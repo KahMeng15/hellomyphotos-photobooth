@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
   uploadPhotos: (data: {
     sessionId: string
     imagePaths: string[]
+    imageBuffers?: ArrayBuffer[]
     frameName?: string | null
     photoCount: number
   }) => ipcRenderer.invoke('upload-photos', data),
@@ -41,5 +42,9 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
 
   onQueueUpdate: (callback: (data: { offline: number }) => void) => {
     ipcRenderer.on('queue-update', (_event, data) => callback(data))
+  },
+
+  onBoothCommand: (callback: (command: { id: string; type: string }) => void) => {
+    ipcRenderer.on('booth-command', (_event, command) => callback(command))
   },
 })

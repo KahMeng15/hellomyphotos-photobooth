@@ -26,6 +26,7 @@ export class BoothApp {
 
   private isCapturing = false
   private isLive = false
+  private isPaused = false
   private settingsData: { photoCount: number; countdown: number; captureInterval: number; serverUrl: string; cameraDeviceId?: string; audioDeviceId?: string } = { photoCount: 4, countdown: 5, captureInterval: 1, serverUrl: 'http://localhost:3000' }
   private serverOnline = true
   private selectedFrame: string | null = null
@@ -62,14 +63,15 @@ export class BoothApp {
     })
 
     this.stopBtn = document.createElement('button')
-    this.stopBtn.textContent = '\u00d7'
+    this.stopBtn.textContent = 'Exit'
     Object.assign(this.stopBtn.style, {
-      position: 'absolute', top: '1rem', right: '1rem', zIndex: '15',
-      width: '3rem', height: '3rem', fontSize: '1.5rem', fontWeight: '700',
-      background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none',
-      borderRadius: '50%', cursor: 'pointer', display: 'none',
-      lineHeight: '1', padding: '0',
+      position: 'absolute', top: '1rem', right: '1rem', zIndex: '50',
+      padding: '0.5rem 1.25rem', fontSize: '0.9375rem', fontWeight: '600',
+      background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)',
+      borderRadius: '8px', cursor: 'pointer', display: 'none',
     })
+    this.stopBtn.addEventListener('mouseenter', () => { this.stopBtn.style.background = 'rgba(255,255,255,0.25)' })
+    this.stopBtn.addEventListener('mouseleave', () => { this.stopBtn.style.background = 'rgba(255,255,255,0.15)' })
     this.stopBtn.addEventListener('click', () => this.goHome())
 
     this.statusBar = document.createElement('div')
@@ -130,7 +132,7 @@ export class BoothApp {
     this.audio = new AudioManager()
     this.countdown = new CountdownUI(this.overlay)
     this.frameCarousel = new FrameCarousel(this.statusBar, (frameId) => { this.selectedFrame = frameId })
-    this.photoPreview = new PhotoPreview(this.container, () => this.reset(), () => this.reset())
+    this.photoPreview = new PhotoPreview(this.container, () => this.reset(), () => this.goHome(), () => this.goHome())
     this.offlineIndicator = new OfflineIndicator(this.statusBar)
     this.settings = new Settings(this.container, (s) => { this.settingsData = s })
 
@@ -169,6 +171,24 @@ export class BoothApp {
         this.offlineIndicator.setQueueDepth(1)
       }
     })
+    window.hellomyphoto?.onBoothCommand((cmd) => {
+      if (cmd.type === 'capture') {
+        if (this.isPaused) return
+        if (!this.isLive) {
+          this.goLive().then(() => setTimeout(() => this.startCapture(), 1500))
+        } else if (!this.isCapturing) {
+          this.startCapture()
+        }
+      } else if (cmd.type === 'start') {
+        if (!this.isLive) this.goLive()
+      } else if (cmd.type === 'pause') {
+        this.isPaused = true
+        this.stateDisplay.textContent = 'PAUSED'
+      } else if (cmd.type === 'resume') {
+        this.isPaused = false
+        this.stateDisplay.textContent = ''
+      }
+    })
   }
 
   async mount() {
@@ -195,6 +215,7 @@ export class BoothApp {
   }
 
   private goHome() {
+    this.photoPreview.hide()
     this.camera.stop()
     this.isLive = false
     this.isCapturing = false
@@ -249,9 +270,20 @@ export class BoothApp {
 
     if (paths.length > 0) {
       const sessionId = `session_${Date.now()}`
+      const filePaths = paths.filter((p) => !p.startsWith('blob:'))
+      const blobBuffers: ArrayBuffer[] = []
+      for (const p of paths) {
+        if (p.startsWith('blob:')) {
+          try {
+            const res = await fetch(p)
+            blobBuffers.push(await res.arrayBuffer())
+          } catch {}
+        }
+      }
       const uploadResult = await window.hellomyphoto?.uploadPhotos({
         sessionId,
-        imagePaths: paths,
+        imagePaths: filePaths,
+        imageBuffers: blobBuffers.length > 0 ? blobBuffers : undefined,
         frameName: this.selectedFrame,
         photoCount: paths.length,
       })
@@ -262,12 +294,13 @@ export class BoothApp {
       }
 
       this.photoPreview.show(paths)
+    } else {
+      this.isCapturing = false
     }
-
-    this.isCapturing = false
   }
 
   private reset() {
+    this.isCapturing = false
     this.captureBtn.style.display = 'block'
     this.photoPreview.hide()
     this.stateDisplay.textContent = ''

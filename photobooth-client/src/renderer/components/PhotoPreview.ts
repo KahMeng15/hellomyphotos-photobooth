@@ -3,11 +3,13 @@ export class PhotoPreview {
   private overlay: HTMLDivElement
   private onRetake: () => void
   private onConfirm: () => void
+  private onExit: () => void
 
-  constructor(container: HTMLElement, onRetake: () => void, onConfirm: () => void) {
+  constructor(container: HTMLElement, onRetake: () => void, onConfirm: () => void, onExit: () => void) {
     this.container = container
     this.onRetake = onRetake
     this.onConfirm = onConfirm
+    this.onExit = onExit
 
     this.overlay = document.createElement('div')
     this.overlay.style.cssText = `
@@ -36,7 +38,7 @@ export class PhotoPreview {
     for (const p of paths) {
       const img = document.createElement('img')
       img.style.cssText = 'width: 100%; border-radius: 8px; aspect-ratio: 3/4; object-fit: cover;'
-      img.src = `file://${p}`
+      img.src = p.startsWith('blob:') || p.startsWith('http') ? p : `file://${p}`
       grid.appendChild(img)
     }
 
@@ -65,8 +67,24 @@ export class PhotoPreview {
       background: #fff; color: #000; border: none; border-radius: 100px;
       cursor: pointer;
     `
-    confirmBtn.addEventListener('click', () => this.onConfirm())
+    confirmBtn.addEventListener('click', () => {
+      this.hide()
+      this.onConfirm()
+    })
     actions.appendChild(confirmBtn)
+
+    const exitBtn = document.createElement('button')
+    exitBtn.textContent = 'Exit'
+    exitBtn.style.cssText = `
+      padding: 1rem 3rem; font-size: 1.25rem; font-weight: 600;
+      background: transparent; color: #888; border: 1px solid #555; border-radius: 100px;
+      cursor: pointer;
+    `
+    exitBtn.addEventListener('click', () => {
+      this.hide()
+      this.onExit()
+    })
+    actions.appendChild(exitBtn)
 
     this.overlay.appendChild(actions)
   }

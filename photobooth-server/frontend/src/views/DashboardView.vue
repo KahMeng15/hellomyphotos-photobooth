@@ -42,7 +42,7 @@
         </div>
       </section>
 
-      <ControlPanel />
+      <ControlPanel :connected="connected" :sendMessage="sendMessage" />
     </div>
 
     <PhotoViewer
@@ -65,7 +65,7 @@ import PhotoViewer from '../components/PhotoViewer.vue'
 const router = useRouter()
 const authStore = useAuthStore()
 const photosStore = usePhotosStore()
-const { ws, connected, connect, disconnect } = useWebSocket()
+const { ws, connected, connect, disconnect, sendMessage } = useWebSocket()
 
 const connectionStatus = ref('connecting')
 const feedRef = ref<HTMLElement | null>(null)

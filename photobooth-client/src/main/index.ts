@@ -67,14 +67,26 @@ app.on('ready', async () => {
       serverUrl: activeServerUrl,
       dslrConnected: dslrManager.isConnected(),
     })
+    fetch(`${activeServerUrl}/api/booth/heartbeat`, { method: 'POST' }).catch(() => {})
   })
 
   intervals.push(setInterval(async () => {
     const online = await checkServerOnline(activeServerUrl)
     sendIfAlive('server-status', { online })
-    if (online) {
-      fetch(`${activeServerUrl}/api/booth/heartbeat`, { method: 'POST' }).catch(() => {})
-    }
+
+    fetch(`${activeServerUrl}/api/booth/heartbeat`, { method: 'POST' }).catch(() => {})
+
+    if (!online) return
+
+    try {
+      const res = await fetch(`${activeServerUrl}/api/booth/commands`)
+      if (res.ok) {
+        const { commands } = await res.json()
+        for (const cmd of commands) {
+          sendIfAlive('booth-command', cmd)
+        }
+      }
+    } catch {}
   }, 10000))
 
   intervals.push(setInterval(async () => {

@@ -73,8 +73,19 @@ export const usePhotosStore = defineStore('photos', () => {
     try {
       await axios.delete(`/api/admin/photos/${id}`)
       photos.value = photos.value.filter((p) => p.id !== id)
+      if (selectedPhoto.value?.id === id) clearSelection()
     } catch (err) {
       console.error('Failed to delete photo', err)
+    }
+  }
+
+  async function deleteSession(sessionId: string) {
+    try {
+      await axios.delete(`/api/admin/session/${sessionId}`)
+      photos.value = photos.value.filter((p) => p.sessionId !== sessionId)
+      if (selectedPhoto.value?.sessionId === sessionId) clearSelection()
+    } catch (err) {
+      console.error('Failed to delete session', err)
     }
   }
 
@@ -116,6 +127,7 @@ export const usePhotosStore = defineStore('photos', () => {
     clearSelection,
     triggerQrCode,
     deletePhoto,
+    deleteSession,
     uploadFrame,
     deleteFrame,
   }

@@ -21,8 +21,11 @@
         </select>
       </div>
 
-      <button @click="triggerReshot" class="btn-control btn-primary">
-        Trigger Reshot
+      <button @click="remoteCapture" class="btn-control btn-primary">
+        Remote Capture
+      </button>
+      <button @click="remoteReshot" class="btn-control btn-secondary">
+        Remote Start
       </button>
       <button @click="togglePause" class="btn-control" :class="paused ? 'btn-resume' : 'btn-pause'">
         {{ paused ? 'Resume Booth' : 'Pause Booth' }}
@@ -56,15 +59,19 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePhotosStore } from '../stores/photos'
-import { useWebSocket } from '../composables/useWebSocket'
+import axios from 'axios'
+
+const props = defineProps<{
+  connected: boolean
+  sendMessage: (event: string, data: any) => void
+}>()
 
 const router = useRouter()
 const photosStore = usePhotosStore()
-const { ws, connected, sendMessage } = useWebSocket()
 
 const selectedFrame = ref('')
 const paused = ref(false)
-const connectionStatus = computed(() => connected.value ? 'connected' : 'disconnected')
+const connectionStatus = computed(() => props.connected ? 'connected' : 'disconnected')
 
 const queuePercent = computed(() => Math.min((photosStore.queueDepth / 10) * 100, 100))
 
@@ -76,9 +83,23 @@ function triggerReshot() {
   sendMessage('trigger-reshot', {})
 }
 
-function togglePause() {
+async function remoteCapture() {
+  try {
+    await axios.post('/api/booth/remote-capture')
+  } catch {}
+}
+
+async function remoteReshot() {
+  try {
+    await axios.post('/api/booth/remote-start')
+  } catch {}
+}
+
+async function togglePause() {
   paused.value = !paused.value
-  sendMessage('booth-pause', { paused: paused.value })
+  try {
+    await axios.post('/api/booth/remote-pause', { paused: paused.value })
+  } catch {}
 }
 
 function shareAll() {

@@ -2,13 +2,16 @@ node_modules/
 dist/
 .env
 *.log
-storage/photos/*
-storage/frames/*
-!storage/photos/.gitkeep
-!storage/frames/.gitkeep
-storage/logs/*
-!storage/logs/.gitkeep
-photobooth-client/db/*
+
+# Photo booth server storage (images, frames, logs)
+photobooth-server/storage/photos/*
+!photobooth-server/storage/photos/.gitkeep
+photobooth-server/storage/frames/*
+!photobooth-server/storage/frames/.gitkeep
+photobooth-server/storage/logs/*
+!photobooth-server/storage/logs/.gitkeep
+
+photobooth-client/db/
 photobooth-client/out/
 .DS_Store
 *.local

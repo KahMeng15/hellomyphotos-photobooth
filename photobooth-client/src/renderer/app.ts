@@ -7,6 +7,7 @@ declare global {
       uploadPhotos: (data: {
         sessionId: string
         imagePaths: string[]
+        imageBuffers?: ArrayBuffer[]
         frameName?: string | null
         photoCount: number
       }) => Promise<{ success: boolean; error?: string; queued?: boolean }>
@@ -20,6 +21,7 @@ declare global {
       onServerStatus: (callback: (status: { online: boolean }) => void) => void
       onServerConfig: (callback: (config: { serverUrl: string; dslrConnected: boolean }) => void) => void
       onQueueUpdate: (callback: (data: { offline: number }) => void) => void
+      onBoothCommand: (callback: (command: { id: string; type: string }) => void) => void
     }
   }
 }

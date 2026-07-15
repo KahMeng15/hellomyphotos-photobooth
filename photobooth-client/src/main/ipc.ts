@@ -42,6 +42,7 @@ export function initIpcHandlers(
   ipcMain.handle('upload-photos', async (event, data: {
     sessionId: string
     imagePaths: string[]
+    imageBuffers?: ArrayBuffer[]
     frameName?: string | null
     photoCount: number
   }) => {
@@ -51,6 +52,12 @@ export function initIpcHandlers(
         const buffer = await readFile(imagePath)
         const blob = new Blob([buffer])
         formData.append('photos', blob, path.basename(imagePath))
+      }
+      if (data.imageBuffers) {
+        for (let i = 0; i < data.imageBuffers.length; i++) {
+          const blob = new Blob([data.imageBuffers[i]])
+          formData.append('photos', blob, `photo_${i}.jpg`)
+        }
       }
       formData.append('sessionId', data.sessionId)
       formData.append('photoCount', String(data.photoCount))

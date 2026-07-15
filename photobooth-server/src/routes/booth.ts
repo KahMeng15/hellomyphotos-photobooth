@@ -10,6 +10,8 @@ import { processSinglePhoto, generateThumbnail, compileVerticalStrip } from '../
 
 const router = Router()
 
+const pendingCommands: { id: string; type: string; createdAt: number }[] = []
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, config.storage.photos),
   filename: (req, file, cb) => {
@@ -119,6 +121,33 @@ router.get('/status', (req: Request, res: Response) => {
     serverTime: new Date().toISOString(),
     version: '3.0.0',
   })
+})
+
+router.post('/remote-capture', (req: Request, res: Response) => {
+  const id = uuidv4()
+  pendingCommands.push({ id, type: 'capture', createdAt: Date.now() })
+  logger.info(`Remote capture command queued: ${id}`)
+  res.json({ success: true, commandId: id })
+})
+
+router.post('/remote-start', (req: Request, res: Response) => {
+  const id = uuidv4()
+  pendingCommands.push({ id, type: 'start', createdAt: Date.now() })
+  logger.info(`Remote start command queued: ${id}`)
+  res.json({ success: true, commandId: id })
+})
+
+router.post('/remote-pause', (req: Request, res: Response) => {
+  const id = uuidv4()
+  const paused = req.body?.paused !== false
+  pendingCommands.push({ id, type: paused ? 'pause' : 'resume', createdAt: Date.now() })
+  logger.info(`Remote pause command queued: ${id} (paused=${paused})`)
+  res.json({ success: true, commandId: id })
+})
+
+router.get('/commands', (req: Request, res: Response) => {
+  const commands = pendingCommands.splice(0)
+  res.json({ commands })
 })
 
 export default router

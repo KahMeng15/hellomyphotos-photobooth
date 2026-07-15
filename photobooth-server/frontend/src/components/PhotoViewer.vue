@@ -13,6 +13,8 @@
           <a :href="photo.url" download class="btn-action">Download</a>
           <button @click="sharePhoto" class="btn-action">Share</button>
           <button @click="showQr" class="btn-action">QR Code</button>
+          <button v-if="photo.sessionId" @click="deleteSession" class="btn-action btn-danger">Delete Session</button>
+          <button @click="deleteSingle" class="btn-action btn-danger">Delete</button>
         </div>
         <div v-if="showQrCode" class="qr-section">
           <canvas ref="qrCanvas"></canvas>
@@ -23,25 +25,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import QRCode from 'qrcode'
+import { usePhotosStore } from '../stores/photos'
 
 const props = defineProps<{
-  photo: { id: string; url: string; timestamp: string; frameName?: string; size?: number }
+  photo: { id: string; url: string; timestamp: string; sessionId?: string; frameName?: string; size?: number }
 }>()
 
-defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: [] }>()
+
+const photosStore = usePhotosStore()
 
 const showQrCode = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 
 async function sharePhoto() {
+  const url = window.location.origin + props.photo.url
   if (navigator.share) {
     try {
-      await navigator.share({
-        title: 'Booth Photo',
-        url: props.photo.url,
-      })
+      await navigator.share({ title: 'Booth Photo', url })
+    } catch {}
+  } else {
+    try {
+      await navigator.clipboard.writeText(url)
     } catch {}
   }
 }
@@ -54,6 +61,18 @@ async function showQr() {
       margin: 2,
     })
   }
+}
+
+async function deleteSingle() {
+  await photosStore.deletePhoto(props.photo.id)
+  emit('close')
+}
+
+async function deleteSession() {
+  if (props.photo.sessionId) {
+    await photosStore.deleteSession(props.photo.sessionId)
+  }
+  emit('close')
 }
 
 function formatTime(ts: string) {
@@ -133,6 +152,16 @@ function formatTime(ts: string) {
 .btn-action:hover {
   background: #3a3a3a;
   color: #fff;
+}
+
+.btn-danger {
+  color: #f44336;
+  border-color: #f44336;
+}
+
+.btn-danger:hover {
+  background: #3a1a1a;
+  color: #ff6659;
 }
 
 .qr-section {

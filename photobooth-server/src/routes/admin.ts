@@ -127,6 +127,23 @@ router.delete('/photos/:id', async (req: Request, res: Response) => {
   }
 })
 
+router.delete('/session/:sessionId', async (req: Request, res: Response) => {
+  try {
+    const { sessionId } = req.params
+    const files = await fs.readdir(config.storage.photos)
+    const toDelete = files.filter((f) => f.startsWith(sessionId))
+    if (toDelete.length === 0) {
+      return res.status(404).json({ error: 'Session not found' })
+    }
+    await Promise.all(toDelete.map((f) => fs.unlink(path.join(config.storage.photos, f))))
+    logger.info(`Session deleted: ${sessionId} (${toDelete.length} files)`)
+    res.json({ success: true, deleted: toDelete.length })
+  } catch (error: any) {
+    logger.error(`Failed to delete session: ${error.message}`)
+    res.status(500).json({ error: 'Failed to delete session' })
+  }
+})
+
 router.get('/settings', async (req: Request, res: Response) => {
   const settingsPath = path.join(config.storage.logs, 'booth-settings.json')
   try {
