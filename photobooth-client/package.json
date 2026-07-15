@@ -6,9 +6,9 @@
   "description": "Self-hosted photo booth system - Capture Client",
   "main": "dist/main/index.js",
   "scripts": {
-    "dev": "tsx watch src/main/index.ts",
-    "start": "electron-forge start",
+    "dev": "tsc && electron-forge start",
     "build": "tsc",
+    "start": "electron-forge start",
     "make": "electron-forge make",
     "package": "electron-forge package",
     "lint": "tsc --noEmit"
