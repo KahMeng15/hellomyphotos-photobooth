@@ -1,0 +1,26 @@
+services:
+  photobooth-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hellomyphoto-server
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-change-me-in-production}
+      OPERATOR_EMAIL: ${OPERATOR_EMAIL:-operator@hellomyphoto.local}
+      OPERATOR_PASSWORD: ${OPERATOR_PASSWORD:-admin123}
+      ALLOWED_ORIGINS: "http://localhost:3000,http://192.168.1.*"
+    volumes:
+      - ./storage/photos:/app/storage/photos
+      - ./storage/frames:/app/storage/frames
+      - ./storage/logs:/app/storage/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
