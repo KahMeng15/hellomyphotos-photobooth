@@ -3,8 +3,11 @@
     <header class="dashboard-header">
       <div class="header-left">
         <h1>hellomyphoto</h1>
-        <span class="badge" :class="`badge-${connectionStatus}`">
-          {{ connectionStatus }}
+        <span class="badge" :class="`badge-${connected ? 'connected' : 'disconnected'}`">
+          {{ connected ? 'connected' : 'disconnected' }}
+        </span>
+        <span v-if="connected" class="badge" :class="`badge-${boothOnline ? 'booth-online' : 'booth-offline'}`">
+          booth {{ boothOnline ? 'online' : 'offline' }}
         </span>
       </div>
       <div class="header-right">
@@ -67,7 +70,7 @@ const authStore = useAuthStore()
 const photosStore = usePhotosStore()
 const { ws, connected, connect, disconnect, sendMessage } = useWebSocket()
 
-const connectionStatus = ref('connecting')
+const boothOnline = ref(false)
 const feedRef = ref<HTMLElement | null>(null)
 
 onMounted(async () => {
@@ -77,12 +80,8 @@ onMounted(async () => {
   const socket = connect()
   if (!socket) return
 
-  socket.on('connect', () => {
-    connectionStatus.value = 'connected'
-  })
-
-  socket.on('disconnect', () => {
-    connectionStatus.value = 'disconnected'
+  socket.on('booth-status', (status: any) => {
+    boothOnline.value = status.online
   })
 
   socket.on('new-media', (data: any) => {
@@ -101,9 +100,6 @@ onMounted(async () => {
     }
   })
 
-  socket.on('booth-status', (status: any) => {
-    connectionStatus.value = status.online ? 'connected' : 'offline'
-  })
 })
 
 async function handleLogout() {
@@ -175,6 +171,16 @@ function formatTime(ts: string) {
 }
 
 .badge-offline {
+  background: #3a1a1a;
+  color: #f44336;
+}
+
+.badge-booth-online {
+  background: #1a3a2a;
+  color: #4caf50;
+}
+
+.badge-booth-offline {
   background: #3a1a1a;
   color: #f44336;
 }

@@ -7,12 +7,18 @@ export function useWebSocket() {
   const connected = ref(false)
 
   function connect() {
+    if (ws.value?.connected) return ws.value
+
     const auth = useAuthStore()
     if (!auth.accessToken) return
 
     const socket = io({
       auth: { token: auth.accessToken },
       transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
     })
 
     socket.on('connect', () => {
@@ -21,6 +27,16 @@ export function useWebSocket() {
 
     socket.on('disconnect', () => {
       connected.value = false
+    })
+
+    socket.on('connect_error', async (err) => {
+      if (err.message === 'Invalid token' || err.message === 'No auth token') {
+        const auth = useAuthStore()
+        const refreshed = await auth.refreshToken()
+        if (refreshed && socket.auth) {
+          socket.auth = { token: auth.accessToken }
+        }
+      }
     })
 
     ws.value = socket
