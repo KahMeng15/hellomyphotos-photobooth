@@ -9,36 +9,29 @@ Booth Client (Electron) ──HTTP/WS──→ Server (Express + Vue 3 + Sharp +
 ## Quick Start
 
 ```bash
-# Server (Docker — everything in one command)
-cd photobooth-server
-cp .env.example .env
+# Server (Docker)
+cd photobooth-server && cp .env.example .env
 docker compose up -d --build
 
 # Client (build installer)
-cd photobooth-client
-npm install
-npm run make
+cd photobooth-client && npm install && npm run make
 ```
 
 ## Development
-
-All commands use `npm run` so tools resolve from the local project (not global `npx`).
 
 ### Server (2 terminals)
 
 ```bash
 cd photobooth-server
 
-# Terminal 1 — Express backend with hot-reload + request/error logs
+# Terminal 1 — Express API + WebSocket (hot-reload, logs all requests)
 npm run dev
 
-# Terminal 2 — Vue 3 frontend HMR (updates on save)
+# Terminal 2 — Vue 3 frontend with HMR (auto-opens at http://localhost:5173)
 npm run dev:frontend
 ```
 
-- Backend: `http://localhost:3000` logs all requests, image processing, and WebSocket events
-- Frontend: Vite dev server proxies API calls to the backend
-- If you only need the backend, just run `npm run dev` (frontend must be built first via `npm run build`)
+API calls from the frontend are proxied to the Express server automatically. Open `http://localhost:5173` for the operator dashboard.
 
 ### Electron Client (1 terminal)
 
@@ -47,7 +40,7 @@ cd photobooth-client
 npm run dev
 ```
 
-This compiles TypeScript then launches Electron in a framed window with DevTools auto-opened. All logs stream to the terminal (main process) and DevTools console (renderer).
+Compiles TypeScript and launches the booth in a framed window with DevTools open.
 
 ## Auth
 

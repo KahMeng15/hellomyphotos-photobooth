@@ -5,12 +5,12 @@
   "description": "Self-hosted photo booth system - Operator Hub",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:frontend": "vite --config vite.config.ts",
     "build": "tsc && vite build --config vite.config.ts",
     "start": "node dist/src/server.js",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "dev:frontend": "vite --config vite.config.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

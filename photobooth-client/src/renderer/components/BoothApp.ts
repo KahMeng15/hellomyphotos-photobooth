@@ -218,7 +218,7 @@ export class BoothApp {
     formData.append('photoCount', String(paths.length))
     if (metadata.frameName) formData.append('frameName', metadata.frameName)
 
-    await fetch(`${this.serverUrl}/api/upload`, {
+    await fetch(`${this.serverUrl}/api/booth/upload`, {
       method: 'POST',
       body: formData,
     })

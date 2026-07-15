@@ -11,12 +11,13 @@ import jwt from 'jsonwebtoken'
 import authRoutes from './routes/auth'
 import uploadRoutes from './routes/upload'
 import adminRoutes from './routes/admin'
+import boothRoutes from './routes/booth'
 import healthRoutes from './routes/health'
 
 import { authMiddleware } from './middleware/authMiddleware'
 import { errorHandler } from './middleware/errorHandler'
 import { requestLogger } from './middleware/requestLogger'
-import { config } from './config'
+import { config, projectRoot } from './config'
 import { logger } from './utils/logger'
 
 const app = express()
@@ -44,13 +45,14 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }))
 app.use(cookieParser())
 app.use(requestLogger)
 
-app.use(express.static(path.join(__dirname, '../../public'), {
+app.use(express.static(path.join(projectRoot, 'public'), {
   maxAge: '1y',
   etag: false,
   immutable: true,
 }))
 
 app.use('/api/auth', authRoutes)
+app.use('/api/booth', boothRoutes)
 app.use('/api/upload', authMiddleware, uploadRoutes)
 app.use('/api/admin', authMiddleware, adminRoutes)
 app.use('/api/health', healthRoutes)
@@ -105,5 +107,22 @@ server.listen(config.port, () => {
   logger.info(`hellomyphoto server running on http://localhost:${config.port}`)
   logger.info(`Environment: ${config.nodeEnv}`)
 })
+
+function shutdown(signal: string) {
+  logger.info(`${signal} received — shutting down gracefully...`)
+  io.close(() => {
+    server.close(() => {
+      logger.info('Server closed')
+      process.exit(0)
+    })
+  })
+  setTimeout(() => {
+    logger.error('Forced shutdown after timeout')
+    process.exit(1)
+  }, 5000)
+}
+
+process.on('SIGINT', () => shutdown('SIGINT'))
+process.on('SIGTERM', () => shutdown('SIGTERM'))
 
 export { app, server, io }

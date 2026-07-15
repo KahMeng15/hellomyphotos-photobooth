@@ -19,7 +19,7 @@ export class FrameCarousel {
 
   async loadFrames(serverUrl: string) {
     try {
-      const response = await fetch(`${serverUrl}/api/admin/frames`)
+      const response = await fetch(`${serverUrl}/api/booth/frames`)
       const data = await response.json()
       this.frames = data.frames.map((f: any) => ({
         id: f.id,

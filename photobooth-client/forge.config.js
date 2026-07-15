@@ -49,6 +49,7 @@ module.exports = {
   hooks: {
     prePackage: async () => {
       execSync('npx tsc', { cwd: __dirname, stdio: 'inherit' })
+      execSync('npx esbuild src/renderer/app.ts --bundle --outfile=dist/renderer/app.js --platform=browser --format=iife --global-name=BoothApp', { cwd: __dirname, stdio: 'inherit' })
     },
   },
 }

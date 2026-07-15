@@ -10,6 +10,7 @@ let offlineQueue: OfflineQueue
 
 const isDev = !app.isPackaged
 const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3000'
+const ROOT = app.getAppPath()
 
 app.on('ready', async () => {
   offlineQueue = new OfflineQueue()
@@ -20,22 +21,21 @@ app.on('ready', async () => {
   mainWindow = new BrowserWindow({
     width: Math.min(screenWidth, 1920),
     height: Math.min(screenHeight, 1080),
-    fullscreen: !isDev,
-    frame: isDev,
-    kiosk: !isDev,
+    fullscreen: false,
+    frame: true,
+    kiosk: false,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: path.join(ROOT, 'dist/preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
     },
   })
 
+  mainWindow.loadFile(path.join(ROOT, 'src/renderer/index.html'))
+
   if (isDev) {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
     mainWindow.webContents.openDevTools()
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
 
   initIpcHandlers(mainWindow, dslrManager, offlineQueue, SERVER_URL)

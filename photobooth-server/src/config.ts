@@ -1,4 +1,20 @@
 import path from 'path'
+import fs from 'fs'
+
+function getProjectRoot(startDir: string): string {
+  let current = path.resolve(startDir)
+  for (let i = 0; i < 10; i++) {
+    if (fs.existsSync(path.join(current, 'package.json'))) {
+      return current
+    }
+    current = path.join(current, '..')
+  }
+  return startDir
+}
+
+const projectRoot = getProjectRoot(__dirname)
+
+export { projectRoot }
 
 export const config = {
   port: parseInt(process.env.PORT || '3000', 10),
@@ -18,9 +34,9 @@ export const config = {
   },
 
   storage: {
-    photos: path.join(__dirname, '../../storage/photos'),
-    frames: path.join(__dirname, '../../storage/frames'),
-    logs: path.join(__dirname, '../../storage/logs'),
+    photos: path.join(projectRoot, 'storage/photos'),
+    frames: path.join(projectRoot, 'storage/frames'),
+    logs: path.join(projectRoot, 'storage/logs'),
   },
 
   upload: {
