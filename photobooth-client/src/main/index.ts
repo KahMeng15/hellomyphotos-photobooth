@@ -7,6 +7,7 @@ import { DslrManager } from './gphoto2'
 let mainWindow: BrowserWindow | null = null
 let dslrManager: DslrManager
 let offlineQueue: OfflineQueue
+let intervals: NodeJS.Timeout[] = []
 
 const isDev = !app.isPackaged
 const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3000'
@@ -38,27 +39,48 @@ app.on('ready', async () => {
     mainWindow.webContents.openDevTools()
   }
 
-  initIpcHandlers(mainWindow, dslrManager, offlineQueue, SERVER_URL)
+  initIpcHandlers(mainWindow!, dslrManager, offlineQueue, SERVER_URL)
 
   await dslrManager.detect()
 
   mainWindow.webContents.on('did-finish-load', () => {
-    mainWindow?.webContents.send('server-config', {
+    sendIfAlive('server-config', {
       serverUrl: SERVER_URL,
       dslrConnected: dslrManager.isConnected(),
     })
   })
 
-  setInterval(async () => {
+  intervals.push(setInterval(async () => {
     const online = await checkServerOnline(SERVER_URL)
-    mainWindow?.webContents.send('server-status', { online })
-  }, 10000)
+    sendIfAlive('server-status', { online })
+    if (online) {
+      fetch(`${SERVER_URL}/api/booth/heartbeat`, { method: 'POST' }).catch(() => {})
+    }
+  }, 10000))
 
-  setInterval(async () => {
-    const depth = offlineQueue.getDepth()
-    mainWindow?.webContents.send('queue-update', { offline: depth })
-  }, 5000)
+  intervals.push(setInterval(async () => {
+    try {
+      const depth = offlineQueue.getDepth()
+      sendIfAlive('queue-update', { offline: depth })
+    } catch {}
+  }, 5000))
+
+  intervals.push(setInterval(async () => {
+    try {
+      const online = await checkServerOnline(SERVER_URL)
+      if (online) {
+        const { flushQueuedUploads } = await import('./ipc')
+        await flushQueuedUploads()
+      }
+    } catch {}
+  }, 15000))
 })
+
+function sendIfAlive(channel: string, data: any) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, data)
+  }
+}
 
 async function checkServerOnline(url: string): Promise<boolean> {
   try {
@@ -69,8 +91,16 @@ async function checkServerOnline(url: string): Promise<boolean> {
   }
 }
 
+app.on('before-quit', () => {
+  intervals.forEach(clearInterval)
+  intervals = []
+  offlineQueue?.close()
+})
+
 app.on('window-all-closed', () => {
-  offlineQueue.close()
+  intervals.forEach(clearInterval)
+  intervals = []
+  offlineQueue?.close()
   if (process.platform !== 'darwin') {
     app.quit()
   }

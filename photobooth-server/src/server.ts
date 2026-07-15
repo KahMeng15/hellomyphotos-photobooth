@@ -69,8 +69,27 @@ io.use((socket, next) => {
   })
 })
 
+let boothLastSeen = 0
+const BOOTH_TIMEOUT = 30000
+
+export function updateBoothHeartbeat() {
+  boothLastSeen = Date.now()
+  io.emit('booth-status', { state: 'online', online: true })
+}
+
+function getBoothStatus() {
+  const online = Date.now() - boothLastSeen < BOOTH_TIMEOUT
+  return { state: online ? 'online' : 'offline', online }
+}
+
+setInterval(() => {
+  io.emit('booth-status', getBoothStatus())
+}, 10000)
+
 io.on('connection', (socket) => {
   logger.info(`Operator connected: ${socket.id}`)
+
+  socket.emit('booth-status', getBoothStatus())
 
   socket.on('frame-override', (data: { frameId: string }) => {
     io.emit('booth-command', { type: 'frame-override', frameId: data.frameId })
@@ -82,10 +101,6 @@ io.on('connection', (socket) => {
 
   socket.on('booth-pause', (data: { paused: boolean }) => {
     io.emit('booth-command', { type: 'booth-pause', paused: data.paused })
-  })
-
-  socket.on('booth-status', (data: { state: string; online: boolean }) => {
-    io.emit('booth-status', data)
   })
 
   socket.on('new-media', (data: any) => {

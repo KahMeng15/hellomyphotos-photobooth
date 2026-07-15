@@ -5,7 +5,8 @@ import fs from 'fs/promises'
 import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
-import { io } from '../server'
+import { io, updateBoothHeartbeat } from '../server'
+import { processSinglePhoto, generateThumbnail, compileVerticalStrip } from '../pipeline'
 
 const router = Router()
 
@@ -58,19 +59,48 @@ router.post('/upload', upload.array('photos', config.upload.maxFiles), async (re
 
     logger.info(`Booth upload: ${files.length} photos, session=${session}`)
 
-    const results = files.map((file, i) => ({
-      raw: file.filename,
-      output: `${session}_${i + 1}.webp`,
-      thumbnail: `${session}_${i + 1}_thumb.webp`,
-    }))
+    const results: any[] = []
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      const outputName = `${session}_${i + 1}.webp`
+      const thumbName = `${session}_${i + 1}_thumb.webp`
+
+      await processSinglePhoto(file.path, frameName || null, outputName)
+      await generateThumbnail(file.path, thumbName)
+
+      results.push({
+        raw: file.filename,
+        output: outputName,
+        thumbnail: thumbName,
+      })
+    }
+
+    if (files.length >= 2) {
+      const stripName = `${session}_strip.webp`
+      results.push({ strip: stripName })
+      await compileVerticalStrip(
+        files.slice(0, count).map((f) => f.path),
+        Math.min(count, files.length),
+        stripName
+      )
+    }
 
     io.emit('new-media', {
       sessionId: session,
       photoCount: files.length,
       frameName: frameName || null,
       timestamp: new Date().toISOString(),
-      results: results.map((r) => ({ output: r.output, thumbnail: r.thumbnail })),
+      results: results.map((r) => ({
+        output: r.output,
+        thumbnail: r.thumbnail,
+        strip: r.strip,
+      })),
     })
+
+    for (const file of files) {
+      await fs.unlink(file.path).catch(() => {})
+    }
 
     res.json({ success: true, sessionId: session, photoCount: files.length, results })
   } catch (error: any) {
@@ -78,7 +108,12 @@ router.post('/upload', upload.array('photos', config.upload.maxFiles), async (re
   }
 })
 
-router.get('/status', async (req: Request, res: Response) => {
+router.post('/heartbeat', (req: Request, res: Response) => {
+  updateBoothHeartbeat()
+  res.json({ online: true, serverTime: new Date().toISOString() })
+})
+
+router.get('/status', (req: Request, res: Response) => {
   res.json({
     online: true,
     serverTime: new Date().toISOString(),

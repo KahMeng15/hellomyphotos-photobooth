@@ -45,6 +45,9 @@
       <button @click="goToAdmin" class="btn-control btn-secondary">
         Admin Panel
       </button>
+      <button @click="goToSettings" class="btn-control btn-secondary">
+        Booth Settings
+      </button>
     </div>
   </aside>
 </template>
@@ -57,11 +60,11 @@ import { useWebSocket } from '../composables/useWebSocket'
 
 const router = useRouter()
 const photosStore = usePhotosStore()
-const { ws, sendMessage } = useWebSocket()
+const { ws, connected, sendMessage } = useWebSocket()
 
 const selectedFrame = ref('')
 const paused = ref(false)
-const connectionStatus = ref('disconnected')
+const connectionStatus = computed(() => connected.value ? 'connected' : 'disconnected')
 
 const queuePercent = computed(() => Math.min((photosStore.queueDepth / 10) * 100, 100))
 
@@ -90,6 +93,10 @@ function shareAll() {
 
 function goToAdmin() {
   router.push('/admin')
+}
+
+function goToSettings() {
+  router.push('/settings')
 }
 </script>
 

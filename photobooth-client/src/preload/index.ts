@@ -3,11 +3,14 @@ import { contextBridge, ipcRenderer } from 'electron'
 contextBridge.exposeInMainWorld('hellomyphoto', {
   capture: () => ipcRenderer.invoke('capture-photo'),
 
-  queueOfflineUpload: (sessionData: {
+  uploadPhotos: (data: {
     sessionId: string
-    metadata: any
     imagePaths: string[]
-  }) => ipcRenderer.invoke('queue-offline-upload', sessionData),
+    frameName?: string | null
+    photoCount: number
+  }) => ipcRenderer.invoke('upload-photos', data),
+
+  uploadQueued: () => ipcRenderer.invoke('upload-queued'),
 
   getQueueDepth: () => ipcRenderer.invoke('get-queue-depth'),
 
@@ -23,25 +26,19 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
 
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),
 
-  triggerUpload: (sessionData: any) => ipcRenderer.invoke('trigger-upload', sessionData),
-
-  onCaptureComplete: (callback: (result: any) => void) => {
-    ipcRenderer.on('capture-complete', (event, result) => callback(result))
+  onUploadComplete: (callback: (data: { sessionId: string; success: boolean }) => void) => {
+    ipcRenderer.on('upload-complete', (_event, data) => callback(data))
   },
 
   onServerStatus: (callback: (status: { online: boolean }) => void) => {
-    ipcRenderer.on('server-status', (event, status) => callback(status))
-  },
-
-  onHardwareStatus: (callback: (status: { dslrConnected: boolean }) => void) => {
-    ipcRenderer.on('hardware-status', (event, status) => callback(status))
+    ipcRenderer.on('server-status', (_event, status) => callback(status))
   },
 
   onServerConfig: (callback: (config: { serverUrl: string; dslrConnected: boolean }) => void) => {
-    ipcRenderer.on('server-config', (event, config) => callback(config))
+    ipcRenderer.on('server-config', (_event, config) => callback(config))
   },
 
   onQueueUpdate: (callback: (data: { offline: number }) => void) => {
-    ipcRenderer.on('queue-update', (event, data) => callback(data))
+    ipcRenderer.on('queue-update', (_event, data) => callback(data))
   },
 })
