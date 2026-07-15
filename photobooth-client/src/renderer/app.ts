@@ -13,8 +13,8 @@ declare global {
       uploadQueued: () => Promise<{ flushed: number }>
       getQueueDepth: () => Promise<number>
       getHardwareStatus: () => Promise<{ dslrConnected: boolean }>
-      getSettings: () => Promise<{ photoCount: number; countdown: number; captureInterval: number }>
-      saveSettings: (settings: { photoCount: number; countdown: number; captureInterval: number }) => Promise<any>
+      getSettings: () => Promise<{ photoCount: number; countdown: number; captureInterval: number; serverUrl?: string; cameraDeviceId?: string; audioDeviceId?: string }>
+      saveSettings: (settings: { photoCount: number; countdown: number; captureInterval: number; serverUrl?: string; cameraDeviceId?: string; audioDeviceId?: string }) => Promise<any>
       getServerConfig: () => Promise<{ serverUrl: string }>
       onUploadComplete: (callback: (data: { sessionId: string; success: boolean }) => void) => void
       onServerStatus: (callback: (status: { online: boolean }) => void) => void

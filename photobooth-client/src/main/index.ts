@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, screen } from 'electron'
 import path from 'path'
+import fs from 'fs'
 import { initIpcHandlers } from './ipc'
 import { OfflineQueue } from './offlineQueue'
 import { DslrManager } from './gphoto2'
@@ -10,8 +11,26 @@ let offlineQueue: OfflineQueue
 let intervals: NodeJS.Timeout[] = []
 
 const isDev = !app.isPackaged
-const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3000'
 const ROOT = app.getAppPath()
+const SETTINGS_FILE = path.join(app.getPath('userData'), 'booth-settings.json')
+
+function loadServerUrl(): string {
+  try {
+    const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'))
+    if (settings.serverUrl) return settings.serverUrl
+  } catch {}
+  return process.env.SERVER_URL || 'http://localhost:3000'
+}
+
+let activeServerUrl = loadServerUrl()
+
+function setActiveServerUrl(url: string) {
+  activeServerUrl = url
+  sendIfAlive('server-config', {
+    serverUrl: url,
+    dslrConnected: dslrManager?.isConnected() ?? false,
+  })
+}
 
 app.on('ready', async () => {
   offlineQueue = new OfflineQueue()
@@ -39,22 +58,22 @@ app.on('ready', async () => {
     mainWindow.webContents.openDevTools()
   }
 
-  initIpcHandlers(mainWindow!, dslrManager, offlineQueue, SERVER_URL)
+  initIpcHandlers(mainWindow!, dslrManager, offlineQueue, activeServerUrl, setActiveServerUrl)
 
   await dslrManager.detect()
 
   mainWindow.webContents.on('did-finish-load', () => {
     sendIfAlive('server-config', {
-      serverUrl: SERVER_URL,
+      serverUrl: activeServerUrl,
       dslrConnected: dslrManager.isConnected(),
     })
   })
 
   intervals.push(setInterval(async () => {
-    const online = await checkServerOnline(SERVER_URL)
+    const online = await checkServerOnline(activeServerUrl)
     sendIfAlive('server-status', { online })
     if (online) {
-      fetch(`${SERVER_URL}/api/booth/heartbeat`, { method: 'POST' }).catch(() => {})
+      fetch(`${activeServerUrl}/api/booth/heartbeat`, { method: 'POST' }).catch(() => {})
     }
   }, 10000))
 
@@ -67,7 +86,7 @@ app.on('ready', async () => {
 
   intervals.push(setInterval(async () => {
     try {
-      const online = await checkServerOnline(SERVER_URL)
+      const online = await checkServerOnline(activeServerUrl)
       if (online) {
         const { flushQueuedUploads } = await import('./ipc')
         await flushQueuedUploads()

@@ -1,9 +1,22 @@
 export class AudioManager {
   private audioCtx: AudioContext | null = null
+  private sinkId: string | undefined
+
+  async setSinkId(deviceId: string) {
+    this.sinkId = deviceId
+    if (this.audioCtx && 'setSinkId' in this.audioCtx) {
+      try {
+        await (this.audioCtx as any).setSinkId(deviceId)
+      } catch {}
+    }
+  }
 
   private getContext(): AudioContext {
     if (!this.audioCtx) {
       this.audioCtx = new AudioContext()
+      if (this.sinkId && 'setSinkId' in this.audioCtx) {
+        ;(this.audioCtx as any).setSinkId(this.sinkId).catch(() => {})
+      }
     }
     if (this.audioCtx.state === 'suspended') {
       this.audioCtx.resume()

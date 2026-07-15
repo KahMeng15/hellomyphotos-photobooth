@@ -35,18 +35,6 @@
         </div>
       </section>
 
-      <section class="card">
-        <h2>Server</h2>
-        <div class="field">
-          <label>Server URL</label>
-          <input type="text" v-model="serverUrl" placeholder="http://localhost:3000" class="text-input" />
-        </div>
-        <div class="status-row">
-          <div :class="['status-dot', serverOnline ? 'online' : 'offline']"></div>
-          <span>{{ serverOnline ? 'Connected' : 'Offline' }}</span>
-        </div>
-      </section>
-
       <div class="actions">
         <button @click="saveSettings" class="btn-primary">Save</button>
         <span v-if="saved" class="saved-msg">Saved</span>
@@ -60,17 +48,13 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
 const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1 })
-const serverUrl = ref('http://localhost:3000')
-const serverOnline = ref(false)
 const saved = ref(false)
 
 onMounted(async () => {
   try {
-    const { data } = await axios.get('/api/health')
-    serverOnline.value = data.status === 'healthy'
-  } catch {
-    serverOnline.value = false
-  }
+    const { data } = await axios.get('/api/admin/settings')
+    settings.value = data
+  } catch {}
 })
 
 async function saveSettings() {
@@ -158,39 +142,6 @@ async function saveSettings() {
   min-width: 2.5rem;
   text-align: right;
 }
-
-.text-input {
-  width: 100%;
-  padding: 0.625rem;
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
-  background: #111;
-  color: #fff;
-  font-size: 0.875rem;
-  outline: none;
-}
-
-.text-input:focus {
-  border-color: #555;
-}
-
-.status-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
-  color: #888;
-  margin-top: 0.75rem;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.status-dot.online { background: #4caf50; }
-.status-dot.offline { background: #f44336; }
 
 .actions {
   display: flex;

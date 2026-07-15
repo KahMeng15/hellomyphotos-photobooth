@@ -1,16 +1,18 @@
 export class CameraManager {
   private stream: MediaStream | null = null
 
-  async startWebcam(): Promise<MediaStream | null> {
+  async startWebcam(deviceId?: string): Promise<MediaStream | null> {
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          facingMode: 'user',
-        },
-        audio: false,
-      })
+      const video: MediaTrackConstraints = {
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      }
+      if (deviceId) {
+        video.deviceId = { exact: deviceId }
+      } else {
+        video.facingMode = 'user'
+      }
+      this.stream = await navigator.mediaDevices.getUserMedia({ video, audio: false })
       return this.stream
     } catch (err) {
       console.error('Webcam start failed:', err)

@@ -6,10 +6,11 @@ import path from 'path'
 import fs from 'fs'
 
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'booth-settings.json')
-const DEFAULT_SETTINGS = { photoCount: 4, countdown: 5, captureInterval: 1 }
+const DEFAULT_SETTINGS = { photoCount: 4, countdown: 5, captureInterval: 1, serverUrl: 'http://localhost:3000' }
 
 let _offlineQueue: OfflineQueue
 let _serverUrl: string
+let _setServerUrl: (url: string) => void
 
 function getSettingsSync() {
   try {
@@ -23,10 +24,12 @@ export function initIpcHandlers(
   mainWindow: BrowserWindow,
   dslrManager: DslrManager,
   offlineQueue: OfflineQueue,
-  serverUrl: string
+  serverUrl: string,
+  setServerUrl: (url: string) => void
 ) {
   _offlineQueue = offlineQueue
   _serverUrl = serverUrl
+  _setServerUrl = setServerUrl
   ipcMain.handle('capture-photo', async (): Promise<{ success: boolean; path?: string; error?: string }> => {
     try {
       const result = await dslrManager.capture()
@@ -117,9 +120,15 @@ export function initIpcHandlers(
     return getSettingsSync()
   })
 
-  ipcMain.handle('save-settings', (event, settings: { photoCount: number; countdown: number; captureInterval: number }) => {
+  ipcMain.handle('save-settings', (event, settings: { photoCount: number; countdown: number; captureInterval: number; serverUrl?: string }) => {
     try {
-      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2))
+      const existing = getSettingsSync()
+      const merged = { ...existing, ...settings }
+      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(merged, null, 2))
+      if (merged.serverUrl && merged.serverUrl !== _serverUrl) {
+        _serverUrl = merged.serverUrl
+        _setServerUrl(merged.serverUrl)
+      }
       return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }
