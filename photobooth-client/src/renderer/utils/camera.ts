@@ -5,7 +5,7 @@ export class CameraManager {
     try {
       const video: MediaTrackConstraints = {
         width: { ideal: 1920 },
-        height: { ideal: 1080 },
+        height: { ideal: 1440 },
       }
       if (deviceId) {
         video.deviceId = { exact: deviceId }
@@ -27,14 +27,7 @@ export class CameraManager {
 
     try {
       const videoTrack = this.stream.getVideoTracks()[0]
-      if (typeof ImageCapture !== 'undefined') {
-        try {
-          const imageCapture = new (ImageCapture as any)(videoTrack)
-          const blob: Blob = await imageCapture.takePhoto()
-          const path = URL.createObjectURL(blob)
-          return { success: true, path }
-        } catch (_e) {}
-      }
+
 
       const originalTrack = this.stream.getVideoTracks()[0]
       const settings = originalTrack.getSettings()

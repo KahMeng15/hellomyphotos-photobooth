@@ -37,7 +37,7 @@ export class PhotoPreview {
 
     for (const p of paths) {
       const img = document.createElement('img')
-      img.style.cssText = 'width: 100%; border-radius: 8px; aspect-ratio: 3/4; object-fit: cover;'
+      img.style.cssText = 'width: 100%; border-radius: 8px; object-fit: contain; max-height: 80vh;'
       img.src = p.startsWith('blob:') || p.startsWith('http') ? p : `file://${p}`
       grid.appendChild(img)
     }

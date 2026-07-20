@@ -23,8 +23,9 @@ export async function processSinglePhoto(
       : null
     const outputPath = path.join(config.storage.photos, outputName)
 
-    let frameWidth = 1200
-    let frameHeight = 1800
+    const rawMetadata = await sharp(rawPath).metadata()
+    let frameWidth = rawMetadata.width || 1200
+    let frameHeight = rawMetadata.height || 1800
 
     if (framePath) {
       try {
@@ -36,9 +37,7 @@ export async function processSinglePhoto(
       }
     }
 
-    let pipeline = sharp(rawPath)
-      .rotate()
-      .resize(frameWidth, frameHeight, { fit: 'cover', position: 'center' })
+    let pipeline = sharp(rawPath).rotate()
 
     if (framePath) {
       try {
@@ -122,7 +121,7 @@ export async function generateThumbnail(
 
     await sharp(inputPath)
       .resize(config.imageProcessing.thumbnailSize, config.imageProcessing.thumbnailSize, {
-        fit: 'cover',
+        fit: 'inside',
       })
       .webp({ quality: config.imageProcessing.thumbnailQuality, effort: 5 })
       .toFile(outputPath)

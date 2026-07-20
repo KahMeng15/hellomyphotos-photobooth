@@ -17,6 +17,8 @@ export class BoothApp {
   private settings: Settings
 
   private webcamPreview: HTMLVideoElement
+  private previewWindow: HTMLDivElement
+  private previewBox: HTMLDivElement
   private overlay: HTMLDivElement
   private statusBar: HTMLDivElement
   private captureBtn: HTMLButtonElement
@@ -43,11 +45,25 @@ export class BoothApp {
 
     this.webcamPreview = document.createElement('video')
     Object.assign(this.webcamPreview.style, {
-      position: 'absolute', inset: '0', width: '100%', height: '100%', objectFit: 'cover',
+      width: '100%', height: '100%', display: 'block',
     })
     this.webcamPreview.autoplay = true
     this.webcamPreview.muted = true
     this.webcamPreview.playsInline = true
+
+    this.previewBox = document.createElement('div')
+    Object.assign(this.previewBox.style, {
+      maxWidth: '100%', maxHeight: '100%', width: '100%',
+      position: 'relative', overflow: 'hidden',
+    })
+    this.previewBox.appendChild(this.webcamPreview)
+
+    this.previewWindow = document.createElement('div')
+    Object.assign(this.previewWindow.style, {
+      flex: '1', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      minHeight: '0', width: '100%', background: '#000',
+    })
+    this.previewWindow.appendChild(this.previewBox)
 
     this.overlay = document.createElement('div')
     Object.assign(this.overlay.style, {
@@ -76,8 +92,9 @@ export class BoothApp {
 
     this.statusBar = document.createElement('div')
     Object.assign(this.statusBar.style, {
-      position: 'absolute', bottom: '2rem', left: '50%', transform: 'translateX(-50%)',
-      display: 'flex', gap: '1rem', alignItems: 'center', zIndex: '10',
+      display: 'flex', gap: '1rem', alignItems: 'center', justifyContent: 'center',
+      padding: '2rem', zIndex: '10', width: '100%', boxSizing: 'border-box',
+      flexShrink: '0',
     })
 
     this.captureBtn = document.createElement('button')
@@ -126,7 +143,7 @@ export class BoothApp {
     settingsBtn.addEventListener('click', () => this.settings.toggle())
     this.landingEl.appendChild(settingsBtn)
 
-    this.container.append(this.landingEl, this.webcamPreview, this.overlay, this.stateDisplay, this.stopBtn, this.statusBar)
+    this.container.append(this.landingEl, this.previewWindow, this.overlay, this.stateDisplay, this.stopBtn, this.statusBar)
 
     this.camera = new CameraManager()
     this.audio = new AudioManager()
@@ -203,6 +220,11 @@ export class BoothApp {
     if (stream) {
       this.webcamPreview.srcObject = stream
       await this.webcamPreview.play()
+      const track = stream.getVideoTracks()[0]
+      const settings = track.getSettings()
+      if (settings.width && settings.height) {
+        this.previewBox.style.aspectRatio = `${settings.width} / ${settings.height}`
+      }
     }
     if (this.settingsData.audioDeviceId) {
       await this.audio.setSinkId(this.settingsData.audioDeviceId)
