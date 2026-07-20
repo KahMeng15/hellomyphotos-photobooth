@@ -15,3 +15,9 @@ photobooth-client/db/
 photobooth-client/out/
 .DS_Store
 *.local
+
+# Built Vite assets (hash-based filenames change every build)
+photobooth-server/public/assets/
+
+# SQLite database (local runtime data)
+photobooth-server/storage/db/

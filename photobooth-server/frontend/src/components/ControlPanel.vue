@@ -53,6 +53,71 @@
       </button>
     </div>
   </aside>
+
+  <Teleport to="body">
+    <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
+      <div class="modal-page">
+        <div class="modal-header">
+          <h2>Booth Controller</h2>
+          <button class="close-btn" @click="$emit('close')">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="panel-section">
+            <h3>Booth Status</h3>
+            <div class="status-row">
+              <div :class="['status-dot', connectionStatus]"></div>
+              <span>{{ connectionStatus }}</span>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <h3>Controls</h3>
+
+            <div class="control-field">
+              <label>Override Frame</label>
+              <select v-model="selectedFrame" @change="sendFrameOverride">
+                <option value="">No Override</option>
+                <option v-for="f in photosStore.frames" :key="f.id" :value="f.id">
+                  {{ f.name }}
+                </option>
+              </select>
+            </div>
+
+            <button @click="remoteCapture" class="btn-control btn-primary">
+              Remote Capture
+            </button>
+            <button @click="remoteReshot" class="btn-control btn-secondary">
+              Remote Start
+            </button>
+            <button @click="togglePause" class="btn-control" :class="paused ? 'btn-resume' : 'btn-pause'">
+              {{ paused ? 'Resume Booth' : 'Pause Booth' }}
+            </button>
+          </div>
+
+          <div class="panel-section">
+            <h3>Processing Queue</h3>
+            <div class="queue-bar">
+              <div class="queue-fill" :style="{ width: queuePercent + '%' }"></div>
+            </div>
+            <span class="queue-label">{{ photosStore.queueDepth }} jobs</span>
+          </div>
+
+          <div class="panel-section">
+            <h3>Quick Actions</h3>
+            <button @click="shareAll" class="btn-control btn-secondary">
+              Share All
+            </button>
+            <button @click="goToAdmin" class="btn-control btn-secondary">
+              Admin Panel
+            </button>
+            <button @click="goToSettings" class="btn-control btn-secondary">
+              Booth Settings
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -64,7 +129,10 @@ import axios from 'axios'
 const props = defineProps<{
   connected: boolean
   sendMessage: (event: string, data: any) => void
+  show: boolean
 }>()
+
+const emit = defineEmits<{ close: [] }>()
 
 const router = useRouter()
 const photosStore = usePhotosStore()
@@ -76,11 +144,7 @@ const connectionStatus = computed(() => props.connected ? 'connected' : 'disconn
 const queuePercent = computed(() => Math.min((photosStore.queueDepth / 10) * 100, 100))
 
 function sendFrameOverride() {
-  sendMessage('frame-override', { frameId: selectedFrame.value })
-}
-
-function triggerReshot() {
-  sendMessage('trigger-reshot', {})
+  props.sendMessage('frame-override', { frameId: selectedFrame.value })
 }
 
 async function remoteCapture() {
@@ -130,6 +194,59 @@ function goToSettings() {
   flex-direction: column;
   gap: 1.5rem;
   overflow-y: auto;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 1rem;
+}
+
+.modal-page {
+  background: #1a1a1a;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.modal-header h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+}
+
+.modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
 .panel-section h3 {
@@ -194,11 +311,6 @@ function goToSettings() {
   font-weight: 500;
   cursor: pointer;
   margin-bottom: 0.5rem;
-  transition: opacity 0.15s;
-}
-
-.btn-control:hover {
-  opacity: 0.9;
 }
 
 .btn-primary {
@@ -244,6 +356,18 @@ function goToSettings() {
 @media (max-width: 768px) {
   .control-panel {
     display: none;
+  }
+
+  .modal-overlay {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .modal-page {
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    height: 100%;
   }
 }
 </style>

@@ -11,9 +11,26 @@
         </span>
       </div>
       <div class="header-right">
+        <button @click="togglePanel" class="btn-icon btn-panel-toggle" title="Booth controller">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </button>
         <span class="user-email">{{ authStore.user?.email }}</span>
-        <button @click="goToAdmin" class="btn-ghost">Admin</button>
-        <button @click="handleLogout" class="btn-ghost">Logout</button>
+        <button @click="goToAdmin" class="btn-icon" title="Admin">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+        </button>
+        <button @click="handleLogout" class="btn-icon" title="Logout">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -48,7 +65,7 @@
         </div>
       </section>
 
-      <ControlPanel :connected="connected" :sendMessage="sendMessage" />
+      <ControlPanel :connected="connected" :sendMessage="sendMessage" :show="showPanel" @close="showPanel = false" />
     </div>
 
     <PhotoViewer
@@ -66,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { usePhotosStore } from '../stores/photos'
@@ -82,8 +99,18 @@ const { ws, connected, connect, disconnect, sendMessage } = useWebSocket()
 
 const boothOnline = ref(false)
 const feedRef = ref<HTMLElement | null>(null)
+const showPanel = ref(false)
+
+let wideMq: MediaQueryList | null = null
+const closePanelOnWide = () => {
+  if (wideMq?.matches) showPanel.value = false
+}
 
 onMounted(async () => {
+  wideMq = window.matchMedia('(min-width: 769px)')
+  wideMq.addEventListener('change', closePanelOnWide)
+
+  await photosStore.fetchSessions()
   await photosStore.fetchSessions()
   await photosStore.fetchPhotos()
   await photosStore.fetchFrames()
@@ -113,6 +140,10 @@ onMounted(async () => {
   })
 })
 
+onUnmounted(() => {
+  if (wideMq) wideMq.removeEventListener('change', closePanelOnWide)
+})
+
 async function handleLogout() {
   disconnect()
   await authStore.logout()
@@ -121,6 +152,10 @@ async function handleLogout() {
 
 function goToAdmin() {
   router.push('/admin')
+}
+
+function togglePanel() {
+  showPanel.value = !showPanel.value
 }
 
 function formatTime(ts: string) {
@@ -207,18 +242,18 @@ function formatTime(ts: string) {
   color: #888;
 }
 
-.btn-ghost {
+.btn-icon {
   background: none;
   border: 1px solid #2a2a2a;
   color: #ccc;
-  padding: 0.375rem 0.75rem;
+  padding: 0.375rem;
   border-radius: 6px;
-  font-size: 0.8125rem;
   cursor: pointer;
+  line-height: 0;
   transition: all 0.15s;
 }
 
-.btn-ghost:hover {
+.btn-icon:hover {
   border-color: #555;
   color: #fff;
 }
@@ -312,6 +347,16 @@ function formatTime(ts: string) {
 @media (max-width: 768px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
+  }
+
+  .user-email {
+    display: none;
+  }
+}
+
+@media (min-width: 769px) {
+  .btn-panel-toggle {
+    display: none;
   }
 }
 </style>
