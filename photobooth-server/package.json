@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/compression": "^1.7.5",
     "@types/cookie-parser": "^1.4.6",
     "@types/cors": "^2.8.17",
@@ -40,16 +41,16 @@
     "@types/node": "^20.11.5",
     "@types/qrcode": "^1.5.5",
     "@types/uuid": "^9.0.7",
+    "@vitejs/plugin-vue": "^5.0.3",
+    "axios": "^1.6.5",
+    "pinia": "^2.1.7",
+    "qrcode.vue": "^3.4.1",
+    "socket.io-client": "^4.7.4",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
     "vite": "^5.0.12",
-    "@vitejs/plugin-vue": "^5.0.3",
     "vue": "^3.4.15",
     "vue-router": "^4.2.5",
-    "vue-tsc": "^1.8.27",
-    "pinia": "^2.1.7",
-    "axios": "^1.6.5",
-    "socket.io-client": "^4.7.4",
-    "qrcode.vue": "^3.4.1"
+    "vue-tsc": "^1.8.27"
   }
 }

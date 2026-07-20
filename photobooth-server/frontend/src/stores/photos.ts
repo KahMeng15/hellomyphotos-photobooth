@@ -12,6 +12,15 @@ export interface Photo {
   frameName?: string | null
 }
 
+export interface Session {
+  sessionId: string
+  photoCount: number
+  firstPhoto: Photo | null
+  photos: Photo[]
+  timestamps: string[]
+  createdAt: string
+}
+
 export interface Frame {
   id: string
   name: string
@@ -21,8 +30,10 @@ export interface Frame {
 
 export const usePhotosStore = defineStore('photos', () => {
   const photos = ref<Photo[]>([])
+  const sessions = ref<Session[]>([])
   const frames = ref<Frame[]>([])
   const selectedPhoto = ref<Photo | null>(null)
+  const selectedSession = ref<Session | null>(null)
   const showQrCode = ref(false)
   const qrUrl = ref('')
   const loading = ref(false)
@@ -37,6 +48,20 @@ export const usePhotosStore = defineStore('photos', () => {
     } catch (err) {
       console.error('Failed to fetch photos', err)
     }
+  }
+
+  async function fetchSessions() {
+    try {
+      const { data } = await axios.get('/api/admin/sessions')
+      sessions.value = data.sessions
+    } catch (err) {
+      console.error('Failed to fetch sessions', err)
+    }
+  }
+
+  async function createShareLink(sessionId: string): Promise<string> {
+    const { data } = await axios.post('/api/share/create', { sessionId })
+    return data.url
   }
 
   async function fetchFrames() {
@@ -57,10 +82,17 @@ export const usePhotosStore = defineStore('photos', () => {
 
   function selectPhoto(photo: Photo) {
     selectedPhoto.value = photo
+    selectedSession.value = null
+  }
+
+  function selectSession(session: Session) {
+    selectedSession.value = session
+    selectedPhoto.value = null
   }
 
   function clearSelection() {
     selectedPhoto.value = null
+    selectedSession.value = null
     showQrCode.value = false
   }
 
@@ -83,6 +115,8 @@ export const usePhotosStore = defineStore('photos', () => {
     try {
       await axios.delete(`/api/admin/session/${sessionId}`)
       photos.value = photos.value.filter((p) => p.sessionId !== sessionId)
+      sessions.value = sessions.value.filter((s) => s.sessionId !== sessionId)
+      if (selectedSession.value?.sessionId === sessionId) clearSelection()
       if (selectedPhoto.value?.sessionId === sessionId) clearSelection()
     } catch (err) {
       console.error('Failed to delete session', err)
@@ -113,17 +147,22 @@ export const usePhotosStore = defineStore('photos', () => {
 
   return {
     photos,
+    sessions,
     frames,
     selectedPhoto,
+    selectedSession,
     showQrCode,
     qrUrl,
     loading,
     queueDepth,
     latestPhotos,
     fetchPhotos,
+    fetchSessions,
+    createShareLink,
     fetchFrames,
     addPhoto,
     selectPhoto,
+    selectSession,
     clearSelection,
     triggerQrCode,
     deletePhoto,

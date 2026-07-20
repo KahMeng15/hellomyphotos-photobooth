@@ -2,12 +2,14 @@ import { Router, Request, Response } from 'express'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs/promises'
+import sharp from 'sharp'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { jobQueue } from '../queue'
 import { pendingCommands } from './booth'
 import { v4 as uuidv4 } from 'uuid'
 import { io } from '../server'
+import { ensureSession } from '../db'
 
 const router = Router()
 
@@ -112,6 +114,51 @@ router.get('/photos', async (req: Request, res: Response) => {
   }
 })
 
+router.get('/sessions', async (req: Request, res: Response) => {
+  try {
+    const files = await fs.readdir(config.storage.photos)
+    const sessionMap = new Map<string, { photos: any[]; timestamps: string[]; frameName?: string | null }>()
+
+    for (const name of files) {
+      if (name.includes('_thumb') || name.includes('_strip')) continue
+      const match = name.match(/^(.+)_(\d+)\.\w+$/)
+      if (!match) continue
+      const sessionId = match[1]
+      if (!sessionMap.has(sessionId)) {
+        sessionMap.set(sessionId, { photos: [], timestamps: [] })
+      }
+      const stat = await fs.stat(path.join(config.storage.photos, name))
+      const thumbName = name.replace(/(\.\w+)$/, '_thumb$1')
+      const thumbExists = files.includes(thumbName)
+      ensureSession(sessionId, sessionMap.get(sessionId)!.photos.length + 1, null)
+      sessionMap.get(sessionId)!.photos.push({
+        id: name,
+        url: `/api/photos/${name}`,
+        thumbnail: thumbExists ? `/api/photos/${thumbName}` : `/api/photos/${name}`,
+        size: stat.size,
+        timestamp: stat.birthtime.toISOString(),
+      })
+      sessionMap.get(sessionId)!.timestamps.push(stat.birthtime.toISOString())
+    }
+
+    const sessions = Array.from(sessionMap.entries())
+      .map(([sessionId, data]) => ({
+        sessionId,
+        photoCount: data.photos.length,
+        firstPhoto: data.photos[0] || null,
+        photos: data.photos,
+        timestamps: data.timestamps,
+        createdAt: data.timestamps.sort().reverse()[0] || new Date().toISOString(),
+      }))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+    res.json({ sessions })
+  } catch (error: any) {
+    logger.error(`Failed to list sessions: ${error.message}`)
+    res.status(500).json({ error: 'Failed to list sessions' })
+  }
+})
+
 router.delete('/photos/:id', async (req: Request, res: Response) => {
   try {
     const photoPath = path.join(config.storage.photos, req.params.id)
@@ -144,6 +191,36 @@ router.delete('/session/:sessionId', async (req: Request, res: Response) => {
   } catch (error: any) {
     logger.error(`Failed to delete session: ${error.message}`)
     res.status(500).json({ error: 'Failed to delete session' })
+  }
+})
+
+router.get('/photos/:id/download', async (req: Request, res: Response) => {
+  try {
+    const filename = req.params.id
+    const filePath = path.join(config.storage.photos, filename)
+    const resolvedPath = path.resolve(filePath)
+
+    if (!resolvedPath.startsWith(path.resolve(config.storage.photos))) {
+      return res.status(400).json({ error: 'Invalid path' })
+    }
+
+    if (!filename.endsWith('.webp')) {
+      return res.status(400).json({ error: 'Only WebP photos can be downloaded as JPEG' })
+    }
+
+    const index = filename.match(/_(\d+)\.webp$/)
+    const photoNum = index ? index[1] : '1'
+
+    const webpBuf = await fs.readFile(filePath)
+    const jpegBuf = await sharp(webpBuf).jpeg({ quality: 85 }).toBuffer()
+
+    res.setHeader('Content-Type', 'image/jpeg')
+    res.setHeader('Content-Disposition', `attachment; filename="photo-${photoNum}.jpg"`)
+    res.setHeader('Content-Length', jpegBuf.length)
+    res.send(jpegBuf)
+  } catch (error: any) {
+    logger.error(`Photo download failed: ${error.message}`)
+    res.status(500).json({ error: error.message })
   }
 })
 

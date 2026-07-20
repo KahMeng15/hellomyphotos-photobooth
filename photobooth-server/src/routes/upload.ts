@@ -7,6 +7,7 @@ import { config } from '../config'
 import { logger } from '../utils/logger'
 import { jobQueue } from '../queue'
 import { io } from '../server'
+import { ensureSession } from '../db'
 
 const router = Router()
 
@@ -115,6 +116,8 @@ router.post('/', upload.array('photos', config.upload.maxFiles), async (req: Req
         strip: r.strip,
       })),
     })
+
+    ensureSession(session, files.length, frameName || null)
 
     const processingTime = Date.now() - startTime
     logger.info(`Upload processed in ${processingTime}ms: session=${session}`)

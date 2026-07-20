@@ -30,6 +30,11 @@ export const router = createRouter({
       component: () => import('./views/SettingsView.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/share/:token',
+      name: 'share',
+      component: () => import('./views/ShareView.vue'),
+    },
   ],
 })
 

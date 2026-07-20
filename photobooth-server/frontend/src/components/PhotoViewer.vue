@@ -10,8 +10,9 @@
           <span v-if="photo.size">{{ (photo.size / 1024).toFixed(0) }}KB</span>
         </div>
         <div class="viewer-actions">
-          <a :href="photo.url" download class="btn-action">Download</a>
+          <a :href="`/api/admin/photos/${photo.id}/download`" class="btn-action">Download JPEG</a>
           <button @click="sharePhoto" class="btn-action">Share</button>
+          <button v-if="photo.sessionId" @click="shareSessionLink" class="btn-action">{{ sessionLinkCopied ? 'Copied!' : 'Copy Session Link' }}</button>
           <button @click="showQr" class="btn-action">QR Code</button>
           <button v-if="photo.sessionId" @click="deleteSession" class="btn-action btn-danger">Delete Session</button>
           <button @click="deleteSingle" class="btn-action btn-danger">Delete</button>
@@ -39,6 +40,7 @@ const photosStore = usePhotosStore()
 
 const showQrCode = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
+const sessionLinkCopied = ref(false)
 
 async function sharePhoto() {
   const url = window.location.origin + props.photo.url
@@ -50,6 +52,19 @@ async function sharePhoto() {
     try {
       await navigator.clipboard.writeText(url)
     } catch {}
+  }
+}
+
+async function shareSessionLink() {
+  if (!props.photo.sessionId) return
+  sessionLinkCopied.value = false
+  try {
+    const url = await photosStore.createShareLink(props.photo.sessionId)
+    await navigator.clipboard.writeText(url)
+    sessionLinkCopied.value = true
+    setTimeout(() => { sessionLinkCopied.value = false }, 2000)
+  } catch {
+    sessionLinkCopied.value = false
   }
 }
 

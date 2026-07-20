@@ -13,6 +13,7 @@ import uploadRoutes from './routes/upload'
 import adminRoutes from './routes/admin'
 import boothRoutes from './routes/booth'
 import healthRoutes from './routes/health'
+import shareRoutes from './routes/share'
 
 import { authMiddleware } from './middleware/authMiddleware'
 import { errorHandler } from './middleware/errorHandler'
@@ -53,6 +54,7 @@ app.use(express.static(path.join(projectRoot, 'public'), {
 
 app.use('/api/auth', authRoutes)
 app.use('/api/booth', boothRoutes)
+app.use('/api/share', shareRoutes)
 app.use('/api/upload', authMiddleware, uploadRoutes)
 app.use('/api/admin', authMiddleware, adminRoutes)
 app.use('/api/health', healthRoutes)
@@ -117,6 +119,10 @@ io.on('connection', (socket) => {
 })
 
 app.use(errorHandler)
+
+app.get('/share/*', (req, res) => {
+  res.sendFile(path.join(projectRoot, 'public', 'index.html'))
+})
 
 server.listen(config.port, () => {
   logger.info(`hellomyphoto server running on http://localhost:${config.port}`)

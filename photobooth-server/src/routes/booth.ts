@@ -7,6 +7,7 @@ import { config } from '../config'
 import { logger } from '../utils/logger'
 import { io, updateBoothHeartbeat } from '../server'
 import { processSinglePhoto, generateThumbnail, compileVerticalStrip } from '../pipeline'
+import { ensureSession } from '../db'
 
 const router = Router()
 
@@ -87,6 +88,8 @@ router.post('/upload', upload.array('photos', config.upload.maxFiles), async (re
         stripName
       )
     }
+
+    ensureSession(session, files.length, frameName || null)
 
     io.emit('new-media', {
       sessionId: session,

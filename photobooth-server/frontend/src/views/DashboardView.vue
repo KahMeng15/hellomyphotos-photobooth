@@ -20,27 +20,30 @@
     <div class="dashboard-grid">
       <section class="photo-feed">
         <div class="feed-header">
-          <h2>Live Photos</h2>
-          <span class="photo-count">{{ photosStore.photos.length }} photos</span>
+          <h2>Sessions</h2>
+          <span class="photo-count">{{ photosStore.sessions.length }} session{{ photosStore.sessions.length !== 1 ? 's' : '' }}</span>
         </div>
-        <div class="photo-grid" ref="feedRef">
+        <div class="session-list" ref="feedRef">
           <div
-            v-for="photo in photosStore.latestPhotos"
-            :key="photo.id"
-            class="photo-card"
-            @click="photosStore.selectPhoto(photo)"
+            v-for="session in photosStore.sessions"
+            :key="session.sessionId"
+            class="session-card"
+            @click="photosStore.selectSession(session)"
           >
-            <img
-              :src="photo.thumbnail"
-              :alt="'Photo ' + photo.id"
-              loading="lazy"
-            />
-            <div class="photo-meta">
-              <span class="timestamp">{{ formatTime(photo.timestamp) }}</span>
+            <div class="session-thumb">
+              <img
+                :src="session.photos[session.photos.length - 1]?.thumbnail"
+                :alt="'Session ' + session.sessionId"
+                class="thumb-img"
+              />
+            </div>
+            <div class="session-meta">
+              <span class="session-time">{{ formatTime(session.createdAt) }}</span>
+              <span class="session-count">{{ session.photoCount }} photo{{ session.photoCount !== 1 ? 's' : '' }}</span>
             </div>
           </div>
-          <div v-if="photosStore.photos.length === 0" class="empty-state">
-            <p>No photos yet. Waiting for captures...</p>
+          <div v-if="photosStore.sessions.length === 0" class="empty-state">
+            <p>No sessions yet. Waiting for captures...</p>
           </div>
         </div>
       </section>
@@ -51,6 +54,12 @@
     <PhotoViewer
       v-if="photosStore.selectedPhoto"
       :photo="photosStore.selectedPhoto"
+      @close="photosStore.clearSelection()"
+    />
+
+    <SessionViewer
+      v-if="photosStore.selectedSession && !photosStore.selectedPhoto"
+      :session="photosStore.selectedSession"
       @close="photosStore.clearSelection()"
     />
   </div>
@@ -64,6 +73,7 @@ import { usePhotosStore } from '../stores/photos'
 import { useWebSocket } from '../composables/useWebSocket'
 import ControlPanel from '../components/ControlPanel.vue'
 import PhotoViewer from '../components/PhotoViewer.vue'
+import SessionViewer from '../components/SessionViewer.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -74,6 +84,7 @@ const boothOnline = ref(false)
 const feedRef = ref<HTMLElement | null>(null)
 
 onMounted(async () => {
+  await photosStore.fetchSessions()
   await photosStore.fetchPhotos()
   await photosStore.fetchFrames()
 
@@ -84,7 +95,8 @@ onMounted(async () => {
     boothOnline.value = status.online
   })
 
-  socket.on('new-media', (data: any) => {
+  socket.on('new-media', async (data: any) => {
+    await photosStore.fetchSessions()
     if (data.results) {
       data.results.forEach((r: any) => {
         photosStore.addPhoto({
@@ -99,7 +111,6 @@ onMounted(async () => {
       })
     }
   })
-
 })
 
 async function handleLogout() {
@@ -113,7 +124,7 @@ function goToAdmin() {
 }
 
 function formatTime(ts: string) {
-  return new Date(ts).toLocaleTimeString()
+  return new Date(ts).toLocaleString()
 }
 </script>
 
@@ -243,44 +254,56 @@ function formatTime(ts: string) {
   color: #888;
 }
 
-.photo-grid {
+.session-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 1rem;
 }
 
-.photo-card {
-  cursor: pointer;
-  border-radius: 8px;
-  overflow: hidden;
+.session-card {
   background: #1a1a1a;
   border: 1px solid #2a2a2a;
-  transition: transform 0.15s, border-color 0.15s;
+  border-radius: 10px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s;
 }
 
-.photo-card:hover {
-  transform: translateY(-2px);
+.session-card:hover {
   border-color: #444;
 }
 
-.photo-card img {
+.session-thumb {
+  aspect-ratio: 3/2;
+  overflow: hidden;
+  background: #111;
+}
+
+.thumb-img {
   width: 100%;
-  height: 160px;
+  height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.photo-meta {
-  padding: 0.5rem;
+.session-meta {
+  padding: 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
 }
 
-.timestamp {
-  font-size: 0.75rem;
+.session-time {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.session-count {
+  font-size: 0.6875rem;
   color: #888;
 }
 
 .empty-state {
-  grid-column: 1 / -1;
   text-align: center;
   padding: 4rem 2rem;
   color: #666;
