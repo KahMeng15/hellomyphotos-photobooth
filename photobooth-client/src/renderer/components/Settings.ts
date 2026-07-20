@@ -6,6 +6,7 @@ interface BoothSettings {
   serverUrl: string
   cameraDeviceId?: string
   audioDeviceId?: string
+  otp?: string
 }
 
 interface MediaDeviceInfo {
@@ -49,6 +50,9 @@ export class Settings {
 
     const serverSection = this.createServerSection()
     panel.appendChild(serverSection)
+
+    const otpSection = this.createOtpSection()
+    panel.appendChild(otpSection)
 
     const devicesSection = this.createDevicesSection()
     panel.appendChild(devicesSection)
@@ -174,6 +178,40 @@ export class Settings {
       this.settings.serverUrl = this.serverInput.value.replace(/\/+$/, '')
       this.markDirty()
     })
+
+    return section
+  }
+
+  private createOtpSection(): HTMLDivElement {
+    const section = document.createElement('div')
+    section.style.cssText = 'margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #2a2a2a;'
+
+    const label = document.createElement('label')
+    label.textContent = 'Event OTP'
+    label.style.cssText = 'display: block; font-size: 0.8125rem; color: #888; margin-bottom: 0.375rem;'
+    section.appendChild(label)
+
+    const desc = document.createElement('p')
+    desc.textContent = '6-digit code from the operator dashboard.'
+    desc.style.cssText = 'font-size: 0.75rem; color: #666; margin: 0 0 0.5rem;'
+    section.appendChild(desc)
+
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.maxLength = 6
+    input.placeholder = '000000'
+    input.value = this.settings.otp || ''
+    input.style.cssText = `
+      font-size: 1.5rem; font-family: monospace; letter-spacing: 0.5rem;
+      padding: 0.625rem; background: #111; border: 1px solid #333;
+      border-radius: 8px; color: #fff; width: 200px; text-align: center;
+      outline: none;
+    `
+    input.addEventListener('input', () => {
+      this.settings.otp = input.value.slice(0, 6)
+      this.markDirty()
+    })
+    section.appendChild(input)
 
     return section
   }

@@ -7,13 +7,19 @@ import { config } from '../config'
 import { logger } from '../utils/logger'
 import { jobQueue } from '../queue'
 import { io } from '../server'
-import { ensureSession } from '../db'
+import { ensurePhotoSession } from '../db'
 
 const router = Router()
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, config.storage.photos)
+    const eventId = (req as any).body?.eventId
+    if (eventId) {
+      const dir = config.eventPhotosDir(eventId)
+      fs.mkdir(dir, { recursive: true }).then(() => cb(null, dir)).catch((err) => cb(err, ''))
+    } else {
+      cb(null, config.storage.photos)
+    }
   },
   filename: (req, file, cb) => {
     const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`
@@ -47,18 +53,23 @@ router.post('/', upload.array('photos', config.upload.maxFiles), async (req: Req
       return res.status(400).json({ error: 'No photos uploaded' })
     }
 
-    const { sessionId, frameName, watermarkText, photoCount } = req.body
-    const session = sessionId || uuidv4()
+    const { eventId, sessionId: reqSessionId, frameName, watermarkText, photoCount } = req.body
+    const sessionId = reqSessionId || uuidv4()
     const count = parseInt(photoCount || String(files.length), 10)
 
-    logger.info(`Upload received: ${files.length} photos, session=${session}`)
+    logger.info(`Upload received: ${files.length} photos, session=${sessionId}${eventId ? `, event=${eventId}` : ''}`)
+
+    if (eventId) {
+      ensurePhotoSession(sessionId, eventId)
+    }
 
     const results: any[] = []
+    const dir = eventId ? config.eventPhotosDir(eventId) : config.storage.photos
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
-      const outputName = `${session}_${i + 1}.webp`
-      const thumbName = `${session}_${i + 1}_thumb.webp`
+      const outputName = `${sessionId}_${i + 1}.webp`
+      const thumbName = `${sessionId}_${i + 1}_thumb.webp`
 
       results.push({
         raw: file.filename,
@@ -67,46 +78,50 @@ router.post('/', upload.array('photos', config.upload.maxFiles), async (req: Req
       })
 
       jobQueue.enqueue({
-        id: `${session}-process-${i}`,
+        id: `${sessionId}-process-${i}`,
         type: 'process-photo',
         data: {
           rawPath: file.path,
           frameName: frameName || null,
           outputName,
+          eventDir: dir,
           watermarkText,
         },
         priority: 1,
       })
 
       jobQueue.enqueue({
-        id: `${session}-thumb-${i}`,
+        id: `${sessionId}-thumb-${i}`,
         type: 'generate-thumbnail',
         data: {
           inputPath: file.path,
           outputName: thumbName,
+          eventDir: dir,
         },
         priority: 2,
       })
     }
 
     if (files.length >= 2) {
-      const stripName = `${session}_strip.webp`
+      const stripName = `${sessionId}_strip.webp`
       results.push({ strip: stripName })
 
       jobQueue.enqueue({
-        id: `${session}-strip`,
+        id: `${sessionId}-strip`,
         type: 'compile-strip',
         data: {
           imagePaths: files.slice(0, count).map((f) => f.path),
           photoCount: Math.min(count, files.length),
           outputName: stripName,
+          eventDir: dir,
         },
         priority: 0,
       })
     }
 
     io.emit('new-media', {
-      sessionId: session,
+      eventId: eventId || null,
+      sessionId,
       photoCount: files.length,
       frameName: frameName || null,
       timestamp: new Date().toISOString(),
@@ -117,14 +132,12 @@ router.post('/', upload.array('photos', config.upload.maxFiles), async (req: Req
       })),
     })
 
-    ensureSession(session, files.length, frameName || null)
-
     const processingTime = Date.now() - startTime
-    logger.info(`Upload processed in ${processingTime}ms: session=${session}`)
+    logger.info(`Upload processed in ${processingTime}ms: session=${sessionId}`)
 
     res.json({
       success: true,
-      sessionId: session,
+      sessionId,
       photoCount: files.length,
       results,
       processingTime,

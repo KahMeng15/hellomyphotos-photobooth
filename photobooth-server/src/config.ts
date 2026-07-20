@@ -39,6 +39,8 @@ export const config = {
     logs: path.join(projectRoot, 'storage/logs'),
   },
 
+  eventPhotosDir: (eventId: string) => path.join(projectRoot, 'storage/photos', eventId),
+
   upload: {
     maxFileSize: 10 * 1024 * 1024,
     maxFiles: 10,

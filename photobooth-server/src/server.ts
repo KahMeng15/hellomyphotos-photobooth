@@ -20,6 +20,7 @@ import { errorHandler } from './middleware/errorHandler'
 import { requestLogger } from './middleware/requestLogger'
 import { config, projectRoot } from './config'
 import { logger } from './utils/logger'
+import { getEventByOtp } from './db'
 
 const app = express()
 const server = http.createServer(app)
@@ -60,67 +61,151 @@ app.use('/api/admin', authMiddleware, adminRoutes)
 app.use('/api/health', healthRoutes)
 app.use('/api/photos', authMiddleware, express.static(config.storage.photos))
 
+// Track booth sockets per event
+const boothSockets = new Map<string, Set<string>>()
+const socketEventMap = new Map<string, string>()
+
+// Track operator subscriptions per event
+const operatorSubscriptions = new Map<string, Set<string>>()
+
 io.use((socket, next) => {
   const token = socket.handshake.auth.token
-  if (!token) return next(new Error('No auth token'))
+  const otp = socket.handshake.auth.otp
 
-  jwt.verify(token, config.jwt.secret, (err: any, decoded: any) => {
-    if (err) return next(new Error('Invalid token'))
-    socket.data.user = decoded
+  if (token) {
+    jwt.verify(token, config.jwt.secret, (err: any, decoded: any) => {
+      if (err) return next(new Error('Invalid token'))
+      socket.data.user = decoded
+      socket.data.role = 'operator'
+      next()
+    })
+  } else if (otp) {
+    const event = getEventByOtp(otp)
+    if (!event) return next(new Error('Invalid or expired OTP'))
+    socket.data.role = 'booth'
+    socket.data.eventId = event.id
     next()
-  })
+  } else {
+    next(new Error('No auth token or OTP'))
+  }
 })
-
-let boothLastSeen = 0
-const BOOTH_TIMEOUT = 30000
-
-export function updateBoothHeartbeat() {
-  boothLastSeen = Date.now()
-  io.emit('booth-status', { state: 'online', online: true })
-}
-
-function getBoothStatus() {
-  const online = Date.now() - boothLastSeen < BOOTH_TIMEOUT
-  return { state: online ? 'online' : 'offline', online }
-}
-
-setInterval(() => {
-  io.emit('booth-status', getBoothStatus())
-}, 10000)
 
 io.on('connection', (socket) => {
-  logger.info(`Operator connected: ${socket.id}`)
+  if (socket.data.role === 'operator') {
+    logger.info(`Operator connected: ${socket.id}`)
+    socket.emit('booth-status', getBoothStatus())
 
-  socket.emit('booth-status', getBoothStatus())
+    socket.on('subscribe', (eventId: string) => {
+      if (!operatorSubscriptions.has(eventId)) {
+        operatorSubscriptions.set(eventId, new Set())
+      }
+      operatorSubscriptions.get(eventId)!.add(socket.id)
+      socket.data.subscribedEvents = socket.data.subscribedEvents || []
+      socket.data.subscribedEvents.push(eventId)
 
-  socket.on('frame-override', (data: { frameId: string }) => {
-    io.emit('booth-command', { type: 'frame-override', frameId: data.frameId })
-  })
+      const hasBooth = boothSockets.has(eventId) && boothSockets.get(eventId)!.size > 0
+      socket.emit('booth-connected', { eventId, connected: hasBooth })
+    })
 
-  socket.on('trigger-reshot', () => {
-    io.emit('booth-command', { type: 'reshot' })
-  })
+    socket.on('unsubscribe', (eventId: string) => {
+      operatorSubscriptions.get(eventId)?.delete(socket.id)
+      if (socket.data.subscribedEvents) {
+        socket.data.subscribedEvents = socket.data.subscribedEvents.filter((e: string) => e !== eventId)
+      }
+    })
 
-  socket.on('booth-pause', (data: { paused: boolean }) => {
-    io.emit('booth-command', { type: 'booth-pause', paused: data.paused })
-  })
+    socket.on('frame-override', (data: { eventId: string; frameId: string }) => {
+      forwardToBooth(data.eventId, { type: 'frame-override', frameId: data.frameId })
+    })
 
-  socket.on('new-media', (data: any) => {
-    io.emit('new-media', data)
-  })
+    socket.on('trigger-reshot', (data: { eventId: string }) => {
+      forwardToBooth(data.eventId, { type: 'reshot' })
+    })
 
-  socket.on('queue-update', (data: { depth: number; offline?: number }) => {
-    io.emit('queue-update', data)
-  })
+    socket.on('booth-pause', (data: { eventId: string; paused: boolean }) => {
+      forwardToBooth(data.eventId, { type: 'booth-pause', paused: data.paused })
+    })
 
-  socket.on('disconnect', () => {
-    logger.info(`Operator disconnected: ${socket.id}`)
-  })
+    socket.on('disconnect', () => {
+      logger.info(`Operator disconnected: ${socket.id}`)
+      if (socket.data.subscribedEvents) {
+        for (const eventId of socket.data.subscribedEvents) {
+          operatorSubscriptions.get(eventId)?.delete(socket.id)
+        }
+      }
+    })
+  } else if (socket.data.role === 'booth') {
+    const eventId = socket.data.eventId
+    logger.info(`Booth connected: ${socket.id} (event=${eventId})`)
+
+    if (!boothSockets.has(eventId)) {
+      boothSockets.set(eventId, new Set())
+    }
+    boothSockets.get(eventId)!.add(socket.id)
+    socketEventMap.set(socket.id, eventId)
+
+    socket.emit('authenticated', { eventId, status: 'ok' })
+
+    notifyBoothConnected(eventId, true)
+
+    socket.on('new-media', (data: any) => {
+      const subs = operatorSubscriptions.get(eventId)
+      if (subs) {
+        for (const sid of subs) {
+          io.to(sid).emit('new-media', { ...data, eventId })
+        }
+      }
+    })
+
+    socket.on('queue-update', (data: { depth: number; offline?: number }) => {
+      const subs = operatorSubscriptions.get(eventId)
+      if (subs) {
+        for (const sid of subs) {
+          io.to(sid).emit('queue-update', { ...data, eventId })
+        }
+      }
+    })
+
+    socket.on('disconnect', () => {
+      logger.info(`Booth disconnected: ${socket.id} (event=${eventId})`)
+      boothSockets.get(eventId)?.delete(socket.id)
+      if (boothSockets.get(eventId)?.size === 0) {
+        boothSockets.delete(eventId)
+      }
+      socketEventMap.delete(socket.id)
+      notifyBoothConnected(eventId, false)
+    })
+  }
 })
+
+function forwardToBooth(eventId: string, message: any) {
+  const sockets = boothSockets.get(eventId)
+  if (!sockets || sockets.size === 0) return
+  for (const sid of sockets) {
+    io.to(sid).emit('booth-command', message)
+  }
+}
+
+function notifyBoothConnected(eventId: string, connected: boolean) {
+  const subs = operatorSubscriptions.get(eventId)
+  if (subs) {
+    for (const sid of subs) {
+      io.to(sid).emit('booth-connected', { eventId, connected })
+    }
+  }
+}
+
+const BOOTH_TIMEOUT = 30000
+function getBoothStatus() {
+  return { state: 'offline', online: false }
+}
 
 app.use(errorHandler)
 
-app.get('/share/*', (req, res) => {
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Not found' })
+  }
   res.sendFile(path.join(projectRoot, 'public', 'index.html'))
 })
 
@@ -146,4 +231,4 @@ function shutdown(signal: string) {
 process.on('SIGINT', () => shutdown('SIGINT'))
 process.on('SIGTERM', () => shutdown('SIGTERM'))
 
-export { app, server, io }
+export { app, server, io, boothSockets }

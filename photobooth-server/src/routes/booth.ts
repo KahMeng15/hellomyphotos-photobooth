@@ -5,16 +5,31 @@ import fs from 'fs/promises'
 import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
-import { io, updateBoothHeartbeat } from '../server'
+import { boothAuthMiddleware } from '../middleware/authMiddleware'
+import { io } from '../server'
 import { processSinglePhoto, generateThumbnail, compileVerticalStrip } from '../pipeline'
-import { ensureSession } from '../db'
+import { ensurePhotoSession } from '../db'
 
 const router = Router()
 
 export const pendingCommands: { id: string; type: string; settings?: any; createdAt: number }[] = []
 
+function ensureEventDir(eventId: string): Promise<string> {
+  const dir = config.eventPhotosDir(eventId)
+  return fs.mkdir(dir, { recursive: true }).then(() => dir)
+}
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, config.storage.photos),
+  destination: async (req, file, cb) => {
+    const eventId = (req as any).eventId
+    if (!eventId) return cb(new Error('No event ID'), '')
+    try {
+      const dir = await ensureEventDir(eventId)
+      cb(null, dir)
+    } catch (err: any) {
+      cb(err, '')
+    }
+  },
   filename: (req, file, cb) => {
     const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`
     cb(null, uniqueName)
@@ -49,28 +64,32 @@ router.get('/frames', async (req: Request, res: Response) => {
   }
 })
 
-router.post('/upload', upload.array('photos', config.upload.maxFiles), async (req: Request, res: Response) => {
+router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload.maxFiles), async (req: Request, res: Response) => {
   try {
     const files = req.files as Express.Multer.File[]
     if (!files || files.length === 0) {
       return res.status(400).json({ error: 'No photos uploaded' })
     }
 
-    const { sessionId, frameName, photoCount } = req.body
-    const session = sessionId || uuidv4()
+    const eventId = (req as any).eventId
+    const { frameName, photoCount } = req.body
+    const sessionId = uuidv4()
     const count = parseInt(photoCount || String(files.length), 10)
 
-    logger.info(`Booth upload: ${files.length} photos, session=${session}`)
+    logger.info(`Booth upload: ${files.length} photos, event=${eventId}, session=${sessionId}`)
+
+    ensurePhotoSession(sessionId, eventId)
 
     const results: any[] = []
+    const eventDir = config.eventPhotosDir(eventId)
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
-      const outputName = `${session}_${i + 1}.webp`
-      const thumbName = `${session}_${i + 1}_thumb.webp`
+      const outputName = `${sessionId}_${i + 1}.webp`
+      const thumbName = `${sessionId}_${i + 1}_thumb.webp`
 
-      await processSinglePhoto(file.path, frameName || null, outputName)
-      await generateThumbnail(file.path, thumbName)
+      await processSinglePhoto(file.path, frameName || null, outputName, eventDir)
+      await generateThumbnail(file.path, thumbName, eventDir)
 
       results.push({
         raw: file.filename,
@@ -80,19 +99,19 @@ router.post('/upload', upload.array('photos', config.upload.maxFiles), async (re
     }
 
     if (files.length >= 2) {
-      const stripName = `${session}_strip.webp`
+      const stripName = `${sessionId}_strip.webp`
       results.push({ strip: stripName })
       await compileVerticalStrip(
         files.slice(0, count).map((f) => f.path),
         Math.min(count, files.length),
-        stripName
+        stripName,
+        eventDir
       )
     }
 
-    ensureSession(session, files.length, frameName || null)
-
     io.emit('new-media', {
-      sessionId: session,
+      eventId,
+      sessionId,
       photoCount: files.length,
       frameName: frameName || null,
       timestamp: new Date().toISOString(),
@@ -107,14 +126,13 @@ router.post('/upload', upload.array('photos', config.upload.maxFiles), async (re
       await fs.unlink(file.path).catch(() => {})
     }
 
-    res.json({ success: true, sessionId: session, photoCount: files.length, results })
+    res.json({ success: true, eventId, sessionId, photoCount: files.length, results })
   } catch (error: any) {
     res.status(500).json({ error: error.message })
   }
 })
 
 router.post('/heartbeat', (req: Request, res: Response) => {
-  updateBoothHeartbeat()
   res.json({ online: true, serverTime: new Date().toISOString() })
 })
 
@@ -159,18 +177,21 @@ router.get('/settings', async (req: Request, res: Response) => {
     const data = await fs.readFile(settingsPath, 'utf-8')
     res.json(JSON.parse(data))
   } catch {
-    res.json({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
+    res.json({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, otp: '' })
   }
 })
 
 router.post('/settings', async (req: Request, res: Response) => {
   const settingsPath = path.join(config.storage.logs, 'booth-settings.json')
-  const { photoCount, countdown, captureInterval, postCapturePreview } = req.body
-  const settings = {
+  const { photoCount, countdown, captureInterval, postCapturePreview, otp } = req.body
+  const settings: Record<string, any> = {
     photoCount: Math.max(1, Math.min(4, photoCount || 4)),
     countdown: Math.max(3, Math.min(10, countdown || 5)),
     captureInterval: Math.max(0, Math.min(5, captureInterval ?? 1)),
     postCapturePreview: Math.max(1, Math.min(5, postCapturePreview ?? 2)),
+  }
+  if (otp !== undefined) {
+    settings.otp = otp
   }
   await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2))
   logger.info('Booth settings synced from client', settings)

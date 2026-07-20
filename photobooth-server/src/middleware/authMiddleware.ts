@@ -1,42 +1,49 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import { config } from '../config'
+import { getEventByOtp } from '../db'
 import { logger } from '../utils/logger'
 
 export interface AuthRequest extends Request {
-  user?: {
-    userId: string
-    email: string
-    role: string
-    sessionId: string
-  }
+  user?: any
+  eventId?: string
 }
 
-export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
-  try {
-    const token = req.cookies.accessToken || req.headers.authorization?.split(' ')[1]
-
-    if (!token) {
-      return res.status(401).json({ error: 'Missing authorization token' })
-    }
-
-    const decoded = jwt.verify(token, config.jwt.secret) as any
-    req.user = decoded
-    next()
-  } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
-      return res.status(401).json({ error: 'Token expired' })
-    }
-    return res.status(401).json({ error: 'Invalid token' })
+export function authMiddleware(req: Request, res: Response, next: NextFunction) {
+  const token = req.cookies?.accessToken || req.headers.authorization?.split(' ')[1]
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' })
   }
+
+  jwt.verify(token, config.jwt.secret, (err: any, decoded: any) => {
+    if (err) return res.status(401).json({ error: 'Invalid token' })
+    ;(req as any).user = decoded
+    next()
+  })
+}
+
+export function boothAuthMiddleware(req: Request, res: Response, next: NextFunction) {
+  const otp = req.headers['x-booth-otp'] as string
+  if (!otp) {
+    return res.status(401).json({ error: 'No OTP provided' })
+  }
+
+  const event = getEventByOtp(otp)
+  if (!event) {
+    return res.status(401).json({ error: 'Invalid or expired OTP' })
+  }
+
+  ;(req as any).eventId = event.id
+  next()
 }
 
 export function requireRole(...roles: string[]) {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as any).user
+    if (!user) {
       return res.status(401).json({ error: 'Not authenticated' })
     }
-    if (!roles.includes(req.user.role)) {
+    if (!roles.includes(user.role)) {
       return res.status(403).json({ error: 'Insufficient permissions' })
     }
     next()

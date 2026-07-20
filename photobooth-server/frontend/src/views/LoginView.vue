@@ -37,6 +37,10 @@
           {{ authStore.loading ? 'Signing in...' : 'Sign In' }}
         </button>
       </form>
+
+      <div class="login-footer">
+        <router-link to="/booth/connect" class="booth-link">Connect Photobooth</router-link>
+      </div>
     </div>
   </div>
 </template>
@@ -57,7 +61,7 @@ async function handleLogin() {
   error.value = ''
   try {
     await authStore.login(email.value, password.value)
-    router.push('/dashboard')
+    router.push('/events')
   } catch (err: any) {
     error.value = err.response?.data?.error || 'Login failed'
   }
@@ -158,5 +162,22 @@ async function handleLogin() {
 .btn-login:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.login-footer {
+  margin-top: 1.5rem;
+  text-align: center;
+  padding-top: 1.5rem;
+  border-top: 1px solid #2a2a2a;
+}
+
+.booth-link {
+  color: #888;
+  font-size: 0.8125rem;
+  text-decoration: none;
+}
+
+.booth-link:hover {
+  color: #fff;
 }
 </style>

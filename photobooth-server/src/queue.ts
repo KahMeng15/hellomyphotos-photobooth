@@ -78,24 +78,27 @@ class AsyncJobQueue extends EventEmitter {
           job.data.rawPath,
           job.data.frameName,
           job.data.outputName,
+          job.data.eventDir,
           job.data.watermarkText
         )
 
       case 'generate-thumbnail':
-        return generateThumbnail(job.data.inputPath, job.data.outputName)
+        return generateThumbnail(job.data.inputPath, job.data.outputName, job.data.eventDir)
 
       case 'compile-strip':
         return compileVerticalStrip(
           job.data.imagePaths,
           job.data.photoCount,
-          job.data.outputName
+          job.data.outputName,
+          job.data.eventDir
         )
 
       case 'apply-watermark':
         return applyWatermark(
           job.data.inputPath,
           job.data.outputName,
-          job.data.watermarkText
+          job.data.watermarkText,
+          job.data.eventDir
         )
 
       default:

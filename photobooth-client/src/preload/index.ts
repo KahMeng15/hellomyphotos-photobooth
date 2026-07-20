@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
     captureInterval: number
     postCapturePreview: number
     serverUrl?: string
+    otp?: string
   }) => ipcRenderer.invoke('save-settings', settings),
 
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),

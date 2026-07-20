@@ -53,9 +53,17 @@ export function useWebSocket() {
     ws.value?.emit(event, data)
   }
 
+  function subscribe(eventId: string) {
+    ws.value?.emit('subscribe', eventId)
+  }
+
+  function unsubscribe(eventId: string) {
+    ws.value?.emit('unsubscribe', eventId)
+  }
+
   onUnmounted(() => {
     disconnect()
   })
 
-  return { ws, connected, connect, disconnect, sendMessage }
+  return { ws, connected, connect, disconnect, sendMessage, subscribe, unsubscribe }
 }

@@ -2,12 +2,16 @@ import { Router, Request, Response } from 'express'
 import path from 'path'
 import fs from 'fs/promises'
 import sharp from 'sharp'
+import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { authMiddleware } from '../middleware/authMiddleware'
-import { ensureSession, createShareToken, getShareToken } from '../db'
+import { getEvent } from '../db'
 
 const router = Router()
+
+// In-memory share tokens for events
+const shareTokens = new Map<string, string>() // token → eventId
 
 function extractSessionId(filename: string): string | null {
   const match = filename.match(/^(.+)_(\d+)\.\w+$/)
@@ -16,20 +20,28 @@ function extractSessionId(filename: string): string | null {
 
 router.post('/create', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { sessionId } = req.body
-    if (!sessionId) {
-      return res.status(400).json({ error: 'sessionId required' })
+    const { eventId } = req.body
+    if (!eventId) {
+      return res.status(400).json({ error: 'eventId required' })
     }
 
-    const files = await fs.readdir(config.storage.photos)
-    const sessionFiles = files.filter((f) => f.startsWith(sessionId) && !f.includes('_thumb') && !f.includes('_strip'))
-    const photoCount = sessionFiles.length
+    const event = getEvent(eventId)
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' })
+    }
 
-    ensureSession(sessionId, photoCount, req.body.frameName || null)
-    const token = createShareToken(sessionId)
+    // Find existing token or create new
+    let token: string | undefined
+    for (const [t, eid] of shareTokens) {
+      if (eid === eventId) { token = t; break }
+    }
+    if (!token) {
+      token = uuidv4()
+      shareTokens.set(token, eventId)
+    }
 
     const shareUrl = `${req.protocol}://${req.get('host')}/share/${token}`
-    logger.info(`Share link created for session ${sessionId}: ${shareUrl}`)
+    logger.info(`Share link created for event ${eventId}: ${shareUrl}`)
 
     res.json({ success: true, token, url: shareUrl })
   } catch (error: any) {
@@ -40,19 +52,31 @@ router.post('/create', authMiddleware, async (req: Request, res: Response) => {
 
 router.get('/:token', async (req: Request, res: Response) => {
   try {
-    const data = getShareToken(req.params.token)
-    if (!data) {
+    const eventId = shareTokens.get(req.params.token)
+    if (!eventId) {
       return res.status(404).json({ error: 'Share link not found' })
     }
 
-    const files = await fs.readdir(config.storage.photos)
+    const event = getEvent(eventId)
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' })
+    }
+
+    const eventDir = config.eventPhotosDir(eventId)
+    let files: string[] = []
+    try {
+      files = await fs.readdir(eventDir)
+    } catch {
+      files = []
+    }
+
     const sessionFiles = files
-      .filter((f) => f.startsWith(data.session_id) && !f.includes('_thumb') && !f.includes('_strip'))
+      .filter((f) => !f.includes('_thumb') && !f.includes('_strip'))
       .sort()
 
     const photos = await Promise.all(
       sessionFiles.map(async (name) => {
-        const stat = await fs.stat(path.join(config.storage.photos, name))
+        const stat = await fs.stat(path.join(eventDir, name))
         const thumbName = name.replace(/(\.\w+)$/, '_thumb$1')
         const thumbExists = files.includes(thumbName)
         return {
@@ -67,10 +91,10 @@ router.get('/:token', async (req: Request, res: Response) => {
     )
 
     res.json({
-      sessionId: data.session_id,
-      photoCount: data.photo_count,
-      frameName: data.frame_name,
-      createdAt: data.created_at,
+      eventId: event.id,
+      eventName: event.name,
+      eventDate: event.date,
+      photoCount: photos.length,
       photos,
     })
   } catch (error: any) {
@@ -81,16 +105,17 @@ router.get('/:token', async (req: Request, res: Response) => {
 
 router.get('/:token/photo/:filename', async (req: Request, res: Response) => {
   try {
-    const data = getShareToken(req.params.token)
-    if (!data) {
+    const eventId = shareTokens.get(req.params.token)
+    if (!eventId) {
       return res.status(404).json({ error: 'Share link not found' })
     }
 
+    const eventDir = config.eventPhotosDir(eventId)
     const filename = req.params.filename
-    const filePath = path.join(config.storage.photos, filename)
+    const filePath = path.join(eventDir, filename)
     const resolvedPath = path.resolve(filePath)
 
-    if (!resolvedPath.startsWith(path.resolve(config.storage.photos))) {
+    if (!resolvedPath.startsWith(path.resolve(eventDir))) {
       return res.status(400).json({ error: 'Invalid path' })
     }
 

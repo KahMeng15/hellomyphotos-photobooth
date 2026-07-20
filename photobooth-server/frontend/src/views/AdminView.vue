@@ -109,7 +109,7 @@ async function deleteFrame(id: string) {
 }
 
 function goBack() {
-  router.push('/dashboard')
+  router.push('/events')
 }
 
 function formatUptime(s: number) {

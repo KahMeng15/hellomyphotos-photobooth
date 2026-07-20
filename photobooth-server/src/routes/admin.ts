@@ -9,7 +9,10 @@ import { jobQueue } from '../queue'
 import { pendingCommands } from './booth'
 import { v4 as uuidv4 } from 'uuid'
 import { io } from '../server'
-import { ensureSession } from '../db'
+import {
+  createEvent, updateEventById, getEvent, listEvents,
+  endEvent, deleteEvent, listEventPhotoSessions
+} from '../db'
 
 const router = Router()
 
@@ -33,6 +36,8 @@ const frameUpload = multer({
     }
   },
 })
+
+// ── Frames ──
 
 router.get('/frames', async (req: Request, res: Response) => {
   try {
@@ -73,11 +78,9 @@ router.delete('/frames/:id', async (req: Request, res: Response) => {
   try {
     const framePath = path.join(config.storage.frames, req.params.id)
     const resolvedPath = path.resolve(framePath)
-
     if (!resolvedPath.startsWith(path.resolve(config.storage.frames))) {
       return res.status(400).json({ error: 'Invalid path' })
     }
-
     await fs.unlink(resolvedPath)
     logger.info(`Frame deleted: ${req.params.id}`)
     res.json({ success: true })
@@ -86,6 +89,239 @@ router.delete('/frames/:id', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to delete frame' })
   }
 })
+
+// ── Events ──
+
+router.get('/events', async (req: Request, res: Response) => {
+  try {
+    const includeEnded = req.query.includeEnded === 'true'
+    const events = listEvents(includeEnded)
+    res.json({ events })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.post('/events', async (req: Request, res: Response) => {
+  try {
+    const { name, date, description } = req.body
+    if (!name) return res.status(400).json({ error: 'Event name required' })
+
+    const { id, otp } = createEvent(name, date || new Date().toISOString().split('T')[0], description || '')
+    const event = getEvent(id)
+    logger.info(`Event created: ${name} (${id}) otp=${otp}`)
+    res.json({ success: true, event, otp })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.get('/events/:id', async (req: Request, res: Response) => {
+  try {
+    const event = getEvent(req.params.id)
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+    res.json({ event })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.patch('/events/:id', async (req: Request, res: Response) => {
+  try {
+    const event = getEvent(req.params.id)
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+    const { name, date, description } = req.body
+    updateEventById(req.params.id,
+      name ?? event.name,
+      date ?? event.date,
+      description ?? event.description
+    )
+    res.json({ success: true, event: getEvent(req.params.id) })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.post('/events/:id/end', async (req: Request, res: Response) => {
+  try {
+    const event = getEvent(req.params.id)
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+    endEvent(req.params.id)
+    io.emit('event-ended', { eventId: req.params.id })
+    res.json({ success: true })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.delete('/events/:id', async (req: Request, res: Response) => {
+  try {
+    const event = getEvent(req.params.id)
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+
+    const eventDir = config.eventPhotosDir(req.params.id)
+    await fs.rm(eventDir, { recursive: true, force: true })
+
+    deleteEvent(req.params.id)
+    logger.info(`Event deleted: ${req.params.id}`)
+    res.json({ success: true })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// ── Event Photo Sessions (per-person groups inside an event) ──
+
+router.get('/events/:id/photos', async (req: Request, res: Response) => {
+  try {
+    const event = getEvent(req.params.id)
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+
+    const eventDir = config.eventPhotosDir(req.params.id)
+    let files: string[] = []
+    try {
+      files = await fs.readdir(eventDir)
+    } catch {
+      files = []
+    }
+
+    const sessionMap = new Map<string, { photos: any[]; timestamps: string[]; frameName?: string | null }>()
+
+    for (const name of files) {
+      if (name.includes('_thumb') || name.includes('_strip')) continue
+      const match = name.match(/^(.+)_(\d+)\.\w+$/)
+      if (!match) continue
+      const sessionId = match[1]
+      if (!sessionMap.has(sessionId)) {
+        sessionMap.set(sessionId, { photos: [], timestamps: [] })
+      }
+      const stat = await fs.stat(path.join(eventDir, name))
+      const thumbName = name.replace(/(\.\w+)$/, '_thumb$1')
+      const thumbExists = files.includes(thumbName)
+      sessionMap.get(sessionId)!.photos.push({
+        id: name,
+        url: `/api/admin/events/${req.params.id}/photo/${name}`,
+        thumbnail: thumbExists ? `/api/admin/events/${req.params.id}/photo/${thumbName}` : `/api/admin/events/${req.params.id}/photo/${name}`,
+        size: stat.size,
+        timestamp: stat.birthtime.toISOString(),
+      })
+      sessionMap.get(sessionId)!.timestamps.push(stat.birthtime.toISOString())
+    }
+
+    const sessions = Array.from(sessionMap.entries())
+      .map(([sessionId, data]) => ({
+        sessionId,
+        photoCount: data.photos.length,
+        firstPhoto: data.photos[0] || null,
+        photos: data.photos,
+        timestamps: data.timestamps,
+        createdAt: data.timestamps.sort().reverse()[0] || new Date().toISOString(),
+      }))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+    res.json({ sessions, event })
+  } catch (error: any) {
+    logger.error(`Failed to list event photos: ${error.message}`)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.get('/events/:id/photo/:filename', async (req: Request, res: Response) => {
+  try {
+    const event = getEvent(req.params.id)
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+
+    const eventDir = config.eventPhotosDir(req.params.id)
+    const filePath = path.join(eventDir, req.params.filename)
+    const resolvedPath = path.resolve(filePath)
+
+    if (!resolvedPath.startsWith(path.resolve(eventDir))) {
+      return res.status(400).json({ error: 'Invalid path' })
+    }
+
+    const download = req.query.download !== undefined
+    if (download && req.params.filename.endsWith('.webp')) {
+      const index = req.params.filename.match(/_(\d+)\.webp$/)
+      const photoNum = index ? index[1] : '1'
+      const webpBuf = await fs.readFile(filePath)
+      const jpegBuf = await sharp(webpBuf).jpeg({ quality: 85 }).toBuffer()
+      res.setHeader('Content-Type', 'image/jpeg')
+      res.setHeader('Content-Disposition', `attachment; filename="photo-${photoNum}.jpg"`)
+      res.setHeader('Content-Length', jpegBuf.length)
+      return res.send(jpegBuf)
+    }
+
+    try {
+      await fs.stat(filePath)
+    } catch {
+      return res.status(404).json({ error: 'Photo not found' })
+    }
+
+    const ext = path.extname(req.params.filename).toLowerCase()
+    const mime: Record<string, string> = {
+      '.webp': 'image/webp',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+    }
+    res.setHeader('Content-Type', mime[ext] || 'application/octet-stream')
+    res.setHeader('Cache-Control', 'public, max-age=86400')
+    res.sendFile(filePath)
+  } catch (error: any) {
+    logger.error(`Photo serve failed: ${error.message}`)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.delete('/events/:id/photo/:filename', async (req: Request, res: Response) => {
+  try {
+    const event = getEvent(req.params.id)
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+
+    const eventDir = config.eventPhotosDir(req.params.id)
+    const filePath = path.join(eventDir, req.params.filename)
+    const resolvedPath = path.resolve(filePath)
+
+    if (!resolvedPath.startsWith(path.resolve(eventDir))) {
+      return res.status(400).json({ error: 'Invalid path' })
+    }
+
+    await fs.unlink(resolvedPath)
+    logger.info(`Photo deleted from event ${req.params.id}: ${req.params.filename}`)
+    res.json({ success: true })
+  } catch (error: any) {
+    logger.error(`Failed to delete photo: ${error.message}`)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.delete('/events/:id/session/:sessionId', async (req: Request, res: Response) => {
+  try {
+    const event = getEvent(req.params.id)
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+
+    const eventDir = config.eventPhotosDir(req.params.id)
+    let files: string[] = []
+    try {
+      files = await fs.readdir(eventDir)
+    } catch {
+      files = []
+    }
+
+    const toDelete = files.filter((f) => f.startsWith(req.params.sessionId))
+    if (toDelete.length === 0) {
+      return res.status(404).json({ error: 'Session not found' })
+    }
+    await Promise.all(toDelete.map((f) => fs.unlink(path.join(eventDir, f))))
+    logger.info(`Session deleted from event ${req.params.id}: ${req.params.sessionId} (${toDelete.length} files)`)
+    res.json({ success: true, deleted: toDelete.length })
+  } catch (error: any) {
+    logger.error(`Failed to delete session: ${error.message}`)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// ── Global photos (legacy — not event-specific, kept for backward compat) ──
 
 router.get('/photos', async (req: Request, res: Response) => {
   try {
@@ -114,6 +350,49 @@ router.get('/photos', async (req: Request, res: Response) => {
   }
 })
 
+router.delete('/photos/:id', async (req: Request, res: Response) => {
+  try {
+    const photoPath = path.join(config.storage.photos, req.params.id)
+    const resolvedPath = path.resolve(photoPath)
+    if (!resolvedPath.startsWith(path.resolve(config.storage.photos))) {
+      return res.status(400).json({ error: 'Invalid path' })
+    }
+    await fs.unlink(resolvedPath)
+    logger.info(`Photo deleted: ${req.params.id}`)
+    res.json({ success: true })
+  } catch (error: any) {
+    logger.error(`Failed to delete photo: ${error.message}`)
+    res.status(500).json({ error: 'Failed to delete photo' })
+  }
+})
+
+router.get('/photos/:id/download', async (req: Request, res: Response) => {
+  try {
+    const filename = req.params.id
+    const filePath = path.join(config.storage.photos, filename)
+    const resolvedPath = path.resolve(filePath)
+    if (!resolvedPath.startsWith(path.resolve(config.storage.photos))) {
+      return res.status(400).json({ error: 'Invalid path' })
+    }
+    if (!filename.endsWith('.webp')) {
+      return res.status(400).json({ error: 'Only WebP photos can be downloaded as JPEG' })
+    }
+    const index = filename.match(/_(\d+)\.webp$/)
+    const photoNum = index ? index[1] : '1'
+    const webpBuf = await fs.readFile(filePath)
+    const jpegBuf = await sharp(webpBuf).jpeg({ quality: 85 }).toBuffer()
+    res.setHeader('Content-Type', 'image/jpeg')
+    res.setHeader('Content-Disposition', `attachment; filename="photo-${photoNum}.jpg"`)
+    res.setHeader('Content-Length', jpegBuf.length)
+    res.send(jpegBuf)
+  } catch (error: any) {
+    logger.error(`Photo download failed: ${error.message}`)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// ── Global session endpoints (legacy) ──
+
 router.get('/sessions', async (req: Request, res: Response) => {
   try {
     const files = await fs.readdir(config.storage.photos)
@@ -130,7 +409,6 @@ router.get('/sessions', async (req: Request, res: Response) => {
       const stat = await fs.stat(path.join(config.storage.photos, name))
       const thumbName = name.replace(/(\.\w+)$/, '_thumb$1')
       const thumbExists = files.includes(thumbName)
-      ensureSession(sessionId, sessionMap.get(sessionId)!.photos.length + 1, null)
       sessionMap.get(sessionId)!.photos.push({
         id: name,
         url: `/api/photos/${name}`,
@@ -159,24 +437,6 @@ router.get('/sessions', async (req: Request, res: Response) => {
   }
 })
 
-router.delete('/photos/:id', async (req: Request, res: Response) => {
-  try {
-    const photoPath = path.join(config.storage.photos, req.params.id)
-    const resolvedPath = path.resolve(photoPath)
-
-    if (!resolvedPath.startsWith(path.resolve(config.storage.photos))) {
-      return res.status(400).json({ error: 'Invalid path' })
-    }
-
-    await fs.unlink(resolvedPath)
-    logger.info(`Photo deleted: ${req.params.id}`)
-    res.json({ success: true })
-  } catch (error: any) {
-    logger.error(`Failed to delete photo: ${error.message}`)
-    res.status(500).json({ error: 'Failed to delete photo' })
-  }
-})
-
 router.delete('/session/:sessionId', async (req: Request, res: Response) => {
   try {
     const { sessionId } = req.params
@@ -194,35 +454,7 @@ router.delete('/session/:sessionId', async (req: Request, res: Response) => {
   }
 })
 
-router.get('/photos/:id/download', async (req: Request, res: Response) => {
-  try {
-    const filename = req.params.id
-    const filePath = path.join(config.storage.photos, filename)
-    const resolvedPath = path.resolve(filePath)
-
-    if (!resolvedPath.startsWith(path.resolve(config.storage.photos))) {
-      return res.status(400).json({ error: 'Invalid path' })
-    }
-
-    if (!filename.endsWith('.webp')) {
-      return res.status(400).json({ error: 'Only WebP photos can be downloaded as JPEG' })
-    }
-
-    const index = filename.match(/_(\d+)\.webp$/)
-    const photoNum = index ? index[1] : '1'
-
-    const webpBuf = await fs.readFile(filePath)
-    const jpegBuf = await sharp(webpBuf).jpeg({ quality: 85 }).toBuffer()
-
-    res.setHeader('Content-Type', 'image/jpeg')
-    res.setHeader('Content-Disposition', `attachment; filename="photo-${photoNum}.jpg"`)
-    res.setHeader('Content-Length', jpegBuf.length)
-    res.send(jpegBuf)
-  } catch (error: any) {
-    logger.error(`Photo download failed: ${error.message}`)
-    res.status(500).json({ error: error.message })
-  }
-})
+// ── Settings ──
 
 router.get('/settings', async (req: Request, res: Response) => {
   const settingsPath = path.join(config.storage.logs, 'booth-settings.json')
@@ -230,18 +462,21 @@ router.get('/settings', async (req: Request, res: Response) => {
     const data = await fs.readFile(settingsPath, 'utf-8')
     res.json(JSON.parse(data))
   } catch {
-    res.json({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
+    res.json({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, otp: '' })
   }
 })
 
 router.post('/settings', async (req: Request, res: Response) => {
   const settingsPath = path.join(config.storage.logs, 'booth-settings.json')
-  const { photoCount, countdown, captureInterval, postCapturePreview } = req.body
-  const settings = {
+  const { photoCount, countdown, captureInterval, postCapturePreview, otp } = req.body
+  const settings: Record<string, any> = {
     photoCount: Math.max(1, Math.min(4, photoCount || 4)),
     countdown: Math.max(3, Math.min(10, countdown || 5)),
     captureInterval: Math.max(0, Math.min(5, captureInterval ?? 1)),
     postCapturePreview: Math.max(1, Math.min(5, postCapturePreview ?? 2)),
+  }
+  if (otp !== undefined) {
+    settings.otp = otp
   }
   await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2))
   logger.info('Booth settings updated', settings)
@@ -255,56 +490,10 @@ router.post('/settings', async (req: Request, res: Response) => {
   res.json({ success: true, settings })
 })
 
+// ── Queue ──
+
 router.get('/queue', (req: Request, res: Response) => {
   res.json({ queue: jobQueue.stats })
-})
-
-router.get('/events', async (req: Request, res: Response) => {
-  try {
-    const eventsPath = path.join(config.storage.logs, 'events.json')
-    let events: any[] = []
-    try {
-      const data = await fs.readFile(eventsPath, 'utf-8')
-      events = JSON.parse(data)
-    } catch {
-      events = []
-    }
-    res.json({ events })
-  } catch (error: any) {
-    res.status(500).json({ error: error.message })
-  }
-})
-
-router.post('/events', async (req: Request, res: Response) => {
-  try {
-    const { name, date, defaultPhotoCount, frameSet } = req.body
-    if (!name) return res.status(400).json({ error: 'Event name required' })
-
-    const eventsPath = path.join(config.storage.logs, 'events.json')
-    let events: any[] = []
-    try {
-      const data = await fs.readFile(eventsPath, 'utf-8')
-      events = JSON.parse(data)
-    } catch {
-      events = []
-    }
-
-    const event = {
-      id: `event-${Date.now()}`,
-      name,
-      date: date || new Date().toISOString().split('T')[0],
-      defaultPhotoCount: defaultPhotoCount || 4,
-      frameSet: frameSet || [],
-      createdAt: new Date().toISOString(),
-    }
-
-    events.push(event)
-    await fs.writeFile(eventsPath, JSON.stringify(events, null, 2))
-    logger.info(`Event created: ${event.name}`)
-    res.json({ success: true, event })
-  } catch (error: any) {
-    res.status(500).json({ error: error.message })
-  }
 })
 
 export default router

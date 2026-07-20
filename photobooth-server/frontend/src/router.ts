@@ -5,7 +5,7 @@ export const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/dashboard',
+      redirect: '/events',
     },
     {
       path: '/login',
@@ -13,9 +13,15 @@ export const router = createRouter({
       component: () => import('./views/LoginView.vue'),
     },
     {
-      path: '/dashboard',
-      name: 'dashboard',
-      component: () => import('./views/DashboardView.vue'),
+      path: '/events',
+      name: 'events',
+      component: () => import('./views/EventListView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/events/:id',
+      name: 'event-detail',
+      component: () => import('./views/EventDetailView.vue'),
       meta: { requiresAuth: true },
     },
     {
@@ -29,6 +35,11 @@ export const router = createRouter({
       name: 'settings',
       component: () => import('./views/SettingsView.vue'),
       meta: { requiresAuth: true },
+    },
+    {
+      path: '/booth/connect',
+      name: 'booth-connect',
+      component: () => import('./views/BoothConnectView.vue'),
     },
     {
       path: '/share/:token',
@@ -56,7 +67,7 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (to.path === '/login' && auth.isAuthenticated) {
-    next('/dashboard')
+    next('/events')
     return
   }
 

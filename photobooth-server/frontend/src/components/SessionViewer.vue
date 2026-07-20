@@ -25,7 +25,7 @@
           </button>
           <button @click="showQr" class="btn-action">QR Code</button>
           <button @click="downloadAll" class="btn-action">Download All</button>
-          <button @click="deleteSession" class="btn-action btn-danger">Delete Session</button>
+          <button @click="deleteSession" class="btn-action btn-danger">Delete</button>
         </div>
 
         <div v-if="shareError" class="share-error">{{ shareError }}</div>
@@ -47,10 +47,11 @@
 import { ref, nextTick } from 'vue'
 import QRCode from 'qrcode'
 import { usePhotosStore } from '../stores/photos'
-import type { Session } from '../stores/photos'
+import type { PhotoSession } from '../stores/photos'
 
 const props = defineProps<{
-  session: Session
+  session: PhotoSession
+  eventId?: string
 }>()
 
 const emit = defineEmits<{ close: [] }>()
@@ -66,9 +67,13 @@ async function copyShareLink() {
   shareError.value = ''
   linkCopied.value = false
   try {
-    const url = await photosStore.createShareLink(props.session.sessionId)
-    shareUrl = url
-    await navigator.clipboard.writeText(url)
+    if (props.eventId) {
+      const url = await photosStore.createShareLink(props.eventId)
+      shareUrl = url
+    } else {
+      shareUrl = `${window.location.origin}/share/${props.session.sessionId}`
+    }
+    await navigator.clipboard.writeText(shareUrl)
     linkCopied.value = true
     setTimeout(() => { linkCopied.value = false }, 2000)
   } catch (err) {
@@ -79,7 +84,11 @@ async function copyShareLink() {
 async function showQr() {
   if (!shareUrl) {
     try {
-      shareUrl = await photosStore.createShareLink(props.session.sessionId)
+      if (props.eventId) {
+        shareUrl = await photosStore.createShareLink(props.eventId)
+      } else {
+        shareUrl = `${window.location.origin}/share/${props.session.sessionId}`
+      }
     } catch {
       shareError.value = 'Failed to create share link'
       return
@@ -99,8 +108,14 @@ async function showQr() {
 
 async function downloadAll() {
   for (const photo of props.session.photos) {
+    let href: string
+    if (props.eventId) {
+      href = `/api/admin/events/${props.eventId}/photo/${photo.id}?download=1`
+    } else {
+      href = `/api/admin/photos/${photo.id}/download`
+    }
     const link = document.createElement('a')
-    link.href = `/api/admin/photos/${photo.id}/download`
+    link.href = href
     link.download = ''
     document.body.appendChild(link)
     link.click()
@@ -110,7 +125,11 @@ async function downloadAll() {
 }
 
 async function deleteSession() {
-  await photosStore.deleteSession(props.session.sessionId)
+  if (props.eventId) {
+    await photosStore.deleteEventSession(props.eventId, props.session.sessionId)
+  } else {
+    await photosStore.deleteSession(props.session.sessionId)
+  }
   emit('close')
 }
 
@@ -240,10 +259,5 @@ function formatTime(ts: string) {
   margin-top: 0.5rem;
   font-size: 0.75rem;
   color: #f44336;
-}
-
-.qr-section {
-  margin-top: 1rem;
-  text-align: center;
 }
 </style>

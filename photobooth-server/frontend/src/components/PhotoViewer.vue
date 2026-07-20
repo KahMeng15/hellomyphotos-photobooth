@@ -10,7 +10,7 @@
           <span v-if="photo.size">{{ (photo.size / 1024).toFixed(0) }}KB</span>
         </div>
         <div class="viewer-actions">
-          <a :href="`/api/admin/photos/${photo.id}/download`" class="btn-action">Download JPEG</a>
+          <a :href="downloadUrl" class="btn-action">Download JPEG</a>
           <button @click="sharePhoto" class="btn-action">Share</button>
           <button v-if="photo.sessionId" @click="shareSessionLink" class="btn-action">{{ sessionLinkCopied ? 'Copied!' : 'Copy Session Link' }}</button>
           <button @click="showQr" class="btn-action">QR Code</button>
@@ -26,12 +26,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import QRCode from 'qrcode'
 import { usePhotosStore } from '../stores/photos'
 
 const props = defineProps<{
   photo: { id: string; url: string; timestamp: string; sessionId?: string; frameName?: string; size?: number }
+  eventId?: string
 }>()
 
 const emit = defineEmits<{ close: [] }>()
@@ -41,6 +42,13 @@ const photosStore = usePhotosStore()
 const showQrCode = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const sessionLinkCopied = ref(false)
+
+const downloadUrl = computed(() => {
+  if (props.eventId) {
+    return `/api/admin/events/${props.eventId}/photo/${props.photo.id}?download=1`
+  }
+  return `/api/admin/photos/${props.photo.id}/download`
+})
 
 async function sharePhoto() {
   const url = window.location.origin + props.photo.url
@@ -56,10 +64,10 @@ async function sharePhoto() {
 }
 
 async function shareSessionLink() {
-  if (!props.photo.sessionId) return
+  if (!props.photo.sessionId || !props.eventId) return
   sessionLinkCopied.value = false
   try {
-    const url = await photosStore.createShareLink(props.photo.sessionId)
+    const url = await photosStore.createShareLink(props.eventId)
     await navigator.clipboard.writeText(url)
     sessionLinkCopied.value = true
     setTimeout(() => { sessionLinkCopied.value = false }, 2000)
@@ -79,12 +87,19 @@ async function showQr() {
 }
 
 async function deleteSingle() {
-  await photosStore.deletePhoto(props.photo.id)
+  if (props.eventId) {
+    const axios = await import('axios')
+    await axios.default.delete(`/api/admin/events/${props.eventId}/photo/${props.photo.id}`)
+  } else {
+    await photosStore.deletePhoto(props.photo.id)
+  }
   emit('close')
 }
 
 async function deleteSession() {
-  if (props.photo.sessionId) {
+  if (props.photo.sessionId && props.eventId) {
+    await photosStore.deleteEventSession(props.eventId, props.photo.sessionId)
+  } else if (props.photo.sessionId) {
     await photosStore.deleteSession(props.photo.sessionId)
   }
   emit('close')

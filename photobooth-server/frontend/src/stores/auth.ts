@@ -37,7 +37,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const { data } = await axios.get('/api/auth/me')
       user.value = data.user
-      accessToken.value = 'restored'
+      await refreshToken()
       return true
     } catch {
       user.value = null

@@ -63,9 +63,14 @@ export function initIpcHandlers(
       formData.append('photoCount', String(data.photoCount))
       if (data.frameName) formData.append('frameName', data.frameName)
 
+      const settings = getSettingsSync()
+      const headers: Record<string, string> = {}
+      if (settings.otp) headers['X-Booth-OTP'] = settings.otp
+
       const response = await fetch(`${serverUrl}/api/booth/upload`, {
         method: 'POST',
         body: formData,
+        headers,
       })
       if (!response.ok) throw new Error(`Upload failed: ${response.status}`)
 
@@ -82,6 +87,10 @@ export function initIpcHandlers(
 
   ipcMain.handle('upload-queued', async () => {
     const pending = offlineQueue.getPending()
+    const settings = getSettingsSync()
+    const headers: Record<string, string> = {}
+    if (settings.otp) headers['X-Booth-OTP'] = settings.otp
+
     for (const job of pending) {
       try {
         const formData = new FormData()
@@ -101,6 +110,7 @@ export function initIpcHandlers(
         const response = await fetch(`${serverUrl}/api/booth/upload`, {
           method: 'POST',
           body: formData,
+          headers,
         })
         if (response.ok) {
           offlineQueue.markCompleted(job.id)
@@ -127,7 +137,7 @@ export function initIpcHandlers(
     return getSettingsSync()
   })
 
-  ipcMain.handle('save-settings', async (event, settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; serverUrl?: string }) => {
+  ipcMain.handle('save-settings', async (event, settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; serverUrl?: string; otp?: string }) => {
     try {
       const existing = getSettingsSync()
       const merged = { ...existing, ...settings }
@@ -138,15 +148,17 @@ export function initIpcHandlers(
         _setServerUrl(merged.serverUrl)
       }
       try {
+        const body: Record<string, any> = {
+          photoCount: merged.photoCount,
+          countdown: merged.countdown,
+          captureInterval: merged.captureInterval,
+          postCapturePreview: merged.postCapturePreview,
+        }
+        if (merged.otp) body.otp = merged.otp
         await fetch(`${syncUrl}/api/booth/settings`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            photoCount: merged.photoCount,
-            countdown: merged.countdown,
-            captureInterval: merged.captureInterval,
-            postCapturePreview: merged.postCapturePreview,
-          }),
+          body: JSON.stringify(body),
         })
       } catch {}
       return { success: true }
@@ -162,6 +174,10 @@ export function initIpcHandlers(
 
 export async function flushQueuedUploads() {
   const pending = _offlineQueue.getPending()
+  const settings = getSettingsSync()
+  const headers: Record<string, string> = {}
+  if (settings.otp) headers['X-Booth-OTP'] = settings.otp
+
   for (const job of pending) {
     try {
       const formData = new FormData()
@@ -181,6 +197,7 @@ export async function flushQueuedUploads() {
       const response = await fetch(`${_serverUrl}/api/booth/upload`, {
         method: 'POST',
         body: formData,
+        headers,
       })
       if (response.ok) {
         _offlineQueue.markCompleted(job.id)

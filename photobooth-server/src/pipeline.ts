@@ -11,17 +11,23 @@ export interface ProcessedImage {
   height: number
 }
 
+function outputDir(eventDir?: string): string {
+  return eventDir || config.storage.photos
+}
+
 export async function processSinglePhoto(
   rawPath: string,
   frameName: string | null,
   outputName: string,
+  eventDir?: string,
   watermarkText?: string
 ): Promise<ProcessedImage> {
   try {
+    const dir = outputDir(eventDir)
     const framePath = frameName
       ? path.join(config.storage.frames, frameName)
       : null
-    const outputPath = path.join(config.storage.photos, outputName)
+    const outputPath = path.join(dir, outputName)
 
     const rawMetadata = await sharp(rawPath).metadata()
     let frameWidth = rawMetadata.width || 1200
@@ -74,10 +80,12 @@ export async function processSinglePhoto(
 export async function compileVerticalStrip(
   imagePaths: string[],
   photoCount: number,
-  outputName: string
+  outputName: string,
+  eventDir?: string
 ): Promise<ProcessedImage> {
   try {
-    const outputPath = path.join(config.storage.photos, outputName)
+    const dir = outputDir(eventDir)
+    const outputPath = path.join(dir, outputName)
 
     const photoWidth = 900
     const photoHeight = 1100
@@ -114,10 +122,12 @@ export async function compileVerticalStrip(
 
 export async function generateThumbnail(
   inputPath: string,
-  outputName: string
+  outputName: string,
+  eventDir?: string
 ): Promise<{ path: string }> {
   try {
-    const outputPath = path.join(config.storage.photos, outputName)
+    const dir = outputDir(eventDir)
+    const outputPath = path.join(dir, outputName)
 
     await sharp(inputPath)
       .resize(config.imageProcessing.thumbnailSize, config.imageProcessing.thumbnailSize, {
@@ -136,10 +146,12 @@ export async function generateThumbnail(
 export async function applyWatermark(
   inputPath: string,
   outputName: string,
-  watermarkText: string
+  watermarkText: string,
+  eventDir?: string
 ): Promise<ProcessedImage> {
   try {
-    const outputPath = path.join(config.storage.photos, outputName)
+    const dir = outputDir(eventDir)
+    const outputPath = path.join(dir, outputName)
     const metadata = await sharp(inputPath).metadata()
     const w = metadata.width || 1200
     const h = metadata.height || 1800

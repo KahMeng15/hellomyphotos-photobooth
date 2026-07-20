@@ -1,7 +1,7 @@
 <template>
   <div class="settings-page">
     <header class="settings-header">
-      <button @click="$router.push('/dashboard')" class="btn-ghost">&larr; Dashboard</button>
+      <button @click="$router.push('/events')" class="btn-ghost">&larr; Events</button>
       <h1>Booth Settings</h1>
       <div></div>
     </header>
@@ -43,6 +43,21 @@
         </div>
       </section>
 
+      <section class="card">
+        <h2>Connection</h2>
+        <div class="field">
+          <label>Photobooth OTP</label>
+          <p class="field-desc">Enter the 6-digit OTP from the event to link this booth.</p>
+          <input
+            v-model="settings.otp"
+            type="text"
+            maxlength="6"
+            placeholder="000000"
+            class="input-otp"
+          />
+        </div>
+      </section>
+
       <div class="actions">
         <button @click="saveAndClose" class="btn-primary">Save</button>
         <button @click="cancelChanges" class="btn-cancel">Cancel</button>
@@ -59,8 +74,8 @@ import axios from 'axios'
 import { useWebSocket } from '../composables/useWebSocket'
 
 const router = useRouter()
-const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
-const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
+const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, otp: '' })
+const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, otp: '' })
 const saved = ref(false)
 const { ws, connect, disconnect } = useWebSocket()
 
@@ -68,7 +83,8 @@ const dirty = computed(() =>
   settings.value.photoCount !== originalSettings.value.photoCount ||
   settings.value.countdown !== originalSettings.value.countdown ||
   settings.value.captureInterval !== originalSettings.value.captureInterval ||
-  settings.value.postCapturePreview !== originalSettings.value.postCapturePreview
+  settings.value.postCapturePreview !== originalSettings.value.postCapturePreview ||
+  settings.value.otp !== originalSettings.value.otp
 )
 
 onMounted(async () => {
@@ -107,7 +123,7 @@ async function saveAndClose() {
     await axios.post('/api/admin/settings', settings.value)
     originalSettings.value = { ...settings.value }
     saved.value = true
-    router.push('/dashboard')
+    router.push('/events')
   } catch (err) {
     console.error('Failed to save settings', err)
   }
@@ -118,7 +134,7 @@ function cancelChanges() {
     if (!confirm('You have unsaved changes. Discard them?')) return
   }
   settings.value = { ...originalSettings.value }
-  router.push('/dashboard')
+  router.push('/events')
 }
 </script>
 
@@ -187,6 +203,30 @@ function cancelChanges() {
 .field-row input[type="range"] {
   flex: 1;
   accent-color: #fff;
+}
+
+.field-desc {
+  font-size: 0.75rem;
+  color: #666;
+  margin: 0 0 0.5rem;
+}
+
+.input-otp {
+  font-size: 1.5rem;
+  font-family: monospace;
+  letter-spacing: 0.5rem;
+  padding: 0.625rem;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  color: #fff;
+  width: 200px;
+  text-align: center;
+  outline: none;
+}
+
+.input-otp:focus {
+  border-color: #555;
 }
 
 .value {
