@@ -8,7 +8,7 @@ import { logger } from '../utils/logger'
 import { boothAuthMiddleware } from '../middleware/authMiddleware'
 import { io } from '../server'
 import { processSinglePhoto, generateThumbnail, compileVerticalStrip } from '../pipeline'
-import { ensurePhotoSession } from '../db'
+import { ensurePhotoSession, getEventByOtp } from '../db'
 
 const router = Router()
 
@@ -169,6 +169,26 @@ router.post('/remote-pause', (req: Request, res: Response) => {
 router.get('/commands', (req: Request, res: Response) => {
   const commands = pendingCommands.splice(0)
   res.json({ commands })
+})
+
+router.get('/validate-otp', (req: Request, res: Response) => {
+  const otp = (req.query.otp || '').toString().trim()
+  if (!otp || otp.length !== 6) {
+    return res.status(400).json({ valid: false, error: 'Invalid OTP format' })
+  }
+  const event = getEventByOtp(otp)
+  if (!event) {
+    return res.json({ valid: false, error: 'OTP not found or expired' })
+  }
+  res.json({
+    valid: true,
+    event: {
+      id: event.id,
+      name: event.name,
+      date: event.date,
+      description: event.description,
+    },
+  })
 })
 
 router.get('/settings', async (req: Request, res: Response) => {

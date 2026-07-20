@@ -1,3 +1,23 @@
+import { io, Socket } from 'socket.io-client'
+
+let boothSocket: Socket | null = null
+
+function connectBoothSocket(serverUrl: string, otp: string) {
+  if (boothSocket?.connected) {
+    boothSocket.disconnect()
+  }
+  boothSocket = io(serverUrl, {
+    auth: { otp },
+    transports: ['websocket', 'polling'],
+  })
+  boothSocket.on('connect', () => {
+    console.log('[booth] WebSocket connected')
+  })
+  boothSocket.on('connect_error', (err) => {
+    console.error('[booth] WebSocket error:', err.message)
+  })
+}
+
 interface BoothSettings {
   photoCount: number
   countdown: number
@@ -196,22 +216,79 @@ export class Settings {
     desc.style.cssText = 'font-size: 0.75rem; color: #666; margin: 0 0 0.5rem;'
     section.appendChild(desc)
 
+    const row = document.createElement('div')
+    row.style.cssText = 'display: flex; gap: 0.5rem; align-items: stretch;'
+
     const input = document.createElement('input')
     input.type = 'text'
     input.maxLength = 6
     input.placeholder = '000000'
     input.value = this.settings.otp || ''
     input.style.cssText = `
-      font-size: 1.5rem; font-family: monospace; letter-spacing: 0.5rem;
+      flex: 1; font-size: 1.5rem; font-family: monospace; letter-spacing: 0.5rem;
       padding: 0.625rem; background: #111; border: 1px solid #333;
-      border-radius: 8px; color: #fff; width: 200px; text-align: center;
+      border-radius: 8px; color: #fff; text-align: center;
       outline: none;
     `
     input.addEventListener('input', () => {
       this.settings.otp = input.value.slice(0, 6)
       this.markDirty()
     })
-    section.appendChild(input)
+    row.appendChild(input)
+
+    const testBtn = document.createElement('button')
+    testBtn.textContent = 'Test'
+    testBtn.style.cssText = `
+      padding: 0.625rem 1rem; border: 1px solid #555; border-radius: 8px;
+      background: #222; color: #fff; font-size: 0.8125rem; cursor: pointer;
+      white-space: nowrap;
+    `
+    row.appendChild(testBtn)
+    section.appendChild(row)
+
+    const result = document.createElement('div')
+    result.style.cssText = 'margin-top: 0.5rem;'
+    section.appendChild(result)
+
+    testBtn.addEventListener('click', async () => {
+      const otpVal = input.value.trim()
+      if (otpVal.length !== 6) {
+        result.innerHTML = '<div style="color:#f44336;font-size:0.75rem;">Enter a 6-digit OTP</div>'
+        return
+      }
+      const url = this.settings.serverUrl.replace(/\/+$/, '')
+      testBtn.disabled = true
+      testBtn.textContent = 'Validating...'
+      testBtn.style.opacity = '0.5'
+      result.innerHTML = ''
+      try {
+        const res = await fetch(`${url}/api/booth/validate-otp?otp=${otpVal}`)
+        const data = await res.json()
+        if (data.valid) {
+          // Establish WebSocket connection so operator sees booth as online
+          connectBoothSocket(url, otpVal)
+
+          result.innerHTML = `
+            <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:0.75rem;">
+              <div style="display:flex;align-items:center;gap:0.375rem;margin-bottom:0.5rem;">
+                <span style="color:#4caf50;font-size:0.8125rem;">●</span>
+                <span style="color:#4caf50;font-size:0.8125rem;font-weight:500;">Connected</span>
+              </div>
+              <div style="color:#fff;font-weight:600;font-size:0.9375rem;margin-bottom:0.25rem;">${data.event.name}</div>
+              <div style="color:#888;font-size:0.75rem;margin-bottom:0.125rem;">${data.event.date}</div>
+              <div style="color:#666;font-size:0.75rem;">${data.event.description || ''}</div>
+            </div>
+          `
+        } else {
+          result.innerHTML = `<div style="background:#1a1a1a;border:1px solid #3a1a1a;border-radius:8px;padding:0.75rem;color:#f44336;font-size:0.8125rem;">${data.error || 'Invalid OTP'}</div>`
+        }
+      } catch {
+        result.innerHTML = '<div style="background:#1a1a1a;border:1px solid #3a1a1a;border-radius:8px;padding:0.75rem;color:#f44336;font-size:0.8125rem;">Could not reach server</div>'
+      }
+      testBtn.disabled = false
+      testBtn.textContent = 'Test'
+      testBtn.style.opacity = '1'
+    })
 
     return section
   }
@@ -358,6 +435,12 @@ export class Settings {
   private save() {
     this.onChange(this.settings)
     window.hellomyphoto?.saveSettings(this.settings)
+    if (this.settings.otp) {
+      connectBoothSocket(this.settings.serverUrl.replace(/\/+$/, ''), this.settings.otp)
+    } else if (boothSocket) {
+      boothSocket.disconnect()
+      boothSocket = null
+    }
   }
 
   toggle() {
