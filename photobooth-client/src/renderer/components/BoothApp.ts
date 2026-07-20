@@ -209,6 +209,7 @@ export class BoothApp {
     }
     this.isLive = true
     this.stopBtn.style.display = 'block'
+    this.captureBtn.style.display = 'block'
     this.statusBar.appendChild(this.captureBtn)
     this.stateDisplay.textContent = 'Touch to Start'
     setTimeout(() => { this.stateDisplay.style.opacity = '0' }, 3000)
@@ -221,7 +222,6 @@ export class BoothApp {
     this.isCapturing = false
     this.stopBtn.style.display = 'none'
     this.captureBtn.style.display = 'none'
-    this.statusBar.innerHTML = ''
     this.stateDisplay.textContent = ''
     this.stateDisplay.style.opacity = '1'
     this.webcamPreview.srcObject = null
