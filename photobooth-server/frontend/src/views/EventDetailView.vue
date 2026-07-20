@@ -152,7 +152,11 @@ onMounted(async () => {
   })
 })
 
+// Poll fallback: refresh every 5s in case WebSocket events are missed
+const pollInterval = setInterval(() => { loadSessions() }, 5000)
+
 onUnmounted(() => {
+  clearInterval(pollInterval)
   if (wideMq) wideMq.removeEventListener('change', closePanelOnWide)
   const eventId = route.params.id as string
   unsubscribe(eventId)

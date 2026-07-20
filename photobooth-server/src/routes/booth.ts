@@ -121,12 +121,15 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
         strip: r.strip,
       })),
     }
+    // Notify operator subscriptions for this event
     const subs = operatorSubscriptions.get(eventId)
     if (subs) {
       for (const sid of subs) {
         io.to(sid).emit('new-media', newMediaPayload)
       }
     }
+    // Also broadcast to all connected sockets as fallback
+    io.emit('new-media', newMediaPayload)
 
     for (const file of files) {
       await fs.unlink(file.path).catch(() => {})

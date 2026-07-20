@@ -138,9 +138,8 @@ router.post('/', upload.array('photos', config.upload.maxFiles), async (req: Req
           io.to(sid).emit('new-media', newMediaPayload)
         }
       }
-    } else {
-      io.emit('new-media', newMediaPayload)
     }
+    io.emit('new-media', newMediaPayload)
 
     const processingTime = Date.now() - startTime
     logger.info(`Upload processed in ${processingTime}ms: session=${sessionId}`)
