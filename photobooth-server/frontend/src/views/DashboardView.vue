@@ -3,12 +3,6 @@
     <header class="dashboard-header">
       <div class="header-left">
         <h1>hellomyphoto</h1>
-        <span class="badge" :class="`badge-${connected ? 'connected' : 'disconnected'}`">
-          {{ connected ? 'connected' : 'disconnected' }}
-        </span>
-        <span v-if="connected" class="badge" :class="`badge-${boothOnline ? 'booth-online' : 'booth-offline'}`">
-          booth {{ boothOnline ? 'online' : 'offline' }}
-        </span>
       </div>
       <div class="header-right">
         <button @click="togglePanel" class="btn-icon btn-panel-toggle" title="Booth controller">
@@ -65,7 +59,7 @@
         </div>
       </section>
 
-      <ControlPanel :connected="connected" :sendMessage="sendMessage" :show="showPanel" @close="showPanel = false" />
+      <ControlPanel :connected="connected" :sendMessage="sendMessage" :show="showPanel" @close="showPanel = false" @retry="retryConnection" />
     </div>
 
     <PhotoViewer
@@ -158,6 +152,11 @@ function togglePanel() {
   showPanel.value = !showPanel.value
 }
 
+function retryConnection() {
+  disconnect()
+  connect()
+}
+
 function formatTime(ts: string) {
   return new Date(ts).toLocaleString()
 }
@@ -191,44 +190,6 @@ function formatTime(ts: string) {
   font-size: 1.125rem;
   font-weight: 600;
   margin: 0;
-}
-
-.badge {
-  font-size: 0.6875rem;
-  padding: 0.125rem 0.5rem;
-  border-radius: 100px;
-  font-weight: 500;
-  text-transform: uppercase;
-}
-
-.badge-connected {
-  background: #1a3a2a;
-  color: #4caf50;
-}
-
-.badge-disconnected {
-  background: #3a1a1a;
-  color: #f44336;
-}
-
-.badge-connecting {
-  background: #3a3a1a;
-  color: #ff9800;
-}
-
-.badge-offline {
-  background: #3a1a1a;
-  color: #f44336;
-}
-
-.badge-booth-online {
-  background: #1a3a2a;
-  color: #4caf50;
-}
-
-.badge-booth-offline {
-  background: #3a1a1a;
-  color: #f44336;
 }
 
 .header-right {

@@ -2,9 +2,10 @@
   <aside class="control-panel">
     <div class="panel-section">
       <h3>Booth Status</h3>
-      <div class="status-row">
+      <div class="status-row" @click="$emit('retry')" :class="{ 'status-clickable': !connected }">
         <div :class="['status-dot', connectionStatus]"></div>
         <span>{{ connectionStatus }}</span>
+        <span v-if="!connected" class="retry-hint">click to retry</span>
       </div>
     </div>
 
@@ -64,9 +65,10 @@
         <div class="modal-body">
           <div class="panel-section">
             <h3>Booth Status</h3>
-            <div class="status-row">
+            <div class="status-row" @click="$emit('retry')" :class="{ 'status-clickable': !connected }">
               <div :class="['status-dot', connectionStatus]"></div>
               <span>{{ connectionStatus }}</span>
+              <span v-if="!connected" class="retry-hint">click to retry</span>
             </div>
           </div>
 
@@ -132,7 +134,7 @@ const props = defineProps<{
   show: boolean
 }>()
 
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; retry: [] }>()
 
 const router = useRouter()
 const photosStore = usePhotosStore()
@@ -264,6 +266,20 @@ function goToSettings() {
   gap: 0.5rem;
   font-size: 0.875rem;
   text-transform: capitalize;
+}
+
+.status-clickable {
+  cursor: pointer;
+}
+
+.status-clickable:hover {
+  opacity: 0.8;
+}
+
+.retry-hint {
+  font-size: 0.6875rem;
+  color: #888;
+  text-transform: none;
 }
 
 .status-dot {
