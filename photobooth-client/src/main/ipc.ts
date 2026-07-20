@@ -6,7 +6,7 @@ import path from 'path'
 import fs from 'fs'
 
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'booth-settings.json')
-const DEFAULT_SETTINGS = { photoCount: 4, countdown: 5, captureInterval: 1, serverUrl: 'http://localhost:3000' }
+const DEFAULT_SETTINGS = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
 
 let _offlineQueue: OfflineQueue
 let _serverUrl: string
@@ -127,7 +127,7 @@ export function initIpcHandlers(
     return getSettingsSync()
   })
 
-  ipcMain.handle('save-settings', async (event, settings: { photoCount: number; countdown: number; captureInterval: number; serverUrl?: string }) => {
+  ipcMain.handle('save-settings', async (event, settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; serverUrl?: string }) => {
     try {
       const existing = getSettingsSync()
       const merged = { ...existing, ...settings }
@@ -145,6 +145,7 @@ export function initIpcHandlers(
             photoCount: merged.photoCount,
             countdown: merged.countdown,
             captureInterval: merged.captureInterval,
+            postCapturePreview: merged.postCapturePreview,
           }),
         })
       } catch {}

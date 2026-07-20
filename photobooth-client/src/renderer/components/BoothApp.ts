@@ -25,11 +25,13 @@ export class BoothApp {
   private stopBtn: HTMLButtonElement
   private stateDisplay: HTMLDivElement
   private landingEl: HTMLDivElement
+  private flashOverlay: HTMLDivElement
+  private postCaptureEl: HTMLImageElement
 
   private isCapturing = false
   private isLive = false
   private isPaused = false
-  private settingsData: { photoCount: number; countdown: number; captureInterval: number; serverUrl: string; cameraDeviceId?: string; audioDeviceId?: string } = { photoCount: 4, countdown: 5, captureInterval: 1, serverUrl: 'http://localhost:3000' }
+  private settingsData: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; serverUrl: string; cameraDeviceId?: string; audioDeviceId?: string } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
   private serverOnline = true
   private selectedFrame: string | null = null
   private serverUrl = 'http://localhost:3000'
@@ -51,12 +53,19 @@ export class BoothApp {
     this.webcamPreview.muted = true
     this.webcamPreview.playsInline = true
 
+    this.postCaptureEl = document.createElement('img')
+    Object.assign(this.postCaptureEl.style, {
+      position: 'absolute', inset: '0', width: '100%', height: '100%',
+      objectFit: 'contain', background: '#000', display: 'none',
+    })
+
     this.previewBox = document.createElement('div')
     Object.assign(this.previewBox.style, {
       maxWidth: '100%', maxHeight: '100%', width: '100%',
       position: 'relative', overflow: 'hidden',
     })
     this.previewBox.appendChild(this.webcamPreview)
+    this.previewBox.appendChild(this.postCaptureEl)
 
     this.previewWindow = document.createElement('div')
     Object.assign(this.previewWindow.style, {
@@ -143,7 +152,13 @@ export class BoothApp {
     settingsBtn.addEventListener('click', () => this.settings.toggle())
     this.landingEl.appendChild(settingsBtn)
 
-    this.container.append(this.landingEl, this.previewWindow, this.overlay, this.stateDisplay, this.stopBtn, this.statusBar)
+    this.flashOverlay = document.createElement('div')
+    Object.assign(this.flashOverlay.style, {
+      position: 'absolute', inset: '0', zIndex: '45',
+      background: '#fff', pointerEvents: 'none', opacity: '0',
+    })
+
+    this.container.append(this.landingEl, this.previewWindow, this.overlay, this.stateDisplay, this.stopBtn, this.statusBar, this.flashOverlay)
 
     this.camera = new CameraManager()
     this.audio = new AudioManager()
@@ -280,15 +295,19 @@ export class BoothApp {
       if (result?.success && result.path) {
         paths.push(result.path)
         this.audio.playShutter()
+        await this.flashWhite()
+        this.stateDisplay.textContent = ''
+        if (this.settingsData.postCapturePreview > 0) {
+          await this.showPostCapture(result.path, this.settingsData.postCapturePreview)
+        }
+        if (i < photoCount - 1 && this.settingsData.captureInterval > 0) {
+          await this.delay(this.settingsData.captureInterval * 1000)
+        }
       } else {
         this.stateDisplay.textContent = 'Capture failed — tap to retry'
         this.isCapturing = false
         this.captureBtn.style.visibility = 'visible'
         return
-      }
-
-      if (i < photoCount - 1 && this.settingsData.captureInterval > 0) {
-        await this.delay(this.settingsData.captureInterval * 1000)
       }
     }
 
@@ -342,6 +361,25 @@ export class BoothApp {
         this.previewBox.style.aspectRatio = `${settings.width} / ${settings.height}`
       }
     }
+  }
+
+  private async flashWhite() {
+    this.flashOverlay.style.transition = 'none'
+    this.flashOverlay.style.opacity = '1'
+    void this.flashOverlay.offsetHeight
+    this.flashOverlay.style.transition = 'opacity 200ms ease-out'
+    this.flashOverlay.style.opacity = '0'
+    await this.delay(250)
+  }
+
+  private async showPostCapture(path: string, duration: number) {
+    this.postCaptureEl.src = path
+    this.postCaptureEl.style.display = 'block'
+    this.webcamPreview.style.opacity = '0'
+    await this.delay(duration * 1000)
+    this.postCaptureEl.style.display = 'none'
+    this.postCaptureEl.src = ''
+    this.webcamPreview.style.opacity = '1'
   }
 
   private delay(ms: number): Promise<void> {

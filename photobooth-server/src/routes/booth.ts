@@ -156,17 +156,18 @@ router.get('/settings', async (req: Request, res: Response) => {
     const data = await fs.readFile(settingsPath, 'utf-8')
     res.json(JSON.parse(data))
   } catch {
-    res.json({ photoCount: 4, countdown: 5, captureInterval: 1 })
+    res.json({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
   }
 })
 
 router.post('/settings', async (req: Request, res: Response) => {
   const settingsPath = path.join(config.storage.logs, 'booth-settings.json')
-  const { photoCount, countdown, captureInterval } = req.body
+  const { photoCount, countdown, captureInterval, postCapturePreview } = req.body
   const settings = {
     photoCount: Math.max(1, Math.min(4, photoCount || 4)),
     countdown: Math.max(3, Math.min(10, countdown || 5)),
     captureInterval: Math.max(0, Math.min(5, captureInterval ?? 1)),
+    postCapturePreview: Math.max(1, Math.min(5, postCapturePreview ?? 2)),
   }
   await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2))
   logger.info('Booth settings synced from client', settings)

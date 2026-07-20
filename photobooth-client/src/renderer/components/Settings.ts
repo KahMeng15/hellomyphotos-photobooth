@@ -2,6 +2,7 @@ interface BoothSettings {
   photoCount: number
   countdown: number
   captureInterval: number
+  postCapturePreview: number
   serverUrl: string
   cameraDeviceId?: string
   audioDeviceId?: string
@@ -17,7 +18,7 @@ export class Settings {
   private visible = false
   private dirty = false
   private onChange: (settings: BoothSettings) => void
-  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, serverUrl: 'http://localhost:3000' }
+  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
   private serverInput!: HTMLInputElement
   private cameraSelect!: HTMLSelectElement
   private audioSelect!: HTMLSelectElement
@@ -60,6 +61,7 @@ export class Settings {
     panel.appendChild(this.createField('Photos per session', 1, 4, this.settings.photoCount, (v) => { this.settings.photoCount = v; this.markDirty() }))
     panel.appendChild(this.createField('Countdown (seconds)', 3, 10, this.settings.countdown, (v) => { this.settings.countdown = v; this.markDirty() }))
     panel.appendChild(this.createField('Interval (seconds)', 0, 5, this.settings.captureInterval, (v) => { this.settings.captureInterval = v; this.markDirty() }))
+    panel.appendChild(this.createField('Preview (seconds)', 1, 5, this.settings.postCapturePreview, (v) => { this.settings.postCapturePreview = v; this.markDirty() }))
 
     const btnRow = document.createElement('div')
     btnRow.style.cssText = 'display: flex; gap: 0.5rem; margin-top: 1.5rem;'
@@ -304,7 +306,7 @@ export class Settings {
   }
 
   private refreshFields() {
-    const values = [this.settings.photoCount, this.settings.countdown, this.settings.captureInterval]
+    const values = [this.settings.photoCount, this.settings.countdown, this.settings.captureInterval, this.settings.postCapturePreview]
     for (let i = 0; i < this.sliderInputs.length; i++) {
       this.sliderInputs[i].value = String(values[i])
       this.sliderValues[i].textContent = String(values[i])

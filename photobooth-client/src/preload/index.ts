@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
     photoCount: number
     countdown: number
     captureInterval: number
+    postCapturePreview: number
     serverUrl?: string
   }) => ipcRenderer.invoke('save-settings', settings),
 

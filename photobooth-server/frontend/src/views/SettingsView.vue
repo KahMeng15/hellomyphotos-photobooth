@@ -33,6 +33,14 @@
             <span class="value">{{ settings.captureInterval }}s</span>
           </div>
         </div>
+
+        <div class="field">
+          <label>Post-capture preview (seconds)</label>
+          <div class="field-row">
+            <input type="range" min="1" max="5" v-model.number="settings.postCapturePreview" />
+            <span class="value">{{ settings.postCapturePreview }}s</span>
+          </div>
+        </div>
       </section>
 
       <div class="actions">
@@ -51,15 +59,16 @@ import axios from 'axios'
 import { useWebSocket } from '../composables/useWebSocket'
 
 const router = useRouter()
-const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1 })
-const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1 })
+const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
+const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
 const saved = ref(false)
 const { ws, connect, disconnect } = useWebSocket()
 
 const dirty = computed(() =>
   settings.value.photoCount !== originalSettings.value.photoCount ||
   settings.value.countdown !== originalSettings.value.countdown ||
-  settings.value.captureInterval !== originalSettings.value.captureInterval
+  settings.value.captureInterval !== originalSettings.value.captureInterval ||
+  settings.value.postCapturePreview !== originalSettings.value.postCapturePreview
 )
 
 onMounted(async () => {
