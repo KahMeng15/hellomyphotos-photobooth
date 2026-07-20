@@ -11,7 +11,8 @@ import { v4 as uuidv4 } from 'uuid'
 import { io } from '../server'
 import {
   createEvent, updateEventById, getEvent, listEvents,
-  endEvent, deleteEvent, listEventPhotoSessions
+  endEvent, deleteEvent, listEventPhotoSessions,
+  updateEventSettingsById, getGlobalSettings, updateGlobalSettings
 } from '../db'
 
 const router = Router()
@@ -104,10 +105,10 @@ router.get('/events', async (req: Request, res: Response) => {
 
 router.post('/events', async (req: Request, res: Response) => {
   try {
-    const { name, date, description } = req.body
+    const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview } = req.body
     if (!name) return res.status(400).json({ error: 'Event name required' })
 
-    const { id, otp } = createEvent(name, date || new Date().toISOString().split('T')[0], description || '')
+    const { id, otp } = createEvent(name, date || new Date().toISOString().split('T')[0], description || '', { photoCount, countdown, captureInterval, postCapturePreview })
     const event = getEvent(id)
     logger.info(`Event created: ${name} (${id}) otp=${otp}`)
     res.json({ success: true, event, otp })
@@ -130,13 +131,33 @@ router.patch('/events/:id', async (req: Request, res: Response) => {
   try {
     const event = getEvent(req.params.id)
     if (!event) return res.status(404).json({ error: 'Event not found' })
-    const { name, date, description } = req.body
+    const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview } = req.body
     updateEventById(req.params.id,
       name ?? event.name,
       date ?? event.date,
-      description ?? event.description
+      description ?? event.description,
+      { photoCount, countdown, captureInterval, postCapturePreview }
     )
-    res.json({ success: true, event: getEvent(req.params.id) })
+
+    // If settings changed, push settings-update command to booth
+    const updated = getEvent(req.params.id)!
+    const settingsChanged = photoCount !== undefined || countdown !== undefined || captureInterval !== undefined || postCapturePreview !== undefined
+    if (settingsChanged) {
+      pendingCommands.push({
+        id: uuidv4(),
+        type: 'settings-update',
+        settings: {
+          photoCount: updated.photo_count,
+          countdown: updated.countdown,
+          captureInterval: updated.capture_interval,
+          postCapturePreview: updated.post_capture_preview,
+        },
+        createdAt: Date.now(),
+      })
+      io.emit('settings-updated', { eventId: req.params.id, settings: updated })
+    }
+
+    res.json({ success: true, event: updated })
   } catch (error: any) {
     res.status(500).json({ error: error.message })
   }
@@ -454,39 +475,21 @@ router.delete('/session/:sessionId', async (req: Request, res: Response) => {
   }
 })
 
-// ── Settings ──
+// ── Global Defaults ──
 
-router.get('/settings', async (req: Request, res: Response) => {
-  const settingsPath = path.join(config.storage.logs, 'booth-settings.json')
-  try {
-    const data = await fs.readFile(settingsPath, 'utf-8')
-    res.json(JSON.parse(data))
-  } catch {
-    res.json({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, otp: '' })
-  }
+router.get('/settings/defaults', (req: Request, res: Response) => {
+  res.json({ settings: getGlobalSettings() })
 })
 
-router.post('/settings', async (req: Request, res: Response) => {
-  const settingsPath = path.join(config.storage.logs, 'booth-settings.json')
-  const { photoCount, countdown, captureInterval, postCapturePreview, otp } = req.body
-  const settings: Record<string, any> = {
-    photoCount: Math.max(1, Math.min(4, photoCount || 4)),
-    countdown: Math.max(3, Math.min(10, countdown || 5)),
+router.put('/settings/defaults', (req: Request, res: Response) => {
+  const { photoCount, countdown, captureInterval, postCapturePreview } = req.body
+  const settings = {
+    photoCount: Math.max(1, Math.min(4, photoCount ?? 4)),
+    countdown: Math.max(3, Math.min(10, countdown ?? 5)),
     captureInterval: Math.max(0, Math.min(5, captureInterval ?? 1)),
     postCapturePreview: Math.max(1, Math.min(5, postCapturePreview ?? 2)),
   }
-  if (otp !== undefined) {
-    settings.otp = otp
-  }
-  await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2))
-  logger.info('Booth settings updated', settings)
-  pendingCommands.push({
-    id: uuidv4(),
-    type: 'settings-update',
-    settings,
-    createdAt: Date.now(),
-  })
-  io.emit('settings-updated', settings)
+  updateGlobalSettings(settings)
   res.json({ success: true, settings })
 })
 

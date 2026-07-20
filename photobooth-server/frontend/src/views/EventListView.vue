@@ -49,7 +49,7 @@
         <p>No events yet. Create one to get started.</p>
       </div>
 
-      <button @click="showSettings" class="btn-link">Booth Settings</button>
+      <button @click="showSettings" class="btn-link">Default Settings</button>
       <router-link to="/booth/connect" class="btn-link">Connect Booth</router-link>
     </main>
 

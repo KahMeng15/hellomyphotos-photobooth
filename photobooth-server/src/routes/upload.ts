@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { jobQueue } from '../queue'
-import { io } from '../server'
+import { io, operatorSubscriptions } from '../server'
 import { ensurePhotoSession } from '../db'
 
 const router = Router()
@@ -119,7 +119,7 @@ router.post('/', upload.array('photos', config.upload.maxFiles), async (req: Req
       })
     }
 
-    io.emit('new-media', {
+    const newMediaPayload = {
       eventId: eventId || null,
       sessionId,
       photoCount: files.length,
@@ -130,7 +130,17 @@ router.post('/', upload.array('photos', config.upload.maxFiles), async (req: Req
         thumbnail: r.thumbnail,
         strip: r.strip,
       })),
-    })
+    }
+    if (eventId) {
+      const subs = operatorSubscriptions.get(eventId)
+      if (subs) {
+        for (const sid of subs) {
+          io.to(sid).emit('new-media', newMediaPayload)
+        }
+      }
+    } else {
+      io.emit('new-media', newMediaPayload)
+    }
 
     const processingTime = Date.now() - startTime
     logger.info(`Upload processed in ${processingTime}ms: session=${sessionId}`)

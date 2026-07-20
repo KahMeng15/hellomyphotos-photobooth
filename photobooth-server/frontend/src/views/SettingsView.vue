@@ -2,13 +2,14 @@
   <div class="settings-page">
     <header class="settings-header">
       <button @click="$router.push('/events')" class="btn-ghost">&larr; Events</button>
-      <h1>Booth Settings</h1>
+      <h1>Default Settings</h1>
       <div></div>
     </header>
 
     <div class="settings-body">
       <section class="card">
-        <h2>Capture</h2>
+        <h2>Capture Defaults</h2>
+        <p class="card-desc">These defaults apply to all new events. You can override them per-event.</p>
 
         <div class="field">
           <label>Photos per session</label>
@@ -43,21 +44,6 @@
         </div>
       </section>
 
-      <section class="card">
-        <h2>Connection</h2>
-        <div class="field">
-          <label>Photobooth OTP</label>
-          <p class="field-desc">Enter the 6-digit OTP from the event to link this booth.</p>
-          <input
-            v-model="settings.otp"
-            type="text"
-            maxlength="6"
-            placeholder="000000"
-            class="input-otp"
-          />
-        </div>
-      </section>
-
       <div class="actions">
         <button @click="saveAndClose" class="btn-primary">Save</button>
         <button @click="cancelChanges" class="btn-cancel">Cancel</button>
@@ -71,61 +57,36 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
 import axios from 'axios'
-import { useWebSocket } from '../composables/useWebSocket'
 
 const router = useRouter()
-const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, otp: '' })
-const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, otp: '' })
+const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
+const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
 const saved = ref(false)
-const { ws, connect, disconnect } = useWebSocket()
 
 const dirty = computed(() =>
   settings.value.photoCount !== originalSettings.value.photoCount ||
   settings.value.countdown !== originalSettings.value.countdown ||
   settings.value.captureInterval !== originalSettings.value.captureInterval ||
-  settings.value.postCapturePreview !== originalSettings.value.postCapturePreview ||
-  settings.value.otp !== originalSettings.value.otp
+  settings.value.postCapturePreview !== originalSettings.value.postCapturePreview
 )
 
 onMounted(async () => {
   try {
-    const { data } = await axios.get('/api/admin/settings')
-    settings.value = data
-    originalSettings.value = { ...data }
+    const { data } = await axios.get('/api/admin/settings/defaults')
+    settings.value = data.settings
+    originalSettings.value = { ...data.settings }
   } catch {}
-
-  const socket = connect()
-  if (socket) {
-    socket.on('settings-updated', (updated: any) => {
-      settings.value = { ...settings.value, ...updated }
-      originalSettings.value = { ...originalSettings.value, ...updated }
-    })
-  }
-})
-
-onUnmounted(() => {
-  disconnect()
-})
-
-onBeforeRouteLeave((to, from, next) => {
-  if (dirty.value) {
-    if (!confirm('You have unsaved changes. Discard them?')) {
-      next(false)
-      return
-    }
-  }
-  next()
 })
 
 async function saveAndClose() {
   saved.value = false
   try {
-    await axios.post('/api/admin/settings', settings.value)
+    await axios.put('/api/admin/settings/defaults', settings.value)
     originalSettings.value = { ...settings.value }
     saved.value = true
     router.push('/events')
   } catch (err) {
-    console.error('Failed to save settings', err)
+    console.error('Failed to save defaults', err)
   }
 }
 
@@ -179,6 +140,12 @@ function cancelChanges() {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  color: #666;
+  margin: 0 0 0.25rem;
+}
+
+.card-desc {
+  font-size: 0.75rem;
   color: #666;
   margin: 0 0 1.25rem;
 }

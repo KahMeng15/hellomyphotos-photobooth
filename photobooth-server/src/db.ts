@@ -28,9 +28,35 @@ db.exec(`
     description TEXT NOT NULL DEFAULT '',
     otp TEXT NOT NULL UNIQUE,
     status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','ended')),
+    photo_count INTEGER NOT NULL DEFAULT 4,
+    countdown INTEGER NOT NULL DEFAULT 5,
+    capture_interval INTEGER NOT NULL DEFAULT 1,
+    post_capture_preview INTEGER NOT NULL DEFAULT 2,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
 `)
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS global_settings (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    photo_count INTEGER NOT NULL DEFAULT 4,
+    countdown INTEGER NOT NULL DEFAULT 5,
+    capture_interval INTEGER NOT NULL DEFAULT 1,
+    post_capture_preview INTEGER NOT NULL DEFAULT 2
+  )
+`)
+
+// Seed defaults row
+db.exec(`
+  INSERT OR IGNORE INTO global_settings (id, photo_count, countdown, capture_interval, post_capture_preview)
+  VALUES (1, 4, 5, 1, 2)
+`)
+
+// Add new columns if missing (for existing DBs)
+try { db.exec(`ALTER TABLE events ADD COLUMN photo_count INTEGER NOT NULL DEFAULT 4`) } catch {}
+try { db.exec(`ALTER TABLE events ADD COLUMN countdown INTEGER NOT NULL DEFAULT 5`) } catch {}
+try { db.exec(`ALTER TABLE events ADD COLUMN capture_interval INTEGER NOT NULL DEFAULT 1`) } catch {}
+try { db.exec(`ALTER TABLE events ADD COLUMN post_capture_preview INTEGER NOT NULL DEFAULT 2`) } catch {}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS photo_sessions (
@@ -46,12 +72,16 @@ db.exec(`
 `)
 
 const insertEvent = db.prepare(`
-  INSERT INTO events (id, name, date, description, otp, status)
-  VALUES (?, ?, ?, ?, ?, 'active')
+  INSERT INTO events (id, name, date, description, otp, status, photo_count, countdown, capture_interval, post_capture_preview)
+  VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
 `)
 
 const updateEvent = db.prepare(`
-  UPDATE events SET name = ?, date = ?, description = ? WHERE id = ?
+  UPDATE events SET name = ?, date = ?, description = ?, photo_count = ?, countdown = ?, capture_interval = ?, post_capture_preview = ? WHERE id = ?
+`)
+
+const updateEventSettings = db.prepare(`
+  UPDATE events SET photo_count = ?, countdown = ?, capture_interval = ?, post_capture_preview = ? WHERE id = ?
 `)
 
 const findEventById = db.prepare('SELECT * FROM events WHERE id = ?')
@@ -83,29 +113,48 @@ function generateOtp(): string {
   return digits
 }
 
-export function createEvent(name: string, date: string, description: string) {
+export function createEvent(name: string, date: string, description: string, settings?: { photoCount?: number; countdown?: number; captureInterval?: number; postCapturePreview?: number }) {
   const id = `evt_${Date.now()}_${randomInt(1000, 9999)}`
   const otp = generateOtp()
-  insertEvent.run(id, name, date, description, otp)
+  const defaults = getGlobalSettings()
+  const photoCount = settings?.photoCount ?? defaults.photoCount
+  const countdown = settings?.countdown ?? defaults.countdown
+  const captureInterval = settings?.captureInterval ?? defaults.captureInterval
+  const postCapturePreview = settings?.postCapturePreview ?? defaults.postCapturePreview
+  insertEvent.run(id, name, date, description, otp, photoCount, countdown, captureInterval, postCapturePreview)
   logger.info(`Event created: ${id} (${name}) otp=${otp}`)
   return { id, otp }
 }
 
-export function updateEventById(id: string, name: string, date: string, description: string) {
-  updateEvent.run(name, date, description, id)
+export function updateEventById(id: string, name: string, date: string, description: string, settings?: { photoCount?: number; countdown?: number; captureInterval?: number; postCapturePreview?: number }) {
+  const existing = getEvent(id)!
+  updateEvent.run(
+    name, date, description,
+    settings?.photoCount ?? existing.photo_count,
+    settings?.countdown ?? existing.countdown,
+    settings?.captureInterval ?? existing.capture_interval,
+    settings?.postCapturePreview ?? existing.post_capture_preview,
+    id
+  )
+}
+
+export function updateEventSettingsById(id: string, settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number }) {
+  updateEventSettings.run(settings.photoCount, settings.countdown, settings.captureInterval, settings.postCapturePreview, id)
 }
 
 export function getEvent(id: string) {
   return findEventById.get(id) as {
     id: string; name: string; date: string; description: string;
-    otp: string; status: string; created_at: string
+    otp: string; status: string; photo_count: number; countdown: number;
+    capture_interval: number; post_capture_preview: number; created_at: string
   } | undefined
 }
 
 export function getEventByOtp(otp: string) {
   return findEventByOtp.get(otp) as {
     id: string; name: string; date: string; description: string;
-    otp: string; status: string; created_at: string
+    otp: string; status: string; photo_count: number; countdown: number;
+    capture_interval: number; post_capture_preview: number; created_at: string
   } | undefined
 }
 
@@ -113,7 +162,8 @@ export function listEvents(includeEnded = false) {
   const stmt = includeEnded ? listAllEvents : listActiveEvents
   return stmt.all() as Array<{
     id: string; name: string; date: string; description: string;
-    otp: string; status: string; created_at: string
+    otp: string; status: string; photo_count: number; countdown: number;
+    capture_interval: number; post_capture_preview: number; created_at: string
   }>
 }
 
@@ -143,6 +193,32 @@ export function listEventPhotoSessions(eventId: string) {
   return listPhotoSessionsByEvent.all(eventId) as Array<{
     id: string; event_id: string; created_at: string
   }>
+}
+
+const getDefaultsStmt = db.prepare('SELECT * FROM global_settings WHERE id = 1')
+const upsertDefaultsStmt = db.prepare(`
+  INSERT INTO global_settings (id, photo_count, countdown, capture_interval, post_capture_preview)
+  VALUES (1, ?, ?, ?, ?)
+  ON CONFLICT(id) DO UPDATE SET
+    photo_count = excluded.photo_count,
+    countdown = excluded.countdown,
+    capture_interval = excluded.capture_interval,
+    post_capture_preview = excluded.post_capture_preview
+`)
+
+export function getGlobalSettings() {
+  const row = getDefaultsStmt.get() as { photo_count: number; countdown: number; capture_interval: number; post_capture_preview: number } | undefined
+  return {
+    photoCount: row?.photo_count ?? 4,
+    countdown: row?.countdown ?? 5,
+    captureInterval: row?.capture_interval ?? 1,
+    postCapturePreview: row?.post_capture_preview ?? 2,
+  }
+}
+
+export function updateGlobalSettings(settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number }) {
+  upsertDefaultsStmt.run(settings.photoCount, settings.countdown, settings.captureInterval, settings.postCapturePreview)
+  logger.info('Global defaults updated', settings)
 }
 
 export function closeDb() {

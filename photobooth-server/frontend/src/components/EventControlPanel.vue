@@ -39,6 +39,34 @@
     </div>
 
     <div class="panel-section">
+      <h3>Event Settings</h3>
+      <div class="control-field">
+        <label>Photos per session (1-4)</label>
+        <input type="range" min="1" max="4" v-model.number="eventSettings.photoCount" />
+        <span class="range-value">{{ eventSettings.photoCount }}</span>
+      </div>
+      <div class="control-field">
+        <label>Countdown (3-10s)</label>
+        <input type="range" min="3" max="10" v-model.number="eventSettings.countdown" />
+        <span class="range-value">{{ eventSettings.countdown }}s</span>
+      </div>
+      <div class="control-field">
+        <label>Interval (0-5s)</label>
+        <input type="range" min="0" max="5" v-model.number="eventSettings.captureInterval" />
+        <span class="range-value">{{ eventSettings.captureInterval }}s</span>
+      </div>
+      <div class="control-field">
+        <label>Preview (1-5s)</label>
+        <input type="range" min="1" max="5" v-model.number="eventSettings.postCapturePreview" />
+        <span class="range-value">{{ eventSettings.postCapturePreview }}s</span>
+      </div>
+      <button @click="saveEventSettings" class="btn-control btn-primary" :disabled="settingsSaving">
+        {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
+      </button>
+      <span v-if="settingsMsg" :class="settingsMsgType === 'success' ? 'msg-success' : 'msg-error'">{{ settingsMsg }}</span>
+    </div>
+
+    <div class="panel-section">
       <h3>Processing Queue</h3>
       <div class="queue-bar">
         <div class="queue-fill" :style="{ width: queuePercent + '%' }"></div>
@@ -53,9 +81,6 @@
       </button>
       <button @click="goToAdmin" class="btn-control btn-secondary">
         Admin Panel
-      </button>
-      <button @click="goToSettings" class="btn-control btn-secondary">
-        Booth Settings
       </button>
       <button @click="goToBoothConnect" class="btn-control btn-secondary">
         Setup Booth
@@ -113,6 +138,34 @@
           </div>
 
           <div class="panel-section">
+            <h3>Event Settings</h3>
+            <div class="control-field">
+              <label>Photos per session (1-4)</label>
+              <input type="range" min="1" max="4" v-model.number="eventSettings.photoCount" />
+              <span class="range-value">{{ eventSettings.photoCount }}</span>
+            </div>
+            <div class="control-field">
+              <label>Countdown (3-10s)</label>
+              <input type="range" min="3" max="10" v-model.number="eventSettings.countdown" />
+              <span class="range-value">{{ eventSettings.countdown }}s</span>
+            </div>
+            <div class="control-field">
+              <label>Interval (0-5s)</label>
+              <input type="range" min="0" max="5" v-model.number="eventSettings.captureInterval" />
+              <span class="range-value">{{ eventSettings.captureInterval }}s</span>
+            </div>
+            <div class="control-field">
+              <label>Preview (1-5s)</label>
+              <input type="range" min="1" max="5" v-model.number="eventSettings.postCapturePreview" />
+              <span class="range-value">{{ eventSettings.postCapturePreview }}s</span>
+            </div>
+            <button @click="saveEventSettings" class="btn-control btn-primary" :disabled="settingsSaving">
+              {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
+            </button>
+            <span v-if="settingsMsg" :class="settingsMsgType === 'success' ? 'msg-success' : 'msg-error'">{{ settingsMsg }}</span>
+          </div>
+
+          <div class="panel-section">
             <h3>Processing Queue</h3>
             <div class="queue-bar">
               <div class="queue-fill" :style="{ width: queuePercent + '%' }"></div>
@@ -127,9 +180,6 @@
             </button>
             <button @click="goToAdmin" class="btn-control btn-secondary">
               Admin Panel
-            </button>
-            <button @click="goToSettings" class="btn-control btn-secondary">
-              Booth Settings
             </button>
             <button @click="goToBoothConnect" class="btn-control btn-secondary">
               Setup Booth
@@ -166,6 +216,10 @@ const event = ref<any>(null)
 const selectedFrame = ref('')
 const paused = ref(false)
 const otpCopied = ref(false)
+const eventSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
+const settingsSaving = ref(false)
+const settingsMsg = ref('')
+const settingsMsgType = ref<'success' | 'error'>('success')
 
 const connectionStatus = computed(() => props.connected ? 'connected' : 'disconnected')
 
@@ -175,6 +229,12 @@ onMounted(async () => {
   try {
     const { data } = await axios.get(`/api/admin/events/${props.eventId}`)
     event.value = data.event
+    eventSettings.value = {
+      photoCount: data.event.photo_count,
+      countdown: data.event.countdown,
+      captureInterval: data.event.capture_interval,
+      postCapturePreview: data.event.post_capture_preview,
+    }
   } catch {}
 })
 
@@ -213,10 +273,6 @@ function goToAdmin() {
   router.push('/admin')
 }
 
-function goToSettings() {
-  router.push('/settings')
-}
-
 function goToBoothConnect() {
   window.open('/booth/connect', '_blank')
 }
@@ -235,6 +291,26 @@ function copyOtp() {
   navigator.clipboard.writeText(event.value.otp)
   otpCopied.value = true
   setTimeout(() => { otpCopied.value = false }, 2000)
+}
+
+async function saveEventSettings() {
+  settingsSaving.value = true
+  settingsMsg.value = ''
+  try {
+    await axios.patch(`/api/admin/events/${props.eventId}`, {
+      photoCount: eventSettings.value.photoCount,
+      countdown: eventSettings.value.countdown,
+      captureInterval: eventSettings.value.captureInterval,
+      postCapturePreview: eventSettings.value.postCapturePreview,
+    })
+    settingsMsg.value = 'Settings saved'
+    settingsMsgType.value = 'success'
+  } catch {
+    settingsMsg.value = 'Failed to save'
+    settingsMsgType.value = 'error'
+  }
+  settingsSaving.value = false
+  setTimeout(() => { settingsMsg.value = '' }, 3000)
 }
 </script>
 
@@ -397,6 +473,32 @@ function copyOtp() {
   color: #fff;
   font-size: 0.8125rem;
   outline: none;
+}
+
+.control-field input[type="range"] {
+  width: 100%;
+  accent-color: #fff;
+  margin: 0.25rem 0;
+}
+
+.range-value {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #ccc;
+}
+
+.msg-success {
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  color: #4caf50;
+}
+
+.msg-error {
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  color: #f44336;
 }
 
 .btn-control {

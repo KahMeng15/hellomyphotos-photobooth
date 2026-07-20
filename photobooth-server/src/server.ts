@@ -231,4 +231,4 @@ function shutdown(signal: string) {
 process.on('SIGINT', () => shutdown('SIGINT'))
 process.on('SIGTERM', () => shutdown('SIGTERM'))
 
-export { app, server, io, boothSockets }
+export { app, server, io, boothSockets, operatorSubscriptions }

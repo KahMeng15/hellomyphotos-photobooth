@@ -4,7 +4,7 @@ import { CountdownUI } from './Countdown.js'
 import { FrameCarousel } from './FrameCarousel.js'
 import { PhotoPreview } from './PhotoPreview.js'
 import { OfflineIndicator } from './OfflineIndicator.js'
-import { Settings } from './Settings.js'
+import { Settings, connectBoothSocket } from './Settings.js'
 
 export class BoothApp {
   private container: HTMLElement
@@ -31,7 +31,7 @@ export class BoothApp {
   private isCapturing = false
   private isLive = false
   private isPaused = false
-  private settingsData: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; serverUrl: string; cameraDeviceId?: string; audioDeviceId?: string } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
+  private settingsData: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; serverUrl: string; cameraDeviceId?: string; audioDeviceId?: string; otp?: string } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
   private serverOnline = true
   private selectedFrame: string | null = null
   private serverUrl = 'http://localhost:3000'
@@ -228,8 +228,32 @@ export class BoothApp {
 
   async mount() {
     const settings = await window.hellomyphoto?.getSettings()
-    if (settings) this.settingsData = { ...this.settingsData, ...settings }
+    if (settings) {
+      this.settingsData = { ...this.settingsData, ...settings }
+      const otp = (settings as any).otp
+      if (otp) {
+        connectBoothSocket(this.settingsData.serverUrl.replace(/\/+$/, ''), otp)
+        // Fetch per-event settings from server
+        this.fetchEventSettings()
+      }
+    }
     await this.frameCarousel.loadFrames(this.serverUrl)
+  }
+
+  private async fetchEventSettings() {
+    const otp = this.settingsData.otp
+    if (!otp) return
+    try {
+      const url = this.settingsData.serverUrl.replace(/\/+$/, '')
+      const res = await fetch(`${url}/api/booth/settings?otp=${otp}`)
+      if (res.ok) {
+        const data = await res.json()
+        this.settingsData = { ...this.settingsData, ...data }
+        window.hellomyphoto?.saveSettings(this.settingsData)
+      }
+    } catch {
+      // Server unreachable — keep local settings
+    }
   }
 
   private async goLive() {

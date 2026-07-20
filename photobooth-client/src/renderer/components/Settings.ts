@@ -1,8 +1,8 @@
 import { io, Socket } from 'socket.io-client'
 
-let boothSocket: Socket | null = null
+export let boothSocket: Socket | null = null
 
-function connectBoothSocket(serverUrl: string, otp: string) {
+export function connectBoothSocket(serverUrl: string, otp: string) {
   if (boothSocket?.connected) {
     boothSocket.disconnect()
   }
@@ -12,10 +12,24 @@ function connectBoothSocket(serverUrl: string, otp: string) {
   })
   boothSocket.on('connect', () => {
     console.log('[booth] WebSocket connected')
+    document.dispatchEvent(new CustomEvent('booth-socket-connect'))
+  })
+  boothSocket.on('disconnect', () => {
+    console.log('[booth] WebSocket disconnected')
+    document.dispatchEvent(new CustomEvent('booth-socket-disconnect'))
   })
   boothSocket.on('connect_error', (err) => {
     console.error('[booth] WebSocket error:', err.message)
+    document.dispatchEvent(new CustomEvent('booth-socket-error'))
   })
+}
+
+export function disconnectBoothSocket() {
+  if (boothSocket) {
+    boothSocket.disconnect()
+    boothSocket = null
+    document.dispatchEvent(new CustomEvent('booth-socket-disconnect'))
+  }
 }
 
 interface BoothSettings {
@@ -46,9 +60,18 @@ export class Settings {
   private statusText!: HTMLSpanElement
   private sliderInputs: HTMLInputElement[] = []
   private sliderValues: HTMLSpanElement[] = []
+  private connectionStatus!: HTMLDivElement
 
   constructor(container: HTMLElement, onChange: (settings: BoothSettings) => void) {
     this.onChange = onChange
+
+    // Listen for socket status changes to update the UI when visible
+    const onSocketEvent = () => {
+      if (this.visible) this.refreshConnectionStatus()
+    }
+    document.addEventListener('booth-socket-connect', onSocketEvent)
+    document.addEventListener('booth-socket-disconnect', onSocketEvent)
+    document.addEventListener('booth-socket-error', onSocketEvent)
 
     this.overlay = document.createElement('div')
     this.overlay.style.cssText = `
@@ -250,6 +273,10 @@ export class Settings {
     result.style.cssText = 'margin-top: 0.5rem;'
     section.appendChild(result)
 
+    this.connectionStatus = document.createElement('div')
+    this.connectionStatus.style.cssText = 'margin-top: 0.375rem; font-size: 0.75rem; display: flex; align-items: center; gap: 0.375rem;'
+    section.appendChild(this.connectionStatus)
+
     testBtn.addEventListener('click', async () => {
       const otpVal = input.value.trim()
       if (otpVal.length !== 6) {
@@ -428,19 +455,31 @@ export class Settings {
     }
   }
 
+  private refreshConnectionStatus() {
+    if (!this.connectionStatus) return
+    if (boothSocket?.connected) {
+      this.connectionStatus.innerHTML = '<span style="color:#4caf50;">●</span> Connected'
+    } else if (boothSocket) {
+      this.connectionStatus.innerHTML = '<span style="color:#f44336;">●</span> Disconnected'
+    } else {
+      this.connectionStatus.innerHTML = '<span style="color:#666;">○</span> Not connected'
+    }
+  }
+
   private markDirty() {
     this.dirty = true
   }
 
   private save() {
+    this.settings.serverUrl = this.serverInput.value.replace(/\/+$/, '')
     this.onChange(this.settings)
     window.hellomyphoto?.saveSettings(this.settings)
     if (this.settings.otp) {
-      connectBoothSocket(this.settings.serverUrl.replace(/\/+$/, ''), this.settings.otp)
+      connectBoothSocket(this.settings.serverUrl, this.settings.otp)
     } else if (boothSocket) {
-      boothSocket.disconnect()
-      boothSocket = null
+      disconnectBoothSocket()
     }
+    this.refreshConnectionStatus()
   }
 
   toggle() {
@@ -451,6 +490,7 @@ export class Settings {
       window.hellomyphoto?.getSettings().then((s) => {
         this.settings = { ...this.settings, ...s }
         this.refreshFields()
+        this.refreshConnectionStatus()
       })
       this.populateDevices()
     }

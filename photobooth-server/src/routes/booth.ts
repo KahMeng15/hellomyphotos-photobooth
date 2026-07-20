@@ -6,9 +6,9 @@ import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { boothAuthMiddleware } from '../middleware/authMiddleware'
-import { io } from '../server'
+import { io, operatorSubscriptions } from '../server'
 import { processSinglePhoto, generateThumbnail, compileVerticalStrip } from '../pipeline'
-import { ensurePhotoSession, getEventByOtp } from '../db'
+import { ensurePhotoSession, getEventByOtp, updateEventSettingsById } from '../db'
 
 const router = Router()
 
@@ -109,7 +109,7 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
       )
     }
 
-    io.emit('new-media', {
+    const newMediaPayload = {
       eventId,
       sessionId,
       photoCount: files.length,
@@ -120,7 +120,13 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
         thumbnail: r.thumbnail,
         strip: r.strip,
       })),
-    })
+    }
+    const subs = operatorSubscriptions.get(eventId)
+    if (subs) {
+      for (const sid of subs) {
+        io.to(sid).emit('new-media', newMediaPayload)
+      }
+    }
 
     for (const file of files) {
       await fs.unlink(file.path).catch(() => {})
@@ -192,30 +198,40 @@ router.get('/validate-otp', (req: Request, res: Response) => {
 })
 
 router.get('/settings', async (req: Request, res: Response) => {
-  const settingsPath = path.join(config.storage.logs, 'booth-settings.json')
-  try {
-    const data = await fs.readFile(settingsPath, 'utf-8')
-    res.json(JSON.parse(data))
-  } catch {
-    res.json({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, otp: '' })
+  const otp = (req.query.otp as string || '').trim()
+  if (otp.length !== 6) {
+    return res.status(400).json({ error: 'OTP required as query param' })
   }
+  const event = getEventByOtp(otp)
+  if (!event) {
+    return res.status(404).json({ error: 'Event not found for OTP' })
+  }
+  res.json({
+    photoCount: event.photo_count,
+    countdown: event.countdown,
+    captureInterval: event.capture_interval,
+    postCapturePreview: event.post_capture_preview,
+  })
 })
 
 router.post('/settings', async (req: Request, res: Response) => {
-  const settingsPath = path.join(config.storage.logs, 'booth-settings.json')
   const { photoCount, countdown, captureInterval, postCapturePreview, otp } = req.body
-  const settings: Record<string, any> = {
-    photoCount: Math.max(1, Math.min(4, photoCount || 4)),
-    countdown: Math.max(3, Math.min(10, countdown || 5)),
-    captureInterval: Math.max(0, Math.min(5, captureInterval ?? 1)),
-    postCapturePreview: Math.max(1, Math.min(5, postCapturePreview ?? 2)),
+  if (!otp) {
+    return res.status(400).json({ error: 'OTP required' })
   }
-  if (otp !== undefined) {
-    settings.otp = otp
+  const event = getEventByOtp(otp)
+  if (!event) {
+    return res.status(404).json({ error: 'Event not found for OTP' })
   }
-  await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2))
-  logger.info('Booth settings synced from client', settings)
-  io.emit('settings-updated', settings)
+  const settings = {
+    photoCount: Math.max(1, Math.min(4, photoCount ?? event.photo_count)),
+    countdown: Math.max(3, Math.min(10, countdown ?? event.countdown)),
+    captureInterval: Math.max(0, Math.min(5, captureInterval ?? event.capture_interval)),
+    postCapturePreview: Math.max(1, Math.min(5, postCapturePreview ?? event.post_capture_preview)),
+  }
+  updateEventSettingsById(event.id, settings)
+  logger.info('Booth settings synced to event', { eventId: event.id, ...settings })
+  io.emit('settings-updated', { eventId: event.id, settings })
   res.json({ success: true, settings })
 })
 
