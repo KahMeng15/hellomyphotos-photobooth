@@ -61,7 +61,7 @@ export class BoothApp {
     this.previewWindow = document.createElement('div')
     Object.assign(this.previewWindow.style, {
       flex: '1', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      minHeight: '0', width: '100%', background: '#000',
+      minHeight: '0', width: '100%', background: '#000', paddingTop: '2rem',
     })
     this.previewWindow.appendChild(this.previewBox)
 
@@ -232,6 +232,7 @@ export class BoothApp {
     this.isLive = true
     this.stopBtn.style.display = 'block'
     this.captureBtn.style.display = 'block'
+    this.captureBtn.style.visibility = 'visible'
     this.statusBar.appendChild(this.captureBtn)
     this.stateDisplay.textContent = 'Touch to Start'
     setTimeout(() => { this.stateDisplay.style.opacity = '0' }, 3000)
@@ -253,7 +254,7 @@ export class BoothApp {
   private async startCapture() {
     if (this.isCapturing || !this.isLive) return
     this.isCapturing = true
-    this.captureBtn.style.display = 'none'
+    this.captureBtn.style.visibility = 'hidden'
     this.stateDisplay.textContent = ''
 
     const photoCount = this.settingsData.photoCount
@@ -279,7 +280,7 @@ export class BoothApp {
       } else {
         this.stateDisplay.textContent = 'Capture failed — tap to retry'
         this.isCapturing = false
-        this.captureBtn.style.display = 'block'
+        this.captureBtn.style.visibility = 'visible'
         return
       }
 
@@ -316,16 +317,28 @@ export class BoothApp {
       }
 
       this.photoPreview.show(paths)
+      this.camera.stop()
+      this.webcamPreview.srcObject = null
     } else {
       this.isCapturing = false
     }
   }
 
-  private reset() {
+  private async reset() {
     this.isCapturing = false
-    this.captureBtn.style.display = 'block'
+    this.captureBtn.style.visibility = 'visible'
     this.photoPreview.hide()
     this.stateDisplay.textContent = ''
+    const stream = await this.camera.startWebcam(this.settingsData.cameraDeviceId)
+    if (stream) {
+      this.webcamPreview.srcObject = stream
+      await this.webcamPreview.play()
+      const track = stream.getVideoTracks()[0]
+      const settings = track.getSettings()
+      if (settings.width && settings.height) {
+        this.previewBox.style.aspectRatio = `${settings.width} / ${settings.height}`
+      }
+    }
   }
 
   private delay(ms: number): Promise<void> {
