@@ -204,6 +204,9 @@ export class BoothApp {
       } else if (cmd.type === 'resume') {
         this.isPaused = false
         this.stateDisplay.textContent = ''
+      } else if (cmd.type === 'settings-update') {
+        this.settingsData = { ...this.settingsData, ...cmd.settings }
+        window.hellomyphoto?.saveSettings(this.settingsData)
       }
     })
   }

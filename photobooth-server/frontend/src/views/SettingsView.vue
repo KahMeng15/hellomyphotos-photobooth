@@ -36,7 +36,8 @@
       </section>
 
       <div class="actions">
-        <button @click="saveSettings" class="btn-primary">Save</button>
+        <button @click="saveAndClose" class="btn-primary">Save</button>
+        <button @click="cancelChanges" class="btn-cancel">Cancel</button>
         <span v-if="saved" class="saved-msg">Saved</span>
       </div>
     </div>
@@ -44,28 +45,71 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter, onBeforeRouteLeave } from 'vue-router'
 import axios from 'axios'
+import { useWebSocket } from '../composables/useWebSocket'
 
+const router = useRouter()
 const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1 })
+const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1 })
 const saved = ref(false)
+const { ws, connect, disconnect } = useWebSocket()
+
+const dirty = computed(() =>
+  settings.value.photoCount !== originalSettings.value.photoCount ||
+  settings.value.countdown !== originalSettings.value.countdown ||
+  settings.value.captureInterval !== originalSettings.value.captureInterval
+)
 
 onMounted(async () => {
   try {
     const { data } = await axios.get('/api/admin/settings')
     settings.value = data
+    originalSettings.value = { ...data }
   } catch {}
+
+  const socket = connect()
+  if (socket) {
+    socket.on('settings-updated', (updated: any) => {
+      settings.value = { ...settings.value, ...updated }
+      originalSettings.value = { ...originalSettings.value, ...updated }
+    })
+  }
 })
 
-async function saveSettings() {
+onUnmounted(() => {
+  disconnect()
+})
+
+onBeforeRouteLeave((to, from, next) => {
+  if (dirty.value) {
+    if (!confirm('You have unsaved changes. Discard them?')) {
+      next(false)
+      return
+    }
+  }
+  next()
+})
+
+async function saveAndClose() {
   saved.value = false
   try {
     await axios.post('/api/admin/settings', settings.value)
+    originalSettings.value = { ...settings.value }
     saved.value = true
-    setTimeout(() => { saved.value = false }, 2000)
+    router.push('/dashboard')
   } catch (err) {
     console.error('Failed to save settings', err)
   }
+}
+
+function cancelChanges() {
+  if (dirty.value) {
+    if (!confirm('You have unsaved changes. Discard them?')) return
+  }
+  settings.value = { ...originalSettings.value }
+  router.push('/dashboard')
 }
 </script>
 
@@ -173,6 +217,16 @@ async function saveSettings() {
 .btn-ghost:hover {
   border-color: #555;
   color: #fff;
+}
+
+.btn-cancel {
+  padding: 0.75rem 2rem;
+  background: transparent;
+  color: #888;
+  border: 1px solid #333;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  cursor: pointer;
 }
 
 .saved-msg {

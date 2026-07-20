@@ -44,7 +44,7 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
     ipcRenderer.on('queue-update', (_event, data) => callback(data))
   },
 
-  onBoothCommand: (callback: (command: { id: string; type: string }) => void) => {
+  onBoothCommand: (callback: (command: { id: string; type: string; settings?: any }) => void) => {
     ipcRenderer.on('booth-command', (_event, command) => callback(command))
   },
 })

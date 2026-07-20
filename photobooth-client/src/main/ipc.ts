@@ -127,15 +127,27 @@ export function initIpcHandlers(
     return getSettingsSync()
   })
 
-  ipcMain.handle('save-settings', (event, settings: { photoCount: number; countdown: number; captureInterval: number; serverUrl?: string }) => {
+  ipcMain.handle('save-settings', async (event, settings: { photoCount: number; countdown: number; captureInterval: number; serverUrl?: string }) => {
     try {
       const existing = getSettingsSync()
       const merged = { ...existing, ...settings }
       fs.writeFileSync(SETTINGS_FILE, JSON.stringify(merged, null, 2))
+      const syncUrl = merged.serverUrl || _serverUrl
       if (merged.serverUrl && merged.serverUrl !== _serverUrl) {
         _serverUrl = merged.serverUrl
         _setServerUrl(merged.serverUrl)
       }
+      try {
+        await fetch(`${syncUrl}/api/booth/settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            photoCount: merged.photoCount,
+            countdown: merged.countdown,
+            captureInterval: merged.captureInterval,
+          }),
+        })
+      } catch {}
       return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }

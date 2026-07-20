@@ -15,12 +15,15 @@ interface MediaDeviceInfo {
 export class Settings {
   private overlay: HTMLDivElement
   private visible = false
+  private dirty = false
   private onChange: (settings: BoothSettings) => void
   private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, serverUrl: 'http://localhost:3000' }
   private serverInput!: HTMLInputElement
   private cameraSelect!: HTMLSelectElement
   private audioSelect!: HTMLSelectElement
   private statusText!: HTMLSpanElement
+  private sliderInputs: HTMLInputElement[] = []
+  private sliderValues: HTMLSpanElement[] = []
 
   constructor(container: HTMLElement, onChange: (settings: BoothSettings) => void) {
     this.onChange = onChange
@@ -54,19 +57,51 @@ export class Settings {
     captureTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0 0 1rem; text-transform: uppercase; letter-spacing: 0.05em;'
     panel.appendChild(captureTitle)
 
-    panel.appendChild(this.createField('Photos per session', 1, 4, (v) => { this.settings.photoCount = v; this.save() }))
-    panel.appendChild(this.createField('Countdown (seconds)', 3, 10, (v) => { this.settings.countdown = v; this.save() }))
-    panel.appendChild(this.createField('Interval (seconds)', 0, 5, (v) => { this.settings.captureInterval = v; this.save() }))
+    panel.appendChild(this.createField('Photos per session', 1, 4, this.settings.photoCount, (v) => { this.settings.photoCount = v; this.markDirty() }))
+    panel.appendChild(this.createField('Countdown (seconds)', 3, 10, this.settings.countdown, (v) => { this.settings.countdown = v; this.markDirty() }))
+    panel.appendChild(this.createField('Interval (seconds)', 0, 5, this.settings.captureInterval, (v) => { this.settings.captureInterval = v; this.markDirty() }))
 
-    const closeBtn = document.createElement('button')
-    closeBtn.textContent = 'Close'
-    closeBtn.style.cssText = `
-      width: 100%; padding: 0.75rem; margin-top: 1.5rem;
+    const btnRow = document.createElement('div')
+    btnRow.style.cssText = 'display: flex; gap: 0.5rem; margin-top: 1.5rem;'
+
+    const saveBtn = document.createElement('button')
+    saveBtn.textContent = 'Save'
+    saveBtn.style.cssText = `
+      flex: 1; padding: 0.75rem;
       background: #fff; color: #000; border: none; border-radius: 8px;
       font-size: 0.9375rem; font-weight: 600; cursor: pointer;
     `
-    closeBtn.addEventListener('click', () => this.hide())
-    panel.appendChild(closeBtn)
+    saveBtn.addEventListener('click', () => {
+      this.save()
+      this.dirty = false
+      this.hide()
+    })
+    btnRow.appendChild(saveBtn)
+
+    const cancelBtn = document.createElement('button')
+    cancelBtn.textContent = 'Cancel'
+    cancelBtn.style.cssText = `
+      flex: 1; padding: 0.75rem;
+      background: transparent; color: #888; border: 1px solid #333; border-radius: 8px;
+      font-size: 0.9375rem; cursor: pointer;
+    `
+    cancelBtn.addEventListener('click', () => {
+      if (this.dirty) {
+        if (!confirm('You have unsaved changes. Discard them?')) return
+      }
+      this.hide()
+    })
+    btnRow.appendChild(cancelBtn)
+    panel.appendChild(btnRow)
+
+    this.overlay.addEventListener('click', (e) => {
+      if (e.target === this.overlay && this.visible) {
+        if (this.dirty) {
+          if (!confirm('You have unsaved changes. Discard them?')) return
+        }
+        this.hide()
+      }
+    })
 
     this.overlay.appendChild(panel)
     container.appendChild(this.overlay)
@@ -135,7 +170,7 @@ export class Settings {
 
     this.serverInput.addEventListener('change', () => {
       this.settings.serverUrl = this.serverInput.value.replace(/\/+$/, '')
-      this.save()
+      this.markDirty()
     })
 
     return section
@@ -164,12 +199,12 @@ export class Settings {
 
     this.cameraSelect.addEventListener('change', () => {
       this.settings.cameraDeviceId = this.cameraSelect.value || undefined
-      this.save()
+      this.markDirty()
     })
 
     this.audioSelect.addEventListener('change', () => {
       this.settings.audioDeviceId = this.audioSelect.value || undefined
-      this.save()
+      this.markDirty()
     })
 
     return section
@@ -229,6 +264,7 @@ export class Settings {
     label: string,
     min: number,
     max: number,
+    currentValue: number,
     onChange: (value: number) => void
   ): HTMLDivElement {
     const field = document.createElement('div')
@@ -246,13 +282,16 @@ export class Settings {
     input.type = 'range'
     input.min = String(min)
     input.max = String(max)
-    input.value = String(this.settings.photoCount)
+    input.value = String(currentValue)
     input.style.cssText = 'flex: 1; accent-color: #fff;'
     row.appendChild(input)
 
     const value = document.createElement('span')
     value.textContent = input.value
     value.style.cssText = 'font-size: 1rem; font-weight: 600; min-width: 2rem; text-align: center;'
+
+    this.sliderInputs.push(input)
+    this.sliderValues.push(value)
 
     input.addEventListener('input', () => {
       value.textContent = input.value
@@ -264,6 +303,18 @@ export class Settings {
     return field
   }
 
+  private refreshFields() {
+    const values = [this.settings.photoCount, this.settings.countdown, this.settings.captureInterval]
+    for (let i = 0; i < this.sliderInputs.length; i++) {
+      this.sliderInputs[i].value = String(values[i])
+      this.sliderValues[i].textContent = String(values[i])
+    }
+  }
+
+  private markDirty() {
+    this.dirty = true
+  }
+
   private save() {
     this.onChange(this.settings)
     window.hellomyphoto?.saveSettings(this.settings)
@@ -273,8 +324,10 @@ export class Settings {
     this.visible = !this.visible
     this.overlay.style.display = this.visible ? 'flex' : 'none'
     if (this.visible) {
+      this.dirty = false
       window.hellomyphoto?.getSettings().then((s) => {
         this.settings = { ...this.settings, ...s }
+        this.refreshFields()
       })
       this.populateDevices()
     }

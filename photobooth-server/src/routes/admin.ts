@@ -5,6 +5,9 @@ import fs from 'fs/promises'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { jobQueue } from '../queue'
+import { pendingCommands } from './booth'
+import { v4 as uuidv4 } from 'uuid'
+import { io } from '../server'
 
 const router = Router()
 
@@ -160,10 +163,17 @@ router.post('/settings', async (req: Request, res: Response) => {
   const settings = {
     photoCount: Math.max(1, Math.min(4, photoCount || 4)),
     countdown: Math.max(3, Math.min(10, countdown || 5)),
-    captureInterval: Math.max(0, Math.min(5, captureInterval || 1)),
+    captureInterval: Math.max(0, Math.min(5, captureInterval ?? 1)),
   }
   await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2))
   logger.info('Booth settings updated', settings)
+  pendingCommands.push({
+    id: uuidv4(),
+    type: 'settings-update',
+    settings,
+    createdAt: Date.now(),
+  })
+  io.emit('settings-updated', settings)
   res.json({ success: true, settings })
 })
 
