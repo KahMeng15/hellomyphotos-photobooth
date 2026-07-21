@@ -39,14 +39,42 @@
       <section class="photo-feed">
         <div class="feed-header">
           <h2>Photos</h2>
-          <span class="photo-count">{{ photoSessions.length }} group{{ photoSessions.length !== 1 ? 's' : '' }}</span>
+          <div class="feed-header-right">
+            <div class="view-toggle">
+              <button @click="viewMode = 'grid-sm'" :class="['btn-view', { active: viewMode === 'grid-sm' }]" title="Small grid">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                </svg>
+              </button>
+              <button @click="viewMode = 'grid-lg'" :class="['btn-view', { active: viewMode === 'grid-lg' }]" title="Large grid">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="7"/><rect x="3" y="14" width="18" height="7"/>
+                </svg>
+              </button>
+              <button @click="viewMode = 'list'" :class="['btn-view', { active: viewMode === 'list' }]" title="List">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <span class="photo-count">{{ photoSessions.length }} group{{ photoSessions.length !== 1 ? 's' : '' }}</span>
+          </div>
         </div>
-        <div class="session-list" ref="feedRef">
+
+        <div v-if="selectedSessions.size > 0" class="selection-bar">
+          <span class="selection-count">{{ selectedSessions.size }} selected</span>
+          <button @click="archiveSelected" class="btn-action btn-archive">Archive</button>
+          <button @click="deleteSelected" class="btn-action btn-delete">Delete</button>
+          <button @click="selectedSessions.clear()" class="btn-action btn-cancel">Clear</button>
+        </div>
+
+        <div :class="['session-list', viewMode]" ref="feedRef">
           <div
             v-for="session in photoSessions"
             :key="session.sessionId"
-            class="session-card"
-            @click="selectSession(session)"
+            :class="['session-card', { selected: selectedSessions.has(session.sessionId) }]"
+            @click="toggleSelect(session.sessionId)"
+            @dblclick="selectSession(session)"
           >
             <div class="session-thumb">
               <img
@@ -54,6 +82,11 @@
                 :alt="'Session ' + session.sessionId"
                 class="thumb-img"
               />
+              <div class="session-check" :class="{ checked: selectedSessions.has(session.sessionId) }">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
             </div>
             <div class="session-meta">
               <span class="session-time">{{ formatTime(session.createdAt) }}</span>
@@ -94,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { usePhotosStore } from '../stores/photos'
@@ -103,19 +136,22 @@ import { useWebSocket } from '../composables/useWebSocket'
 import EventControlPanel from '../components/EventControlPanel.vue'
 import PhotoViewer from '../components/PhotoViewer.vue'
 import SessionViewer from '../components/SessionViewer.vue'
+import axios from 'axios'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const photosStore = usePhotosStore()
-const { ws, connected, connect, disconnect, sendMessage, subscribe, unsubscribe } = useWebSocket()
+const { ws, connect, disconnect, sendMessage, subscribe, unsubscribe } = useWebSocket()
 
 const event = ref<any>(null)
-const photoSessions = ref<PhotoSession[]>([])
+const photoSessions = ref<any[]>([])
 const boothConnected = ref(false)
 const boothState = ref<string | null>(null)
 const showPanel = ref(false)
 const feedRef = ref<HTMLElement | null>(null)
+const viewMode = ref<'grid-sm' | 'grid-lg' | 'list'>('grid-lg')
+const selectedSessions = ref(new Set<string>())
 
 let wideMq: MediaQueryList | null = null
 const closePanelOnWide = () => {
@@ -185,7 +221,7 @@ onUnmounted(() => {
 
 async function loadSessions() {
   const eventId = route.params.id as string
-  const { data } = await (await import('axios')).default.get(`/api/admin/events/${eventId}/photos`)
+  const { data } = await axios.get(`/api/admin/events/${eventId}/photos`)
   photoSessions.value = data.sessions
 }
 
@@ -194,7 +230,7 @@ function selectSession(session: PhotoSession) {
 }
 
 function goBack() {
-  router.push('/events')
+  router.back()
 }
 
 function goToAdmin() {
@@ -216,6 +252,37 @@ function retryConnection() {
   connect()
   const eventId = route.params.id as string
   subscribe(eventId)
+}
+
+function toggleSelect(sessionId: string) {
+  const newSet = new Set(selectedSessions.value)
+  if (newSet.has(sessionId)) {
+    newSet.delete(sessionId)
+  } else {
+    newSet.add(sessionId)
+  }
+  selectedSessions.value = newSet
+}
+
+async function archiveSelected() {
+  const ids = Array.from(selectedSessions.value)
+  if (!ids.length) return
+  try {
+    await axios.post(`/api/admin/events/${route.params.id}/sessions/batch-archive`, { sessionIds: ids })
+    selectedSessions.value = new Set()
+    await loadSessions()
+  } catch {}
+}
+
+async function deleteSelected() {
+  const ids = Array.from(selectedSessions.value)
+  if (!ids.length) return
+  if (!confirm(`Delete ${ids.length} session${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return
+  try {
+    await axios.post(`/api/admin/events/${route.params.id}/sessions/batch-delete`, { sessionIds: ids })
+    selectedSessions.value = new Set()
+    await loadSessions()
+  } catch {}
 }
 
 function formatTime(ts: string) {
@@ -346,15 +413,113 @@ function formatTime(ts: string) {
   margin: 0;
 }
 
+.feed-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 2px;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.btn-view {
+  background: none;
+  border: none;
+  color: #666;
+  padding: 0.25rem 0.375rem;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.btn-view:hover {
+  color: #ccc;
+}
+
+.btn-view.active {
+  background: #2a2a2a;
+  color: #fff;
+}
+
 .photo-count {
   font-size: 0.8125rem;
   color: #888;
 }
 
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: #1a2a3a;
+  border: 1px solid #2a4a6a;
+  border-radius: 8px;
+}
+
+.selection-count {
+  font-size: 0.8125rem;
+  color: #88c8ff;
+  margin-right: auto;
+}
+
+.btn-action {
+  padding: 0.375rem 0.75rem;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-archive {
+  background: #2a3a2a;
+  color: #4caf50;
+}
+
+.btn-archive:hover {
+  background: #3a4a3a;
+}
+
+.btn-delete {
+  background: #3a1a1a;
+  color: #f44336;
+}
+
+.btn-delete:hover {
+  background: #4a2a2a;
+}
+
+.btn-cancel {
+  background: #2a2a2a;
+  color: #888;
+}
+
+.btn-cancel:hover {
+  color: #ccc;
+}
+
 .session-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 1rem;
+}
+
+.session-list.grid-sm {
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+}
+
+.session-list.grid-lg {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.session-list.list {
+  grid-template-columns: 1fr;
 }
 
 .session-card {
@@ -363,16 +528,40 @@ function formatTime(ts: string) {
   border-radius: 10px;
   cursor: pointer;
   overflow: hidden;
+  transition: border-color 0.15s;
 }
 
 .session-card:hover {
-  border-color: #444;
+  border-color: #555;
+}
+
+.session-card.selected {
+  border-color: #2196F3;
+  box-shadow: 0 0 0 1px #2196F3;
 }
 
 .session-thumb {
+  position: relative;
   aspect-ratio: 3/2;
   overflow: hidden;
   background: #111;
+}
+
+.session-list.list .session-thumb {
+  aspect-ratio: auto;
+  width: 120px;
+  height: 80px;
+  flex-shrink: 0;
+}
+
+.session-list.list .session-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.session-list.list .session-meta {
+  flex: 1;
 }
 
 .thumb-img {
@@ -380,6 +569,32 @@ function formatTime(ts: string) {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.session-check {
+  position: absolute;
+  top: 0.375rem;
+  left: 0.375rem;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid rgba(255,255,255,0.5);
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.session-card:hover .session-check {
+  opacity: 1;
+}
+
+.session-check.checked {
+  opacity: 1;
+  background: #2196F3;
+  border-color: #2196F3;
 }
 
 .session-meta {

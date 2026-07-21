@@ -58,6 +58,8 @@ try { db.exec(`ALTER TABLE events ADD COLUMN countdown INTEGER NOT NULL DEFAULT 
 try { db.exec(`ALTER TABLE events ADD COLUMN capture_interval INTEGER NOT NULL DEFAULT 1`) } catch {}
 try { db.exec(`ALTER TABLE events ADD COLUMN post_capture_preview INTEGER NOT NULL DEFAULT 2`) } catch {}
 
+try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`) } catch {}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS photo_sessions (
     id TEXT PRIMARY KEY,
@@ -96,6 +98,9 @@ const endEventStmt = db.prepare("UPDATE events SET status = 'ended' WHERE id = ?
 
 const deleteEventStmt = db.prepare('DELETE FROM events WHERE id = ?')
 
+const archiveSessionStmt = db.prepare("UPDATE photo_sessions SET archived = 1 WHERE id = ?")
+const restoreSessionStmt = db.prepare("UPDATE photo_sessions SET archived = 0 WHERE id = ?")
+
 const insertPhotoSession = db.prepare(`
   INSERT INTO photo_sessions (id, event_id) VALUES (?, ?)
 `)
@@ -104,6 +109,9 @@ const findPhotoSession = db.prepare('SELECT * FROM photo_sessions WHERE id = ?')
 
 const listPhotoSessionsByEvent = db.prepare(
   'SELECT * FROM photo_sessions WHERE event_id = ? ORDER BY created_at DESC'
+)
+const listActivePhotoSessionsByEvent = db.prepare(
+  "SELECT * FROM photo_sessions WHERE event_id = ? AND archived = 0 ORDER BY created_at DESC"
 )
 
 function generateOtp(): string {
@@ -189,10 +197,19 @@ export function getPhotoSession(sessionId: string) {
   } | undefined
 }
 
-export function listEventPhotoSessions(eventId: string) {
-  return listPhotoSessionsByEvent.all(eventId) as Array<{
-    id: string; event_id: string; created_at: string
+export function listEventPhotoSessions(eventId: string, includeArchived = false) {
+  const stmt = includeArchived ? listPhotoSessionsByEvent : listActivePhotoSessionsByEvent
+  return stmt.all(eventId) as Array<{
+    id: string; event_id: string; created_at: string; archived: number
   }>
+}
+
+export function archiveSession(sessionId: string) {
+  archiveSessionStmt.run(sessionId)
+}
+
+export function restoreSession(sessionId: string) {
+  restoreSessionStmt.run(sessionId)
 }
 
 const getDefaultsStmt = db.prepare('SELECT * FROM global_settings WHERE id = 1')

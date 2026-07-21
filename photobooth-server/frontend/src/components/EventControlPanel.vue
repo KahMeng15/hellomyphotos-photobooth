@@ -36,31 +36,9 @@
     </div>
 
     <div class="panel-section">
-      <h3>Event Settings</h3>
-      <div class="control-field">
-        <label>Photos per session (1-4)</label>
-        <input type="range" min="1" max="4" v-model.number="eventSettings.photoCount" />
-        <span class="range-value">{{ eventSettings.photoCount }}</span>
-      </div>
-      <div class="control-field">
-        <label>Countdown (3-10s)</label>
-        <input type="range" min="3" max="10" v-model.number="eventSettings.countdown" />
-        <span class="range-value">{{ eventSettings.countdown }}s</span>
-      </div>
-      <div class="control-field">
-        <label>Interval (0-5s)</label>
-        <input type="range" min="0" max="5" v-model.number="eventSettings.captureInterval" />
-        <span class="range-value">{{ eventSettings.captureInterval }}s</span>
-      </div>
-      <div class="control-field">
-        <label>Preview (1-5s)</label>
-        <input type="range" min="1" max="5" v-model.number="eventSettings.postCapturePreview" />
-        <span class="range-value">{{ eventSettings.postCapturePreview }}s</span>
-      </div>
-      <button @click="saveEventSettings" class="btn-control btn-primary" :disabled="settingsSaving">
-        {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
+      <button @click="showSettingsModal = true" class="btn-control btn-secondary">
+        Event Settings
       </button>
-      <span v-if="settingsMsg" :class="settingsMsgType === 'success' ? 'msg-success' : 'msg-error'">{{ settingsMsg }}</span>
     </div>
 
     <div class="panel-section">
@@ -75,12 +53,6 @@
       <h3>Quick Actions</h3>
       <button @click="shareAll" class="btn-control btn-secondary">
         Share All
-      </button>
-      <button @click="goToAdmin" class="btn-control btn-secondary">
-        Admin Panel
-      </button>
-      <button @click="goToBoothConnect" class="btn-control btn-secondary">
-        Setup Booth
       </button>
       <button v-if="event.status === 'active'" @click="endThisEvent" class="btn-control btn-danger">
         End Event
@@ -132,31 +104,9 @@
           </div>
 
           <div class="panel-section">
-            <h3>Event Settings</h3>
-            <div class="control-field">
-              <label>Photos per session (1-4)</label>
-              <input type="range" min="1" max="4" v-model.number="eventSettings.photoCount" />
-              <span class="range-value">{{ eventSettings.photoCount }}</span>
-            </div>
-            <div class="control-field">
-              <label>Countdown (3-10s)</label>
-              <input type="range" min="3" max="10" v-model.number="eventSettings.countdown" />
-              <span class="range-value">{{ eventSettings.countdown }}s</span>
-            </div>
-            <div class="control-field">
-              <label>Interval (0-5s)</label>
-              <input type="range" min="0" max="5" v-model.number="eventSettings.captureInterval" />
-              <span class="range-value">{{ eventSettings.captureInterval }}s</span>
-            </div>
-            <div class="control-field">
-              <label>Preview (1-5s)</label>
-              <input type="range" min="1" max="5" v-model.number="eventSettings.postCapturePreview" />
-              <span class="range-value">{{ eventSettings.postCapturePreview }}s</span>
-            </div>
-            <button @click="saveEventSettings" class="btn-control btn-primary" :disabled="settingsSaving">
-              {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
+            <button @click="showSettingsModal = true" class="btn-control btn-secondary">
+              Event Settings
             </button>
-            <span v-if="settingsMsg" :class="settingsMsgType === 'success' ? 'msg-success' : 'msg-error'">{{ settingsMsg }}</span>
           </div>
 
           <div class="panel-section">
@@ -172,16 +122,45 @@
             <button @click="shareAll" class="btn-control btn-secondary">
               Share All
             </button>
-            <button @click="goToAdmin" class="btn-control btn-secondary">
-              Admin Panel
-            </button>
-            <button @click="goToBoothConnect" class="btn-control btn-secondary">
-              Setup Booth
-            </button>
             <button v-if="event.status === 'active'" @click="endThisEvent" class="btn-control btn-danger">
               End Event
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <Teleport to="body">
+    <div v-if="showSettingsModal" class="modal-overlay" @click.self="showSettingsModal = false">
+      <div class="modal-page">
+        <div class="modal-header">
+          <h2>Event Settings</h2>
+          <button class="close-btn" @click="showSettingsModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="settings-box">
+            <div class="field-row">
+              <label>Photos per session</label>
+              <input type="number" min="1" max="4" v-model.number="eventSettings.photoCount" class="num-input" />
+            </div>
+            <div class="field-row">
+              <label>Countdown</label>
+              <input type="number" min="3" max="10" v-model.number="eventSettings.countdown" class="num-input" />
+            </div>
+            <div class="field-row">
+              <label>Interval</label>
+              <input type="number" min="0" max="5" v-model.number="eventSettings.captureInterval" class="num-input" />
+            </div>
+            <div class="field-row">
+              <label>Preview</label>
+              <input type="number" min="1" max="5" v-model.number="eventSettings.postCapturePreview" class="num-input" />
+            </div>
+          </div>
+          <button @click="saveEventSettings" class="btn-control btn-primary" :disabled="settingsSaving">
+            {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
+          </button>
+          <span v-if="settingsMsg" :class="settingsMsgType === 'success' ? 'msg-success' : 'msg-error'">{{ settingsMsg }}</span>
         </div>
       </div>
     </div>
@@ -211,6 +190,7 @@ const event = ref<any>(null)
 const selectedFrame = ref('')
 const paused = ref(false)
 const otpCopied = ref(false)
+const showSettingsModal = ref(false)
 const eventSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
 const settingsSaving = ref(false)
 const settingsMsg = ref('')
@@ -276,14 +256,6 @@ function shareAll() {
       url: window.location.origin,
     })
   }
-}
-
-function goToAdmin() {
-  router.push('/admin')
-}
-
-function goToBoothConnect() {
-  window.open('/booth/connect', '_blank')
 }
 
 async function endThisEvent() {
@@ -484,17 +456,57 @@ async function saveEventSettings() {
   outline: none;
 }
 
-.control-field input[type="range"] {
-  width: 100%;
-  accent-color: #fff;
-  margin: 0.25rem 0;
+.settings-box {
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-.range-value {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: #ccc;
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
 }
+
+.field-row:nth-child(odd) {
+  background: #111;
+}
+
+.field-row:nth-child(even) {
+  background: #191919;
+}
+
+.field-row:not(:last-child) {
+  border-bottom: 1px solid #252525;
+}
+
+.field-row label {
+  font-size: 0.8125rem;
+  color: #ccc;
+  font-weight: 500;
+}
+
+.num-input {
+  width: 60px;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #0f0f0f;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  outline: none;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.num-input:focus {
+  border-color: #666;
+  box-shadow: 0 0 0 1px #555;
+}
+
+
 
 .msg-success {
   display: block;

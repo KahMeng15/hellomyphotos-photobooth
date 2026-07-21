@@ -37,11 +37,6 @@ export const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: '/booth/connect',
-      name: 'booth-connect',
-      component: () => import('./views/BoothConnectView.vue'),
-    },
-    {
       path: '/share/:token',
       name: 'share',
       component: () => import('./views/ShareView.vue'),

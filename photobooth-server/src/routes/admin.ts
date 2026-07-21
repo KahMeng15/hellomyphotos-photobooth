@@ -12,7 +12,8 @@ import { io } from '../server'
 import {
   createEvent, updateEventById, getEvent, listEvents,
   endEvent, deleteEvent, listEventPhotoSessions,
-  updateEventSettingsById, getGlobalSettings, updateGlobalSettings
+  updateEventSettingsById, getGlobalSettings, updateGlobalSettings,
+  archiveSession, restoreSession
 } from '../db'
 
 const router = Router()
@@ -198,6 +199,8 @@ router.get('/events/:id/photos', async (req: Request, res: Response) => {
     const event = getEvent(req.params.id)
     if (!event) return res.status(404).json({ error: 'Event not found' })
 
+    const includeArchived = req.query.includeArchived === 'true'
+
     const eventDir = config.eventPhotosDir(req.params.id)
     let files: string[] = []
     try {
@@ -229,7 +232,11 @@ router.get('/events/:id/photos', async (req: Request, res: Response) => {
       sessionMap.get(sessionId)!.timestamps.push(stat.birthtime.toISOString())
     }
 
-    const sessions = Array.from(sessionMap.entries())
+    // Cross-reference with DB to get archived status
+    const dbSessions = listEventPhotoSessions(req.params.id, true)
+    const archivedSet = new Set(dbSessions.filter(s => s.archived === 1).map(s => s.id))
+
+    let sessions = Array.from(sessionMap.entries())
       .map(([sessionId, data]) => ({
         sessionId,
         photoCount: data.photos.length,
@@ -237,8 +244,13 @@ router.get('/events/:id/photos', async (req: Request, res: Response) => {
         photos: data.photos,
         timestamps: data.timestamps,
         createdAt: data.timestamps.sort().reverse()[0] || new Date().toISOString(),
+        archived: archivedSet.has(sessionId),
       }))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+    if (!includeArchived) {
+      sessions = sessions.filter(s => !s.archived)
+    }
 
     res.json({ sessions, event })
   } catch (error: any) {
@@ -338,6 +350,53 @@ router.delete('/events/:id/session/:sessionId', async (req: Request, res: Respon
     res.json({ success: true, deleted: toDelete.length })
   } catch (error: any) {
     logger.error(`Failed to delete session: ${error.message}`)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.patch('/events/:id/session/:sessionId/archive', async (req: Request, res: Response) => {
+  try {
+    archiveSession(req.params.sessionId)
+    res.json({ success: true })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.patch('/events/:id/session/:sessionId/restore', async (req: Request, res: Response) => {
+  try {
+    restoreSession(req.params.sessionId)
+    res.json({ success: true })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.post('/events/:id/sessions/batch-archive', async (req: Request, res: Response) => {
+  try {
+    const { sessionIds } = req.body
+    if (!Array.isArray(sessionIds)) return res.status(400).json({ error: 'sessionIds must be an array' })
+    for (const sid of sessionIds) archiveSession(sid)
+    res.json({ success: true, count: sessionIds.length })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.post('/events/:id/sessions/batch-delete', async (req: Request, res: Response) => {
+  try {
+    const { sessionIds } = req.body
+    if (!Array.isArray(sessionIds)) return res.status(400).json({ error: 'sessionIds must be an array' })
+    const eventDir = config.eventPhotosDir(req.params.id)
+    const results = await Promise.allSettled(sessionIds.map(async (sid) => {
+      let files: string[] = []
+      try { files = await fs.readdir(eventDir) } catch {}
+      const toDelete = files.filter((f) => f.startsWith(sid))
+      await Promise.all(toDelete.map((f) => fs.unlink(path.join(eventDir, f))))
+    }))
+    const deleted = results.filter(r => r.status === 'fulfilled').length
+    res.json({ success: true, deleted })
+  } catch (error: any) {
     res.status(500).json({ error: error.message })
   }
 })

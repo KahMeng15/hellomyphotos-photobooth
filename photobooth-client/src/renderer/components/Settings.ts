@@ -62,8 +62,7 @@ export class Settings {
   private cameraSelect!: HTMLSelectElement
   private audioSelect!: HTMLSelectElement
   private statusText!: HTMLSpanElement
-  private sliderInputs: HTMLInputElement[] = []
-  private sliderValues: HTMLSpanElement[] = []
+  private numInputs: HTMLInputElement[] = []
   private connectionStatus!: HTMLDivElement
   private connectedEvent: { name: string; date: string; description: string } | null = null
 
@@ -118,10 +117,17 @@ export class Settings {
     captureTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0 0 1rem; text-transform: uppercase; letter-spacing: 0.05em;'
     panel.appendChild(captureTitle)
 
-    panel.appendChild(this.createField('Photos per session', 1, 4, this.settings.photoCount, (v) => { this.settings.photoCount = v; this.markDirty() }))
-    panel.appendChild(this.createField('Countdown (seconds)', 3, 10, this.settings.countdown, (v) => { this.settings.countdown = v; this.markDirty() }))
-    panel.appendChild(this.createField('Interval (seconds)', 0, 5, this.settings.captureInterval, (v) => { this.settings.captureInterval = v; this.markDirty() }))
-    panel.appendChild(this.createField('Preview (seconds)', 1, 5, this.settings.postCapturePreview, (v) => { this.settings.postCapturePreview = v; this.markDirty() }))
+    const fields = [
+      this.createField('Photos per session', 1, 4, this.settings.photoCount, (v) => { this.settings.photoCount = v; this.markDirty() }, false),
+      this.createField('Countdown (seconds)', 3, 10, this.settings.countdown, (v) => { this.settings.countdown = v; this.markDirty() }, true),
+      this.createField('Interval (seconds)', 0, 5, this.settings.captureInterval, (v) => { this.settings.captureInterval = v; this.markDirty() }, false),
+      this.createField('Preview (seconds)', 1, 5, this.settings.postCapturePreview, (v) => { this.settings.postCapturePreview = v; this.markDirty() }, true),
+    ]
+    const settingsBox = document.createElement('div')
+    settingsBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden; margin-bottom: 1rem;'
+    for (const f of fields) settingsBox.appendChild(f)
+    fields[fields.length - 1].style.borderBottom = 'none'
+    panel.appendChild(settingsBox)
 
     const btnRow = document.createElement('div')
     btnRow.style.cssText = 'display: flex; gap: 0.5rem; margin-top: 1.5rem;'
@@ -411,49 +417,49 @@ export class Settings {
     min: number,
     max: number,
     currentValue: number,
-    onChange: (value: number) => void
+    onChange: (value: number) => void,
+    isEven: boolean
   ): HTMLDivElement {
     const field = document.createElement('div')
-    field.style.cssText = 'margin-bottom: 1rem;'
+    field.style.cssText = `display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: ${isEven ? '#191919' : '#111'}; border-bottom: 1px solid #252525;`
 
     const lbl = document.createElement('label')
     lbl.textContent = label
-    lbl.style.cssText = 'display: block; font-size: 0.8125rem; color: #888; margin-bottom: 0.375rem;'
+    lbl.style.cssText = 'font-size: 0.8125rem; color: #ccc; font-weight: 500;'
     field.appendChild(lbl)
 
-    const row = document.createElement('div')
-    row.style.cssText = 'display: flex; align-items: center; gap: 0.75rem;'
-
     const input = document.createElement('input')
-    input.type = 'range'
+    input.type = 'number'
     input.min = String(min)
     input.max = String(max)
     input.value = String(currentValue)
-    input.style.cssText = 'flex: 1; accent-color: #fff;'
-    row.appendChild(input)
+    input.style.cssText = `
+      width: 60px; padding: 0.375rem 0.5rem; border: 1px solid #333; border-radius: 6px;
+      background: #0f0f0f; color: #fff; font-size: 0.875rem; font-weight: 600;
+      outline: none; text-align: center; box-sizing: border-box;
+    `
 
-    const value = document.createElement('span')
-    value.textContent = input.value
-    value.style.cssText = 'font-size: 1rem; font-weight: 600; min-width: 2rem; text-align: center;'
+    this.numInputs.push(input)
 
-    this.sliderInputs.push(input)
-    this.sliderValues.push(value)
+    input.addEventListener('focus', () => { input.style.borderColor = '#666'; input.style.boxShadow = '0 0 0 1px #555' })
+    input.addEventListener('blur', () => { input.style.borderColor = '#333'; input.style.boxShadow = 'none' })
 
-    input.addEventListener('input', () => {
-      value.textContent = input.value
-      onChange(parseInt(input.value, 10))
+    input.addEventListener('change', () => {
+      let val = parseInt(input.value, 10)
+      if (isNaN(val)) val = min
+      val = Math.max(min, Math.min(max, val))
+      input.value = String(val)
+      onChange(val)
     })
 
-    row.appendChild(value)
-    field.appendChild(row)
+    field.appendChild(input)
     return field
   }
 
   private refreshFields() {
     const values = [this.settings.photoCount, this.settings.countdown, this.settings.captureInterval, this.settings.postCapturePreview]
-    for (let i = 0; i < this.sliderInputs.length; i++) {
-      this.sliderInputs[i].value = String(values[i])
-      this.sliderValues[i].textContent = String(values[i])
+    for (let i = 0; i < this.numInputs.length; i++) {
+      this.numInputs[i].value = String(values[i])
     }
   }
 

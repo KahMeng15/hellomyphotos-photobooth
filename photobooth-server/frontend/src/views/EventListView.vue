@@ -22,7 +22,7 @@
         <h2>Events</h2>
         <div class="events-header-right">
           <span class="event-count">{{ events.length }} event{{ events.length !== 1 ? 's' : '' }}</span>
-          <router-link to="/booth/connect" class="btn-link">Connect Booth</router-link>
+          <router-link to="/settings" class="btn-link">Default Settings</router-link>
         </div>
       </div>
 
@@ -48,9 +48,6 @@
       <div v-else class="empty-state">
         <p>No events yet. Create one to get started.</p>
       </div>
-
-      <button @click="showSettings" class="btn-link">Default Settings</button>
-      <router-link to="/booth/connect" class="btn-link">Connect Booth</router-link>
     </main>
 
     <Teleport to="body">
@@ -143,10 +140,6 @@ function copyOtp() {
   navigator.clipboard.writeText(createdOtp.value)
   otpCopied.value = true
   setTimeout(() => { otpCopied.value = false }, 2000)
-}
-
-function showSettings() {
-  router.push('/settings')
 }
 
 async function handleLogout() {

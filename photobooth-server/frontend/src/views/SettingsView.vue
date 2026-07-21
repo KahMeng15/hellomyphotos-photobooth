@@ -1,7 +1,7 @@
 <template>
   <div class="settings-page">
     <header class="settings-header">
-      <button @click="$router.push('/events')" class="btn-ghost">&larr; Events</button>
+      <button @click="router.back()" class="btn-ghost">&larr; Back</button>
       <h1>Default Settings</h1>
       <div></div>
     </header>
@@ -11,35 +11,22 @@
         <h2>Capture Defaults</h2>
         <p class="card-desc">These defaults apply to all new events. You can override them per-event.</p>
 
-        <div class="field">
-          <label>Photos per session</label>
+        <div class="settings-box">
           <div class="field-row">
-            <input type="range" min="1" max="4" v-model.number="settings.photoCount" />
-            <span class="value">{{ settings.photoCount }}</span>
+            <label>Photos per session</label>
+            <input type="number" min="1" max="4" v-model.number="settings.photoCount" class="num-input" />
           </div>
-        </div>
-
-        <div class="field">
-          <label>Countdown (seconds)</label>
           <div class="field-row">
-            <input type="range" min="3" max="10" v-model.number="settings.countdown" />
-            <span class="value">{{ settings.countdown }}s</span>
+            <label>Countdown</label>
+            <input type="number" min="3" max="10" v-model.number="settings.countdown" class="num-input" />
           </div>
-        </div>
-
-        <div class="field">
-          <label>Gap between shots (seconds)</label>
           <div class="field-row">
-            <input type="range" min="0" max="5" v-model.number="settings.captureInterval" />
-            <span class="value">{{ settings.captureInterval }}s</span>
+            <label>Gap between shots</label>
+            <input type="number" min="0" max="5" v-model.number="settings.captureInterval" class="num-input" />
           </div>
-        </div>
-
-        <div class="field">
-          <label>Post-capture preview (seconds)</label>
           <div class="field-row">
-            <input type="range" min="1" max="5" v-model.number="settings.postCapturePreview" />
-            <span class="value">{{ settings.postCapturePreview }}s</span>
+            <label>Preview</label>
+            <input type="number" min="1" max="5" v-model.number="settings.postCapturePreview" class="num-input" />
           </div>
         </div>
       </section>
@@ -84,7 +71,7 @@ async function saveAndClose() {
     await axios.put('/api/admin/settings/defaults', settings.value)
     originalSettings.value = { ...settings.value }
     saved.value = true
-    router.push('/events')
+    router.back()
   } catch (err) {
     console.error('Failed to save defaults', err)
   }
@@ -95,7 +82,7 @@ function cancelChanges() {
     if (!confirm('You have unsaved changes. Discard them?')) return
   }
   settings.value = { ...originalSettings.value }
-  router.push('/events')
+  router.back()
 }
 </script>
 
@@ -150,26 +137,54 @@ function cancelChanges() {
   margin: 0 0 1.25rem;
 }
 
-.field {
-  margin-bottom: 1.25rem;
-}
-
-.field label {
-  display: block;
-  font-size: 0.8125rem;
-  color: #aaa;
-  margin-bottom: 0.375rem;
+.settings-box {
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .field-row {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
 }
 
-.field-row input[type="range"] {
-  flex: 1;
-  accent-color: #fff;
+.field-row:nth-child(odd) {
+  background: #111;
+}
+
+.field-row:nth-child(even) {
+  background: #191919;
+}
+
+.field-row:not(:last-child) {
+  border-bottom: 1px solid #252525;
+}
+
+.field-row label {
+  font-size: 0.875rem;
+  color: #ccc;
+  font-weight: 500;
+}
+
+.num-input {
+  width: 60px;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #0f0f0f;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  outline: none;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.num-input:focus {
+  border-color: #666;
+  box-shadow: 0 0 0 1px #555;
 }
 
 .field-desc {

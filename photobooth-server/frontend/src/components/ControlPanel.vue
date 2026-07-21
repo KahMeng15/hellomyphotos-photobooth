@@ -46,9 +46,6 @@
       <button @click="shareAll" class="btn-control btn-secondary">
         Share All
       </button>
-      <button @click="goToAdmin" class="btn-control btn-secondary">
-        Admin Panel
-      </button>
       <button @click="goToSettings" class="btn-control btn-secondary">
         Booth Settings
       </button>
@@ -108,9 +105,6 @@
             <h3>Quick Actions</h3>
             <button @click="shareAll" class="btn-control btn-secondary">
               Share All
-            </button>
-            <button @click="goToAdmin" class="btn-control btn-secondary">
-              Admin Panel
             </button>
             <button @click="goToSettings" class="btn-control btn-secondary">
               Booth Settings
@@ -176,10 +170,6 @@ function shareAll() {
       url: window.location.origin,
     })
   }
-}
-
-function goToAdmin() {
-  router.push('/admin')
 }
 
 function goToSettings() {
