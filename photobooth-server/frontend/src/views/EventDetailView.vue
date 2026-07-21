@@ -71,6 +71,7 @@
         :event-id="event.id"
         :show="showPanel"
         :send-message="sendMessage"
+        :booth-state="boothState"
         @close="showPanel = false"
         @retry="retryConnection"
       />
@@ -112,6 +113,7 @@ const { ws, connected, connect, disconnect, sendMessage, subscribe, unsubscribe 
 const event = ref<any>(null)
 const photoSessions = ref<PhotoSession[]>([])
 const boothConnected = ref(false)
+const boothState = ref<string | null>(null)
 const showPanel = ref(false)
 const feedRef = ref<HTMLElement | null>(null)
 
@@ -135,9 +137,20 @@ onMounted(async () => {
 
   subscribe(eventId)
 
+  socket.on('connect', () => {
+    subscribe(eventId)
+  })
+
   socket.on('booth-connected', (data: any) => {
     if (data.eventId === eventId) {
       boothConnected.value = data.connected
+      if (!data.connected) boothState.value = null
+    }
+  })
+
+  socket.on('booth-state', (data: any) => {
+    if (data.eventId === eventId) {
+      boothState.value = data.state
     }
   })
 
@@ -155,8 +168,16 @@ onMounted(async () => {
 // Poll fallback: refresh every 5s in case WebSocket events are missed
 const pollInterval = setInterval(() => { loadSessions() }, 5000)
 
+// Poll fallback for booth connection status every 10s
+const connPollInterval = setInterval(() => {
+  if (!boothConnected.value && ws.value?.connected) {
+    subscribe(eventId)
+  }
+}, 10000)
+
 onUnmounted(() => {
   clearInterval(pollInterval)
+  clearInterval(connPollInterval)
   if (wideMq) wideMq.removeEventListener('change', closePanelOnWide)
   const eventId = route.params.id as string
   unsubscribe(eventId)

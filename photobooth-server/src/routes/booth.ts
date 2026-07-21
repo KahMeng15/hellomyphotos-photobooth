@@ -167,6 +167,13 @@ router.post('/remote-start', (req: Request, res: Response) => {
   res.json({ success: true, commandId: id })
 })
 
+router.post('/remote-go-home', (req: Request, res: Response) => {
+  const id = uuidv4()
+  pendingCommands.push({ id, type: 'go-home', createdAt: Date.now() })
+  logger.info(`Remote go-home command queued: ${id}`)
+  res.json({ success: true, commandId: id })
+})
+
 router.post('/remote-pause', (req: Request, res: Response) => {
   const id = uuidv4()
   const paused = req.body?.paused !== false

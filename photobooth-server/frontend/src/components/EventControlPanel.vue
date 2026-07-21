@@ -27,11 +27,8 @@
         </select>
       </div>
 
-      <button @click="remoteCapture" class="btn-control btn-primary">
-        Remote Capture
-      </button>
-      <button @click="remoteReshot" class="btn-control btn-secondary">
-        Remote Start
+      <button @click="boothAction" class="btn-control" :class="actionButtonClass" :disabled="!canAct">
+        {{ actionButtonLabel }}
       </button>
       <button @click="togglePause" class="btn-control" :class="paused ? 'btn-resume' : 'btn-pause'">
         {{ paused ? 'Resume Booth' : 'Pause Booth' }}
@@ -126,11 +123,8 @@
               </select>
             </div>
 
-            <button @click="remoteCapture" class="btn-control btn-primary">
-              Remote Capture
-            </button>
-            <button @click="remoteReshot" class="btn-control btn-secondary">
-              Remote Start
+            <button @click="boothAction" class="btn-control" :class="actionButtonClass" :disabled="!canAct">
+              {{ actionButtonLabel }}
             </button>
             <button @click="togglePause" class="btn-control" :class="paused ? 'btn-resume' : 'btn-pause'">
               {{ paused ? 'Resume Booth' : 'Pause Booth' }}
@@ -205,6 +199,7 @@ const props = defineProps<{
   eventId: string
   show: boolean
   sendMessage: (event: string, data: any) => void
+  boothState: string | null
 }>()
 
 const emit = defineEmits<{ close: []; retry: [] }>()
@@ -225,6 +220,21 @@ const connectionStatus = computed(() => props.connected ? 'connected' : 'disconn
 
 const queuePercent = computed(() => Math.min((photosStore.queueDepth / 10) * 100, 100))
 
+const actionButtonLabel = computed(() => {
+  if (props.boothState === 'preview') return 'Return to Main Menu'
+  if (props.boothState === 'live') return 'Begin Countdown'
+  return 'Start'
+})
+
+const canAct = computed(() => {
+  return props.connected && props.boothState !== 'capturing' && props.boothState !== 'paused'
+})
+
+const actionButtonClass = computed(() => {
+  if (props.boothState === 'preview') return 'btn-warning'
+  return 'btn-primary'
+})
+
 onMounted(async () => {
   try {
     const { data } = await axios.get(`/api/admin/events/${props.eventId}`)
@@ -242,16 +252,15 @@ function sendFrameOverride() {
   props.sendMessage('frame-override', { eventId: props.eventId, frameId: selectedFrame.value })
 }
 
-async function remoteCapture() {
-  try {
-    await axios.post('/api/booth/remote-capture')
-  } catch {}
-}
-
-async function remoteReshot() {
-  try {
-    await axios.post('/api/booth/remote-start')
-  } catch {}
+async function boothAction() {
+  if (!canAct.value) return
+  if (props.boothState === 'preview') {
+    props.sendMessage('booth-go-home', { eventId: props.eventId })
+  } else if (props.boothState === 'live') {
+    props.sendMessage('booth-capture', { eventId: props.eventId })
+  } else {
+    props.sendMessage('booth-start', { eventId: props.eventId })
+  }
 }
 
 async function togglePause() {
@@ -512,6 +521,11 @@ async function saveEventSettings() {
   margin-bottom: 0.5rem;
 }
 
+.btn-control:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .btn-primary {
   background: #2196F3;
   color: #fff;
@@ -524,6 +538,11 @@ async function saveEventSettings() {
 
 .btn-resume {
   background: #4caf50;
+  color: #fff;
+}
+
+.btn-warning {
+  background: #ff9800;
   color: #fff;
 }
 

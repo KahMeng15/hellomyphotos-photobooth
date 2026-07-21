@@ -126,6 +126,18 @@ io.on('connection', (socket) => {
       forwardToBooth(data.eventId, { type: 'booth-pause', paused: data.paused })
     })
 
+    socket.on('booth-capture', (data: { eventId: string }) => {
+      forwardToBooth(data.eventId, { type: 'capture' })
+    })
+
+    socket.on('booth-start', (data: { eventId: string }) => {
+      forwardToBooth(data.eventId, { type: 'start' })
+    })
+
+    socket.on('booth-go-home', (data: { eventId: string }) => {
+      forwardToBooth(data.eventId, { type: 'go-home' })
+    })
+
     socket.on('disconnect', () => {
       logger.info(`Operator disconnected: ${socket.id}`)
       if (socket.data.subscribedEvents) {
@@ -153,6 +165,15 @@ io.on('connection', (socket) => {
       if (subs) {
         for (const sid of subs) {
           io.to(sid).emit('new-media', { ...data, eventId })
+        }
+      }
+    })
+
+    socket.on('booth-state', (data: { state: string }) => {
+      const subs = operatorSubscriptions.get(eventId)
+      if (subs) {
+        for (const sid of subs) {
+          io.to(sid).emit('booth-state', { ...data, eventId })
         }
       }
     })

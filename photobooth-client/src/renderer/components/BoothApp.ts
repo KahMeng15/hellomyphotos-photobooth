@@ -4,7 +4,9 @@ import { CountdownUI } from './Countdown.js'
 import { FrameCarousel } from './FrameCarousel.js'
 import { PhotoPreview } from './PhotoPreview.js'
 import { OfflineIndicator } from './OfflineIndicator.js'
-import { Settings, connectBoothSocket } from './Settings.js'
+import { Settings, connectBoothSocket, boothSocket } from './Settings.js'
+
+type BoothState = 'idle' | 'live' | 'capturing' | 'preview' | 'paused'
 
 export class BoothApp {
   private container: HTMLElement
@@ -35,6 +37,7 @@ export class BoothApp {
   private serverOnline = true
   private selectedFrame: string | null = null
   private serverUrl = 'http://localhost:3000'
+  private _state: BoothState = 'idle'
 
   constructor() {
     this.container = document.getElementById('app') || document.body
@@ -216,9 +219,13 @@ export class BoothApp {
       } else if (cmd.type === 'pause') {
         this.isPaused = true
         this.stateDisplay.textContent = 'PAUSED'
+        this.emitBoothState()
       } else if (cmd.type === 'resume') {
         this.isPaused = false
         this.stateDisplay.textContent = ''
+        this.emitBoothState()
+      } else if (cmd.type === 'go-home') {
+        this.goHome()
       } else if (cmd.type === 'settings-update') {
         this.settingsData = { ...this.settingsData, ...cmd.settings }
         window.hellomyphoto?.saveSettings(this.settingsData)
@@ -256,6 +263,11 @@ export class BoothApp {
     }
   }
 
+  private emitBoothState() {
+    const state = this.isPaused ? 'paused' : this._state
+    try { boothSocket?.emit('booth-state', { state }) } catch {}
+  }
+
   private async goLive() {
     this.landingEl.style.display = 'none'
     const stream = await this.camera.startWebcam(this.settingsData.cameraDeviceId)
@@ -272,6 +284,8 @@ export class BoothApp {
       await this.audio.setSinkId(this.settingsData.audioDeviceId)
     }
     this.isLive = true
+    this._state = 'live'
+    this.emitBoothState()
     this.stopBtn.style.display = 'block'
     this.captureBtn.style.display = 'block'
     this.captureBtn.style.visibility = 'visible'
@@ -285,6 +299,8 @@ export class BoothApp {
     this.camera.stop()
     this.isLive = false
     this.isCapturing = false
+    this._state = 'idle'
+    this.emitBoothState()
     this.stopBtn.style.display = 'none'
     this.captureBtn.style.display = 'none'
     this.stateDisplay.textContent = ''
@@ -296,6 +312,8 @@ export class BoothApp {
   private async startCapture() {
     if (this.isCapturing || !this.isLive) return
     this.isCapturing = true
+    this._state = 'capturing'
+    this.emitBoothState()
     this.captureBtn.style.visibility = 'hidden'
     this.stateDisplay.textContent = ''
 
@@ -362,16 +380,22 @@ export class BoothApp {
         this.offlineIndicator.setQueueDepth(1)
       }
 
+      this._state = 'preview'
+      this.emitBoothState()
       this.photoPreview.show(paths)
       this.camera.stop()
       this.webcamPreview.srcObject = null
     } else {
       this.isCapturing = false
+      this._state = 'live'
+      this.emitBoothState()
     }
   }
 
   private async reset() {
     this.isCapturing = false
+    this._state = 'live'
+    this.emitBoothState()
     this.captureBtn.style.visibility = 'visible'
     this.photoPreview.hide()
     this.stateDisplay.textContent = ''

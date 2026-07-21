@@ -61,6 +61,7 @@ export class Settings {
   private sliderInputs: HTMLInputElement[] = []
   private sliderValues: HTMLSpanElement[] = []
   private connectionStatus!: HTMLDivElement
+  private connectedEvent: { name: string; date: string; description: string } | null = null
 
   constructor(container: HTMLElement, onChange: (settings: BoothSettings) => void) {
     this.onChange = onChange
@@ -68,6 +69,14 @@ export class Settings {
     // Listen for socket status changes to update the UI when visible
     const onSocketEvent = () => {
       if (this.visible) this.refreshConnectionStatus()
+      if (boothSocket?.connected && !this.connectedEvent) {
+        window.hellomyphoto?.getSettings().then((s) => {
+          if (s.otp && !this.connectedEvent) {
+            this.settings = { ...this.settings, ...s }
+            this.fetchConnectedEvent(s.otp)
+          }
+        })
+      }
     }
     document.addEventListener('booth-socket-connect', onSocketEvent)
     document.addEventListener('booth-socket-disconnect', onSocketEvent)
@@ -274,7 +283,7 @@ export class Settings {
     section.appendChild(result)
 
     this.connectionStatus = document.createElement('div')
-    this.connectionStatus.style.cssText = 'margin-top: 0.375rem; font-size: 0.75rem; display: flex; align-items: center; gap: 0.375rem;'
+    this.connectionStatus.style.cssText = 'margin-top: 0.375rem; font-size: 0.75rem; display: flex; align-items: center; gap: 0.375rem; width: 100%;'
     section.appendChild(this.connectionStatus)
 
     testBtn.addEventListener('click', async () => {
@@ -283,29 +292,18 @@ export class Settings {
         result.innerHTML = '<div style="color:#f44336;font-size:0.75rem;">Enter a 6-digit OTP</div>'
         return
       }
-      const url = this.settings.serverUrl.replace(/\/+$/, '')
       testBtn.disabled = true
       testBtn.textContent = 'Validating...'
       testBtn.style.opacity = '0.5'
       result.innerHTML = ''
+      const url = this.settings.serverUrl.replace(/\/+$/, '')
       try {
         const res = await fetch(`${url}/api/booth/validate-otp?otp=${otpVal}`)
         const data = await res.json()
         if (data.valid) {
-          // Establish WebSocket connection so operator sees booth as online
+          this.connectedEvent = { name: data.event.name, date: data.event.date, description: data.event.description || '' }
           connectBoothSocket(url, otpVal)
-
-          result.innerHTML = `
-            <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:0.75rem;">
-              <div style="display:flex;align-items:center;gap:0.375rem;margin-bottom:0.5rem;">
-                <span style="color:#4caf50;font-size:0.8125rem;">●</span>
-                <span style="color:#4caf50;font-size:0.8125rem;font-weight:500;">Connected</span>
-              </div>
-              <div style="color:#fff;font-weight:600;font-size:0.9375rem;margin-bottom:0.25rem;">${data.event.name}</div>
-              <div style="color:#888;font-size:0.75rem;margin-bottom:0.125rem;">${data.event.date}</div>
-              <div style="color:#666;font-size:0.75rem;">${data.event.description || ''}</div>
-            </div>
-          `
+          this.refreshConnectionStatus()
         } else {
           result.innerHTML = `<div style="background:#1a1a1a;border:1px solid #3a1a1a;border-radius:8px;padding:0.75rem;color:#f44336;font-size:0.8125rem;">${data.error || 'Invalid OTP'}</div>`
         }
@@ -455,10 +453,56 @@ export class Settings {
     }
   }
 
+  private async fetchConnectedEvent(otp: string) {
+    const url = this.settings.serverUrl.replace(/\/+$/, '')
+    try {
+      const res = await fetch(`${url}/api/booth/validate-otp?otp=${otp}`)
+      const data = await res.json()
+      if (data.valid) {
+        this.connectedEvent = { name: data.event.name, date: data.event.date, description: data.event.description || '' }
+        if (this.visible) this.refreshConnectionStatus()
+      }
+    } catch {}
+  }
+
+  private disconnect() {
+    disconnectBoothSocket()
+    this.settings.otp = ''
+    window.hellomyphoto?.saveSettings(this.settings)
+    this.connectedEvent = null
+    this.refreshConnectionStatus()
+    // Also clear the OTP input value
+    const otpInput = this.overlay.querySelector<HTMLInputElement>('input[maxlength="6"]')
+    if (otpInput) otpInput.value = ''
+  }
+
   private refreshConnectionStatus() {
     if (!this.connectionStatus) return
     if (boothSocket?.connected) {
-      this.connectionStatus.innerHTML = '<span style="color:#4caf50;">●</span> Connected'
+      if (this.connectedEvent) {
+        this.connectionStatus.innerHTML = `
+          <div style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:0.75rem;box-sizing:border-box;">
+            <div style="display:flex;align-items:center;gap:0.375rem;margin-bottom:0.5rem;">
+              <span style="color:#4caf50;font-size:0.8125rem;">●</span>
+              <span style="color:#4caf50;font-size:0.8125rem;font-weight:500;">Connected</span>
+            </div>
+            <div style="color:#fff;font-weight:600;font-size:0.9375rem;margin-bottom:0.25rem;">${this.connectedEvent.name}</div>
+            <div style="color:#888;font-size:0.75rem;margin-bottom:0.125rem;">${this.connectedEvent.date}</div>
+            <div style="color:#666;font-size:0.75rem;margin-bottom:0.5rem;">${this.connectedEvent.description}</div>
+            <button id="disconnect-otp-btn" style="padding:0.375rem 0.75rem;background:#3a1a1a;color:#f44336;border:1px solid #5a2a2a;border-radius:6px;font-size:0.75rem;cursor:pointer;">Disconnect</button>
+          </div>
+        `
+      } else {
+        this.connectionStatus.innerHTML = `
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <span style="color:#4caf50;font-size:0.8125rem;">●</span>
+            <span style="color:#888;font-size:0.8125rem;">Connected</span>
+            <button id="disconnect-otp-btn" style="margin-left:auto;padding:0.25rem 0.625rem;background:#3a1a1a;color:#f44336;border:1px solid #5a2a2a;border-radius:6px;font-size:0.6875rem;cursor:pointer;">Disconnect</button>
+          </div>
+        `
+      }
+      const btn = this.overlay.querySelector('#disconnect-otp-btn')
+      if (btn) btn.addEventListener('click', () => this.disconnect())
     } else if (boothSocket) {
       this.connectionStatus.innerHTML = '<span style="color:#f44336;">●</span> Disconnected'
     } else {
@@ -476,7 +520,9 @@ export class Settings {
     window.hellomyphoto?.saveSettings(this.settings)
     if (this.settings.otp) {
       connectBoothSocket(this.settings.serverUrl, this.settings.otp)
+      if (!this.connectedEvent) this.fetchConnectedEvent(this.settings.otp)
     } else if (boothSocket) {
+      this.connectedEvent = null
       disconnectBoothSocket()
     }
     this.refreshConnectionStatus()
@@ -491,6 +537,9 @@ export class Settings {
         this.settings = { ...this.settings, ...s }
         this.refreshFields()
         this.refreshConnectionStatus()
+        if (this.settings.otp && boothSocket?.connected && !this.connectedEvent) {
+          this.fetchConnectedEvent(this.settings.otp)
+        }
       })
       this.populateDevices()
     }
