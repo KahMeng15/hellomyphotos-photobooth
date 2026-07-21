@@ -190,6 +190,42 @@ export class BoothApp {
     })
   }
 
+  private handleBoothCommand(cmd: { type: string; settings?: any }) {
+    if (cmd.type === 'capture') {
+      if (this.isPaused) return
+      if (!this.isLive) {
+        this.goLive().then(() => setTimeout(() => this.startCapture(), 1500))
+      } else if (!this.isCapturing) {
+        this.startCapture()
+      }
+    } else if (cmd.type === 'start') {
+      if (!this.isLive) this.goLive()
+    } else if (cmd.type === 'booth-pause') {
+      // Handle the 'booth-pause' event sent by the operator panel
+      const paused = (cmd as any).paused !== false
+      this.isPaused = paused
+      this.stateDisplay.textContent = paused ? 'PAUSED' : ''
+      this.emitBoothState()
+    } else if (cmd.type === 'pause') {
+      this.isPaused = true
+      this.stateDisplay.textContent = 'PAUSED'
+      this.emitBoothState()
+    } else if (cmd.type === 'resume') {
+      this.isPaused = false
+      this.stateDisplay.textContent = ''
+      this.emitBoothState()
+    } else if (cmd.type === 'go-home') {
+      this.goHome()
+    } else if (cmd.type === 'frame-override') {
+      this.selectedFrame = (cmd as any).frameId || null
+    } else if (cmd.type === 'reshot') {
+      if (this.isLive && !this.isCapturing) this.startCapture()
+    } else if (cmd.type === 'settings-update') {
+      this.settingsData = { ...this.settingsData, ...cmd.settings }
+      window.hellomyphoto?.saveSettings(this.settingsData)
+    }
+  }
+
   private setupIpcListeners() {
     window.hellomyphoto?.onServerConfig((config) => {
       this.serverUrl = config.serverUrl
@@ -206,30 +242,15 @@ export class BoothApp {
         this.offlineIndicator.setQueueDepth(1)
       }
     })
+    // IPC path: commands forwarded from Electron main process (via HTTP polling fallback)
     window.hellomyphoto?.onBoothCommand((cmd) => {
-      if (cmd.type === 'capture') {
-        if (this.isPaused) return
-        if (!this.isLive) {
-          this.goLive().then(() => setTimeout(() => this.startCapture(), 1500))
-        } else if (!this.isCapturing) {
-          this.startCapture()
-        }
-      } else if (cmd.type === 'start') {
-        if (!this.isLive) this.goLive()
-      } else if (cmd.type === 'pause') {
-        this.isPaused = true
-        this.stateDisplay.textContent = 'PAUSED'
-        this.emitBoothState()
-      } else if (cmd.type === 'resume') {
-        this.isPaused = false
-        this.stateDisplay.textContent = ''
-        this.emitBoothState()
-      } else if (cmd.type === 'go-home') {
-        this.goHome()
-      } else if (cmd.type === 'settings-update') {
-        this.settingsData = { ...this.settingsData, ...cmd.settings }
-        window.hellomyphoto?.saveSettings(this.settingsData)
-      }
+      this.handleBoothCommand(cmd)
+    })
+    // WebSocket path: commands received in real-time directly from the server socket
+    // This fires instantly when the operator clicks Start/Begin Countdown/Exit
+    document.addEventListener('booth-ws-command', (e: Event) => {
+      const cmd = (e as CustomEvent).detail
+      this.handleBoothCommand(cmd)
     })
   }
 

@@ -22,6 +22,10 @@ export function connectBoothSocket(serverUrl: string, otp: string) {
     console.error('[booth] WebSocket error:', err.message)
     document.dispatchEvent(new CustomEvent('booth-socket-error'))
   })
+  boothSocket.on('booth-command', (cmd: any) => {
+    console.log('[booth] Received command via WebSocket:', cmd)
+    document.dispatchEvent(new CustomEvent('booth-ws-command', { detail: cmd }))
+  })
 }
 
 export function disconnectBoothSocket() {

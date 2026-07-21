@@ -78,6 +78,8 @@ app.on('ready', async () => {
 
     if (!online) return
 
+    // HTTP command polling is a fallback for environments where WebSocket is unavailable.
+    // Commands are primarily delivered in real-time via the booth's WebSocket connection.
     try {
       const res = await fetch(`${activeServerUrl}/api/booth/commands`)
       if (res.ok) {
@@ -87,7 +89,7 @@ app.on('ready', async () => {
         }
       }
     } catch {}
-  }, 10000))
+  }, 30000))
 
   intervals.push(setInterval(async () => {
     try {
