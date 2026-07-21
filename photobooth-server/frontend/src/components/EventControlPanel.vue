@@ -36,21 +36,31 @@
     </div>
 
     <div class="panel-section">
-      <button @click="showSettingsModal = true" class="btn-control btn-secondary">
-        Event Settings
-      </button>
-    </div>
-
-    <div class="panel-section">
-      <h3>Processing Queue</h3>
+      <h3>Sessions</h3>
+      <div class="stats-row">
+        <div class="stat-item">
+          <span class="stat-value">{{ totalSessions }}</span>
+          <span class="stat-label">groups</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">{{ totalPhotos }}</span>
+          <span class="stat-label">photos</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">{{ photosStore.queueDepth }}</span>
+          <span class="stat-label">queued</span>
+        </div>
+      </div>
       <div class="queue-bar">
         <div class="queue-fill" :style="{ width: queuePercent + '%' }"></div>
       </div>
-      <span class="queue-label">{{ photosStore.queueDepth }} jobs</span>
     </div>
 
     <div class="panel-section">
       <h3>Quick Actions</h3>
+      <button @click="showSettingsModal = true" class="btn-control btn-secondary">
+        Booth Settings
+      </button>
       <button @click="shareAll" class="btn-control btn-secondary">
         Share All
       </button>
@@ -110,15 +120,31 @@
           </div>
 
           <div class="panel-section">
-            <h3>Processing Queue</h3>
+            <h3>Sessions</h3>
+            <div class="stats-row">
+              <div class="stat-item">
+                <span class="stat-value">{{ totalSessions }}</span>
+                <span class="stat-label">groups</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value">{{ totalPhotos }}</span>
+                <span class="stat-label">photos</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value">{{ photosStore.queueDepth }}</span>
+                <span class="stat-label">queued</span>
+              </div>
+            </div>
             <div class="queue-bar">
               <div class="queue-fill" :style="{ width: queuePercent + '%' }"></div>
             </div>
-            <span class="queue-label">{{ photosStore.queueDepth }} jobs</span>
           </div>
 
           <div class="panel-section">
             <h3>Quick Actions</h3>
+            <button @click="showSettingsModal = true" class="btn-control btn-secondary">
+              Booth Settings
+            </button>
             <button @click="shareAll" class="btn-control btn-secondary">
               Share All
             </button>
@@ -135,7 +161,7 @@
     <div v-if="showSettingsModal" class="modal-overlay" @click.self="showSettingsModal = false">
       <div class="modal-page">
         <div class="modal-header">
-          <h2>Event Settings</h2>
+          <h2>Booth Settings</h2>
           <button class="close-btn" @click="showSettingsModal = false">✕</button>
         </div>
         <div class="modal-body">
@@ -179,6 +205,8 @@ const props = defineProps<{
   show: boolean
   sendMessage: (event: string, data: any) => void
   boothState: string | null
+  totalSessions: number
+  totalPhotos: number
 }>()
 
 const emit = defineEmits<{ close: []; retry: [] }>()
@@ -568,12 +596,43 @@ async function saveEventSettings() {
   color: #f44336;
 }
 
+.stats-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.stat-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.5rem;
+  background: #151515;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+}
+
+.stat-value {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+}
+
 .queue-bar {
-  height: 6px;
+  height: 4px;
   background: #2a2a2a;
   border-radius: 3px;
   overflow: hidden;
-  margin-bottom: 0.375rem;
 }
 
 .queue-fill {
@@ -581,11 +640,6 @@ async function saveEventSettings() {
   background: #4caf50;
   transition: width 0.3s;
   border-radius: 3px;
-}
-
-.queue-label {
-  font-size: 0.75rem;
-  color: #888;
 }
 
 @media (max-width: 768px) {

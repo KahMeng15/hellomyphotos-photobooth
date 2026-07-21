@@ -30,11 +30,12 @@ export class BoothApp {
   private flashOverlay: HTMLDivElement
   private postCaptureEl: HTMLImageElement
 
-  private isCapturing = false
+  private   isCapturing = false
   private isLive = false
   private isPaused = false
   private settingsData: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; serverUrl: string; cameraDeviceId?: string; audioDeviceId?: string; otp?: string } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
   private serverOnline = true
+  private offlineMode = false
   private selectedFrame: string | null = null
   private serverUrl = 'http://localhost:3000'
   private _state: BoothState = 'idle'

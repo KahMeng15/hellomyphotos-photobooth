@@ -41,23 +41,22 @@
           <h2>Photos</h2>
           <div class="feed-header-right">
             <div class="view-toggle">
-              <button @click="viewMode = 'grid-sm'" :class="['btn-view', { active: viewMode === 'grid-sm' }]" title="Small grid">
+              <button @click="setViewMode('grid-sm')" :class="['btn-view', { active: viewMode === 'grid-sm' }]" title="Small grid">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
                 </svg>
               </button>
-              <button @click="viewMode = 'grid-lg'" :class="['btn-view', { active: viewMode === 'grid-lg' }]" title="Large grid">
+              <button @click="setViewMode('grid-lg')" :class="['btn-view', { active: viewMode === 'grid-lg' }]" title="Large grid">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="3" y="3" width="18" height="7"/><rect x="3" y="14" width="18" height="7"/>
                 </svg>
               </button>
-              <button @click="viewMode = 'list'" :class="['btn-view', { active: viewMode === 'list' }]" title="List">
+              <button @click="setViewMode('list')" :class="['btn-view', { active: viewMode === 'list' }]" title="List">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
                 </svg>
               </button>
             </div>
-            <span class="photo-count">{{ photoSessions.length }} group{{ photoSessions.length !== 1 ? 's' : '' }}</span>
           </div>
         </div>
 
@@ -105,6 +104,8 @@
         :show="showPanel"
         :send-message="sendMessage"
         :booth-state="boothState"
+        :total-sessions="photoSessions.length"
+        :total-photos="photoSessions.reduce((sum, s) => sum + s.photoCount, 0)"
         @close="showPanel = false"
         @retry="retryConnection"
       />
@@ -123,6 +124,18 @@
       :event-id="event.id"
       @close="photosStore.clearSelection()"
     />
+
+    <Teleport to="body">
+      <div v-if="confirmState" class="modal-overlay" @click.self="confirmState = null">
+        <div class="confirm-modal">
+          <p>{{ confirmState.message }}</p>
+          <div class="confirm-actions">
+            <button @click="handleConfirm" class="btn-confirm">{{ confirmState.confirmLabel }}</button>
+            <button @click="handleCancel" class="btn-cancel-modal">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -150,8 +163,34 @@ const boothConnected = ref(false)
 const boothState = ref<string | null>(null)
 const showPanel = ref(false)
 const feedRef = ref<HTMLElement | null>(null)
-const viewMode = ref<'grid-sm' | 'grid-lg' | 'list'>('grid-lg')
+const viewMode = ref<'grid-sm' | 'grid-lg' | 'list'>((localStorage.getItem('hellomyphoto_viewMode') as any) || 'grid-lg')
 const selectedSessions = ref(new Set<string>())
+const confirmState = ref<{ message: string; confirmLabel: string } | null>(null)
+let confirmResolve: ((v: boolean) => void) | null = null
+
+function confirmAsync(message: string, confirmLabel = 'Confirm'): Promise<boolean> {
+  return new Promise((resolve) => {
+    confirmResolve = resolve
+    confirmState.value = { message, confirmLabel }
+  })
+}
+
+function handleConfirm() {
+  confirmResolve?.(true)
+  confirmResolve = null
+  confirmState.value = null
+}
+
+function handleCancel() {
+  confirmResolve?.(false)
+  confirmResolve = null
+  confirmState.value = null
+}
+
+function setViewMode(mode: 'grid-sm' | 'grid-lg' | 'list') {
+  viewMode.value = mode
+  localStorage.setItem('hellomyphoto_viewMode', mode)
+}
 
 let wideMq: MediaQueryList | null = null
 const closePanelOnWide = () => {
@@ -267,6 +306,8 @@ function toggleSelect(sessionId: string) {
 async function archiveSelected() {
   const ids = Array.from(selectedSessions.value)
   if (!ids.length) return
+  const confirmed = await confirmAsync(`Archive ${ids.length} session${ids.length > 1 ? 's' : ''}?`, 'Archive')
+  if (!confirmed) return
   try {
     await axios.post(`/api/admin/events/${route.params.id}/sessions/batch-archive`, { sessionIds: ids })
     selectedSessions.value = new Set()
@@ -277,7 +318,8 @@ async function archiveSelected() {
 async function deleteSelected() {
   const ids = Array.from(selectedSessions.value)
   if (!ids.length) return
-  if (!confirm(`Delete ${ids.length} session${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return
+  const confirmed = await confirmAsync(`Delete ${ids.length} session${ids.length > 1 ? 's' : ''}? This cannot be undone.`, 'Delete')
+  if (!confirmed) return
   try {
     await axios.post(`/api/admin/events/${route.params.id}/sessions/batch-delete`, { sessionIds: ids })
     selectedSessions.value = new Set()
@@ -447,11 +489,6 @@ function formatTime(ts: string) {
   color: #fff;
 }
 
-.photo-count {
-  font-size: 0.8125rem;
-  color: #888;
-}
-
 .selection-bar {
   display: flex;
   align-items: center;
@@ -615,9 +652,62 @@ function formatTime(ts: string) {
 }
 
 .empty-state {
+  grid-column: 1 / -1;
   text-align: center;
   padding: 4rem 2rem;
   color: #666;
+}
+
+.confirm-modal {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 360px;
+  width: 100%;
+}
+
+.confirm-modal p {
+  font-size: 0.9375rem;
+  color: #ccc;
+  margin: 0 0 1.25rem;
+  line-height: 1.4;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.btn-confirm {
+  padding: 0.5rem 1rem;
+  background: #f44336;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-confirm:hover {
+  background: #d32f2f;
+}
+
+.btn-cancel-modal {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: #888;
+  border: 1px solid #333;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.btn-cancel-modal:hover {
+  border-color: #555;
+  color: #ccc;
 }
 
 @media (max-width: 768px) {
