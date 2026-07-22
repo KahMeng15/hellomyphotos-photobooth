@@ -38,9 +38,7 @@
         </button>
       </form>
 
-      <div class="login-footer">
-        <router-link to="/booth/connect" class="booth-link">Connect Photobooth</router-link>
-      </div>
+      
     </div>
   </div>
 </template>
@@ -164,20 +162,5 @@ async function handleLogin() {
   cursor: not-allowed;
 }
 
-.login-footer {
-  margin-top: 1.5rem;
-  text-align: center;
-  padding-top: 1.5rem;
-  border-top: 1px solid #2a2a2a;
-}
 
-.booth-link {
-  color: #888;
-  font-size: 0.8125rem;
-  text-decoration: none;
-}
-
-.booth-link:hover {
-  color: #fff;
-}
 </style>

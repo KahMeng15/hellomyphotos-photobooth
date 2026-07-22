@@ -9,7 +9,7 @@
         </button>
         <h1>{{ event.name }}</h1>
         <span class="event-status" :class="`status-${event.status}`">{{ event.status }}</span>
-        <span class="otp-badge" v-if="event.status === 'active'" title="Photobooth OTP">OTP: {{ event.otp }}</span>
+        
       </div>
       <div class="header-right">
         <button @click="togglePanel" class="btn-icon btn-panel-toggle" title="Booth controller">
@@ -392,15 +392,6 @@ function formatTime(ts: string) {
 .status-ended {
   background: #3a1a1a;
   color: #f44336;
-}
-
-.otp-badge {
-  font-size: 0.6875rem;
-  color: #888;
-  font-family: monospace;
-  padding: 0.125rem 0.5rem;
-  background: #111;
-  border-radius: 4px;
 }
 
 .header-right {

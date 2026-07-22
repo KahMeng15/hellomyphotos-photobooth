@@ -29,13 +29,14 @@ export class BoothApp {
   private landingEl: HTMLDivElement
   private flashOverlay: HTMLDivElement
   private postCaptureEl: HTMLImageElement
+  private startBtn: HTMLButtonElement
+  private confirmModal: HTMLDivElement
 
   private   isCapturing = false
   private isLive = false
   private isPaused = false
   private settingsData: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; serverUrl: string; cameraDeviceId?: string; audioDeviceId?: string; otp?: string } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
   private serverOnline = true
-  private offlineMode = false
   private selectedFrame: string | null = null
   private serverUrl = 'http://localhost:3000'
   private _state: BoothState = 'idle'
@@ -136,15 +137,53 @@ export class BoothApp {
     subtitle.style.cssText = 'font-size: 1.125rem; color: #666; margin: -1rem 0 0;'
     this.landingEl.appendChild(subtitle)
 
-    const startBtn = document.createElement('button')
-    startBtn.textContent = 'Start Taking Photos'
-    Object.assign(startBtn.style, {
+    this.startBtn = document.createElement('button')
+    this.startBtn.textContent = 'Start Taking Photos'
+    Object.assign(this.startBtn.style, {
       padding: '1.25rem 4rem', fontSize: '1.5rem', fontWeight: '700',
       background: '#fff', color: '#000', border: 'none', borderRadius: '100px',
       cursor: 'pointer', marginTop: '1rem',
     })
-    startBtn.addEventListener('click', () => this.goLive())
-    this.landingEl.appendChild(startBtn)
+    this.startBtn.addEventListener('click', () => {
+      if (this.isEventConnected()) {
+        this.goLive()
+      } else {
+        this.showOfflineConfirm()
+      }
+    })
+    this.landingEl.appendChild(this.startBtn)
+
+    this.confirmModal = document.createElement('div')
+    Object.assign(this.confirmModal.style, {
+      position: 'absolute', inset: '0', zIndex: '35',
+      display: 'none', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0,0,0,0.7)',
+    })
+    const confirmBox = document.createElement('div')
+    Object.assign(confirmBox.style, {
+      background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '12px',
+      padding: '1.5rem', maxWidth: '360px', width: '90%', textAlign: 'center',
+    })
+    confirmBox.innerHTML = `
+      <p style="font-size:0.9375rem;color:#ccc;margin:0 0 1.25rem;line-height:1.4;">
+        Booth is not linked to an event.<br>Continue in test mode?<br>
+        <span style="font-size:0.8125rem;color:#666;">Photos won't be uploaded until linked to an event.</span>
+      </p>
+      <div style="display:flex;gap:0.5rem;justify-content:center;">
+        <button id="offline-confirm-btn" style="padding:0.5rem 1.25rem;background:#4caf50;color:#fff;border:none;border-radius:6px;font-size:0.8125rem;font-weight:600;cursor:pointer;">Continue Offline</button>
+        <button id="offline-cancel-btn" style="padding:0.5rem 1.25rem;background:transparent;color:#888;border:1px solid #333;border-radius:6px;font-size:0.8125rem;cursor:pointer;">Cancel</button>
+      </div>
+    `
+    this.confirmModal.appendChild(confirmBox)
+    this.container.appendChild(this.confirmModal)
+
+    confirmBox.querySelector('#offline-confirm-btn')!.addEventListener('click', () => {
+      this.confirmModal.style.display = 'none'
+      this.goLive()
+    })
+    confirmBox.querySelector('#offline-cancel-btn')!.addEventListener('click', () => {
+      this.confirmModal.style.display = 'none'
+    })
 
     const settingsBtn = document.createElement('button')
     settingsBtn.textContent = 'Settings'
@@ -255,6 +294,24 @@ export class BoothApp {
     })
   }
 
+  private isEventConnected(): boolean {
+    return !!(boothSocket?.connected)
+  }
+
+  private updateStartBtn() {
+    if (this.isEventConnected()) {
+      this.startBtn.textContent = 'Start Taking Photos'
+      Object.assign(this.startBtn.style, {
+        background: '#fff', color: '#000', cursor: 'pointer',
+      })
+    } else {
+      this.startBtn.textContent = 'Booth Not Connected'
+      Object.assign(this.startBtn.style, {
+        background: 'rgba(255,255,255,0.1)', color: '#666', cursor: 'pointer',
+      })
+    }
+  }
+
   async mount() {
     const settings = await window.hellomyphoto?.getSettings()
     if (settings) {
@@ -262,11 +319,14 @@ export class BoothApp {
       const otp = (settings as any).otp
       if (otp) {
         connectBoothSocket(this.settingsData.serverUrl.replace(/\/+$/, ''), otp)
-        // Fetch per-event settings from server
         this.fetchEventSettings()
       }
     }
     await this.frameCarousel.loadFrames(this.serverUrl)
+    this.updateStartBtn()
+
+    document.addEventListener('booth-socket-connect', () => this.updateStartBtn())
+    document.addEventListener('booth-socket-disconnect', () => this.updateStartBtn())
   }
 
   private async fetchEventSettings() {
@@ -283,6 +343,10 @@ export class BoothApp {
     } catch {
       // Server unreachable — keep local settings
     }
+  }
+
+  private showOfflineConfirm() {
+    this.confirmModal.style.display = 'flex'
   }
 
   private emitBoothState() {
@@ -329,6 +393,8 @@ export class BoothApp {
     this.stateDisplay.style.opacity = '1'
     this.webcamPreview.srcObject = null
     this.landingEl.style.display = 'flex'
+    this.confirmModal.style.display = 'none'
+    this.updateStartBtn()
   }
 
   private async startCapture() {
