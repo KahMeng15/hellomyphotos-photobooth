@@ -27,15 +27,18 @@ export class BoothApp {
   private statusBar: HTMLDivElement
   private captureBtn: HTMLButtonElement
   private stopBtn: HTMLButtonElement
-  private stateDisplay: HTMLDivElement
-  private landingEl: HTMLDivElement
-  private flashOverlay: HTMLDivElement
-  private postCaptureEl: HTMLImageElement
-  private startBtn: HTMLButtonElement
-  private confirmModal: HTMLDivElement
+  private dslrSettingsBtn!: HTMLButtonElement
+  private dslrSettingsModal!: HTMLDivElement
+  private isDslrSettingsOpen = false
+  private stateDisplay!: HTMLDivElement
+  private landingEl!: HTMLDivElement
+  private flashOverlay!: HTMLDivElement
+  private postCaptureEl!: HTMLImageElement
+  private startBtn!: HTMLButtonElement
+  private confirmModal!: HTMLDivElement
 
   // DSLR disconnect error overlay
-  private dslrErrorOverlay: HTMLDivElement
+  private dslrErrorOverlay!: HTMLDivElement
 
   private isCapturing = false
   private isLive = false
@@ -51,6 +54,9 @@ export class BoothApp {
     audioDeviceId?: string
     otp?: string
     cameraMode?: CameraMode
+    dslrIso?: string
+    dslrShutterSpeed?: string
+    dslrAperture?: string
   } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
   private serverOnline = true
   private selectedFrame: string | null = null
@@ -144,6 +150,23 @@ export class BoothApp {
       cursor: 'pointer', pointerEvents: 'all',
     })
     this.captureBtn.addEventListener('click', () => this.startCapture())
+
+    this.dslrSettingsBtn = document.createElement('button')
+    this.dslrSettingsBtn.innerHTML = `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    `
+    Object.assign(this.dslrSettingsBtn.style, {
+      padding: '1rem',
+      background: 'rgba(255, 255, 255, 0.1)', color: '#fff', border: 'none', borderRadius: '50%',
+      cursor: 'pointer', pointerEvents: 'all', display: 'none',
+      alignItems: 'center', justifyContent: 'center'
+    })
+    this.dslrSettingsBtn.addEventListener('click', () => this.toggleDslrSettingsModal())
+
+    this.createDslrSettingsModal()
 
     // ------------------------------------------------------------------
     // Landing screen
@@ -348,6 +371,83 @@ export class BoothApp {
     } else {
       const msgEl = this.dslrErrorOverlay.querySelector<HTMLParagraphElement>('#dslr-error-msg')
       if (msgEl) msgEl.textContent = 'Camera still not detected. Check the USB cable and try again.'
+    }
+  }
+
+  private createDslrSettingsModal() {
+    this.dslrSettingsModal = document.createElement('div')
+    Object.assign(this.dslrSettingsModal.style, {
+      position: 'absolute', bottom: '100px', right: '40px',
+      background: 'rgba(20,20,20,0.85)', backdropFilter: 'blur(10px)', border: '1px solid #333',
+      borderRadius: '12px', padding: '1.5rem', width: '320px', display: 'none', zIndex: '100',
+      flexDirection: 'column', gap: '1rem', color: '#fff', fontFamily: 'system-ui, sans-serif'
+    })
+
+    const title = document.createElement('div')
+    title.textContent = 'Camera Exposure'
+    title.style.cssText = 'font-weight: 600; font-size: 1.1rem; margin-bottom: 0.5rem;'
+    this.dslrSettingsModal.appendChild(title)
+
+    const isoChoices = ['auto', '100', '200', '400', '800', '1600', '3200', '6400']
+    const shutterChoices = ['auto', '1/30', '1/40', '1/50', '1/60', '1/80', '1/100', '1/125', '1/160', '1/200', '1/250', '1/320', '1/400', '1/500', '1/640', '1/800']
+    const apertureChoices = ['auto', '2.8', '4', '4.5', '5', '5.6', '6.3', '7.1', '8', '9', '10', '11']
+
+    const createSliderRow = (labelStr: string, choices: string[], key: 'dslrIso' | 'dslrShutterSpeed' | 'dslrAperture') => {
+      const row = document.createElement('div')
+      row.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
+      const header = document.createElement('div')
+      header.style.cssText = 'display: flex; justify-content: space-between; font-size: 0.9rem;'
+      const lbl = document.createElement('span')
+      lbl.textContent = labelStr; lbl.style.color = '#aaa'
+      const valDisp = document.createElement('span')
+      valDisp.textContent = this.settingsData[key] || 'auto'
+      header.appendChild(lbl); header.appendChild(valDisp)
+      
+      const input = document.createElement('input')
+      input.type = 'range'; input.min = '0'; input.max = String(choices.length - 1)
+      const currentIdx = choices.indexOf(this.settingsData[key] || 'auto')
+      input.value = String(currentIdx >= 0 ? currentIdx : 0)
+      
+      input.addEventListener('input', () => {
+        const v = choices[parseInt(input.value)]
+        valDisp.textContent = v
+        this.settingsData[key] = v
+      })
+      input.addEventListener('change', () => {
+        window.hellomyphoto?.saveSettings(this.settingsData)
+      })
+
+      row.appendChild(header)
+      row.appendChild(input)
+      return row
+    }
+
+    this.dslrSettingsModal.appendChild(createSliderRow('Shutter', shutterChoices, 'dslrShutterSpeed'))
+    this.dslrSettingsModal.appendChild(createSliderRow('ISO', isoChoices, 'dslrIso'))
+    this.dslrSettingsModal.appendChild(createSliderRow('Aperture', apertureChoices, 'dslrAperture'))
+
+    // Update modal when global settings are updated remotely
+    window.hellomyphoto?.getSettings().then((s) => {
+      if (s) {
+        this.settingsData = { ...this.settingsData, ...s }
+        // We re-render lazily on open, so just close it if it's open to refresh next time
+      }
+    })
+
+    document.body.appendChild(this.dslrSettingsModal)
+  }
+
+  private toggleDslrSettingsModal() {
+    this.isDslrSettingsOpen = !this.isDslrSettingsOpen
+    if (this.isDslrSettingsOpen) {
+      // Rebuild the modal to get fresh values
+      this.dslrSettingsModal.remove()
+      this.createDslrSettingsModal()
+      this.dslrSettingsModal.style.display = 'flex'
+      this.dslrSettingsBtn.style.background = 'rgba(255, 255, 255, 0.3)'
+    } else {
+      this.dslrSettingsModal.style.display = 'none'
+      this.dslrSettingsBtn.style.background = 'rgba(255, 255, 255, 0.1)'
     }
   }
 
@@ -579,6 +679,14 @@ export class BoothApp {
     this.captureBtn.style.display = 'block'
     this.captureBtn.style.visibility = 'visible'
     this.statusBar.appendChild(this.captureBtn)
+    
+    if (this.cameraMode === 'dslr') {
+      this.dslrSettingsBtn.style.display = 'flex'
+      this.statusBar.appendChild(this.dslrSettingsBtn)
+    } else {
+      this.dslrSettingsBtn.style.display = 'none'
+    }
+    
     this.stateDisplay.textContent = 'Touch to Start'
     setTimeout(() => { this.stateDisplay.style.opacity = '0' }, 3000)
   }
@@ -680,6 +788,10 @@ export class BoothApp {
     this.isCapturing = false
     this._state = 'idle'
     this.emitBoothState()
+    
+    if (this.isDslrSettingsOpen) {
+      this.toggleDslrSettingsModal()
+    }
     this.stopBtn.style.display = 'none'
     this.captureBtn.style.display = 'none'
     this.stateDisplay.textContent = ''
@@ -743,7 +855,9 @@ export class BoothApp {
           await this.delay(this.settingsData.captureInterval * 1000)
         }
       } else {
-        this.stateDisplay.textContent = 'Capture failed — tap to retry'
+        const errMsg = result?.error || 'Unknown error'
+        console.error(`[BoothApp] Capture failed: ${errMsg}`)
+        this.stateDisplay.innerHTML = `<span style="color: #ff4444; font-size: 1.5rem;">Capture failed</span><br/><span style="font-size: 1rem; color: #fff;">${errMsg}</span><br/><br/><span style="font-size: 1rem;">Tap to retry</span>`
         this.isCapturing = false
         this.captureBtn.style.visibility = 'visible'
         audioCtx.close()

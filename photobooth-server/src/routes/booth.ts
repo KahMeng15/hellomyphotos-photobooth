@@ -221,11 +221,14 @@ router.get('/settings', async (req: Request, res: Response) => {
     countdown: event.countdown,
     captureInterval: event.capture_interval,
     postCapturePreview: event.post_capture_preview,
+    dslrIso: event.dslr_iso,
+    dslrShutterSpeed: event.dslr_shutterspeed,
+    dslrAperture: event.dslr_aperture,
   })
 })
 
 router.post('/settings', async (req: Request, res: Response) => {
-  const { photoCount, countdown, captureInterval, postCapturePreview, otp } = req.body
+  const { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, otp } = req.body
   if (!otp) {
     return res.status(400).json({ error: 'OTP required' })
   }
@@ -238,6 +241,9 @@ router.post('/settings', async (req: Request, res: Response) => {
     countdown: Math.max(3, Math.min(10, countdown ?? event.countdown)),
     captureInterval: Math.max(0, Math.min(5, captureInterval ?? event.capture_interval)),
     postCapturePreview: Math.max(1, Math.min(5, postCapturePreview ?? event.post_capture_preview)),
+    dslrIso: dslrIso ?? event.dslr_iso,
+    dslrShutterSpeed: dslrShutterSpeed ?? event.dslr_shutterspeed,
+    dslrAperture: dslrAperture ?? event.dslr_aperture,
   }
   updateEventSettingsById(event.id, settings)
   logger.info('Booth settings synced to event', { eventId: event.id, ...settings })

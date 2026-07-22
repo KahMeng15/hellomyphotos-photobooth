@@ -31,6 +31,35 @@
         </div>
       </section>
 
+      <section class="card">
+        <h2>DSLR Exposure Defaults</h2>
+        <p class="card-desc">Defaults for DSLR manual exposure settings. Use "auto" to let the camera decide.</p>
+
+        <div class="settings-box">
+          <div class="field-row">
+            <label>Shutter</label>
+            <div class="slider-wrapper">
+              <input type="range" min="0" :max="shutterChoices.length - 1" :value="shutterChoices.indexOf(settings.dslrShutterSpeed) >= 0 ? shutterChoices.indexOf(settings.dslrShutterSpeed) : 0" @input="settings.dslrShutterSpeed = shutterChoices[parseInt(($event.target as HTMLInputElement).value)]" class="range-input" />
+              <span class="slider-val">{{ settings.dslrShutterSpeed || 'auto' }}</span>
+            </div>
+          </div>
+          <div class="field-row">
+            <label>ISO</label>
+            <div class="slider-wrapper">
+              <input type="range" min="0" :max="isoChoices.length - 1" :value="isoChoices.indexOf(settings.dslrIso) >= 0 ? isoChoices.indexOf(settings.dslrIso) : 0" @input="settings.dslrIso = isoChoices[parseInt(($event.target as HTMLInputElement).value)]" class="range-input" />
+              <span class="slider-val">{{ settings.dslrIso || 'auto' }}</span>
+            </div>
+          </div>
+          <div class="field-row">
+            <label>Aperture</label>
+            <div class="slider-wrapper">
+              <input type="range" min="0" :max="apertureChoices.length - 1" :value="apertureChoices.indexOf(settings.dslrAperture) >= 0 ? apertureChoices.indexOf(settings.dslrAperture) : 0" @input="settings.dslrAperture = apertureChoices[parseInt(($event.target as HTMLInputElement).value)]" class="range-input" />
+              <span class="slider-val">{{ settings.dslrAperture || 'auto' }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div class="actions">
         <button @click="saveAndClose" class="btn-primary">Save</button>
         <button @click="cancelChanges" class="btn-cancel">Cancel</button>
@@ -45,16 +74,23 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
 import axios from 'axios'
 
+const isoChoices = ['auto', '100', '200', '400', '800', '1600', '3200', '6400']
+const shutterChoices = ['auto', '1/30', '1/40', '1/50', '1/60', '1/80', '1/100', '1/125', '1/160', '1/200', '1/250', '1/320', '1/400', '1/500', '1/640', '1/800']
+const apertureChoices = ['auto', '2.8', '4', '4.5', '5', '5.6', '6.3', '7.1', '8', '9', '10', '11']
+
 const router = useRouter()
-const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
-const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
+const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto' })
+const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto' })
 const saved = ref(false)
 
 const dirty = computed(() =>
   settings.value.photoCount !== originalSettings.value.photoCount ||
   settings.value.countdown !== originalSettings.value.countdown ||
   settings.value.captureInterval !== originalSettings.value.captureInterval ||
-  settings.value.postCapturePreview !== originalSettings.value.postCapturePreview
+  settings.value.postCapturePreview !== originalSettings.value.postCapturePreview ||
+  settings.value.dslrIso !== originalSettings.value.dslrIso ||
+  settings.value.dslrShutterSpeed !== originalSettings.value.dslrShutterSpeed ||
+  settings.value.dslrAperture !== originalSettings.value.dslrAperture
 )
 
 onMounted(async () => {
@@ -185,6 +221,46 @@ function cancelChanges() {
 .num-input:focus {
   border-color: #666;
   box-shadow: 0 0 0 1px #555;
+}
+
+.str-input {
+  width: 120px;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #0f0f0f;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  outline: none;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.str-input:focus {
+  border-color: #666;
+  box-shadow: 0 0 0 1px #555;
+}
+
+.slider-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.range-input {
+  flex: 1;
+  max-width: 150px;
+}
+
+.slider-val {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  min-width: 50px;
+  text-align: right;
 }
 
 .field-desc {

@@ -14,6 +14,9 @@ const DEFAULT_SETTINGS = {
   serverUrl: 'http://localhost:3000',
   cameraMode: 'webcam' as 'webcam' | 'dslr',
   dslrCameraPort: null as string | null,
+  dslrIso: 'auto',
+  dslrShutterSpeed: 'auto',
+  dslrAperture: 'auto',
 }
 
 let _offlineQueue: OfflineQueue
@@ -160,7 +163,12 @@ export function initIpcHandlers(
   // ------------------------------------------------------------------
   ipcMain.handle('capture-photo', async (): Promise<{ success: boolean; path?: string; error?: string }> => {
     try {
-      const result = await dslrManager.capture()
+      const settings = getSettingsSync()
+      const result = await dslrManager.capture({
+        iso: settings.dslrIso,
+        shutterSpeed: settings.dslrShutterSpeed,
+        aperture: settings.dslrAperture,
+      })
       return result
     } catch (error: any) {
       return { success: false, error: error.message }
@@ -276,6 +284,9 @@ export function initIpcHandlers(
     serverUrl?: string
     otp?: string
     cameraMode?: 'webcam' | 'dslr'
+    dslrIso?: string
+    dslrShutterSpeed?: string
+    dslrAperture?: string
   }) => {
     try {
       const existing = getSettingsSync()
@@ -292,6 +303,9 @@ export function initIpcHandlers(
           countdown: merged.countdown,
           captureInterval: merged.captureInterval,
           postCapturePreview: merged.postCapturePreview,
+          dslrIso: merged.dslrIso,
+          dslrShutterSpeed: merged.dslrShutterSpeed,
+          dslrAperture: merged.dslrAperture,
         }
         if (merged.otp) body.otp = merged.otp
         await fetch(`${syncUrl}/api/booth/settings`, {
@@ -300,6 +314,15 @@ export function initIpcHandlers(
           body: JSON.stringify(body),
         })
       } catch {}
+      
+      // Apply new DSLR exposure settings to the live view if connected
+      if (merged.cameraMode === 'dslr') {
+        dslrManager.applyExposure(
+          merged.dslrIso || 'auto',
+          merged.dslrShutterSpeed || 'auto',
+          merged.dslrAperture || 'auto'
+        )
+      }
       return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }

@@ -51,6 +51,7 @@ export interface DslrStatus {
   cameras: { model: string; port: string }[]
   selectedPort: string | null
   liveviewActive: boolean
+  configChoices?: Record<string, string[]>
 }
 
 export interface CaptureResult {
@@ -577,6 +578,13 @@ export class DslrManager {
     this.mainWindow = win
   }
 
+  // DSLR config choices (ISO, Shutter Speed, Aperture)
+  private configChoices: Record<string, string[]> = {
+    iso: ['auto'],
+    shutterspeed: ['auto'],
+    aperture: ['auto']
+  }
+
   // -------------------------------------------------------------------------
   // Detection & Selection
   // -------------------------------------------------------------------------
@@ -586,7 +594,39 @@ export class DslrManager {
     if (this.isWindows) {
       return this.detectWindows()
     }
-    return this.detectGphoto2()
+    const res = await this.detectGphoto2()
+    if (res.connected) {
+      this.fetchConfigChoices()
+    }
+    return res
+  }
+
+  private async fetchConfigChoices() {
+    if (this.isWindows) return
+    const keys = ['iso', 'shutterspeed', 'aperture']
+    for (const key of keys) {
+      try {
+        const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+        const res = await this.execGphoto2(['--get-config', key, ...portArgs], 10000)
+        if (res.code === 0) {
+          const choices = res.stdout.split('\n')
+            .filter(l => l.startsWith('Choice:'))
+            .map(l => l.replace(/^Choice:\s*\d+\s*/, '').trim())
+          if (choices.length > 0) {
+            // 'auto' is usually implicitly supported, so we prefix it if not present
+            const finalChoices = choices.some(c => c.toLowerCase() === 'auto') ? choices : ['auto', ...choices]
+            this.configChoices[key] = finalChoices
+            log.info(`[DslrManager] Fetched ${finalChoices.length} choices for ${key}`)
+          }
+        }
+      } catch (err: any) {
+        log.warn(`[DslrManager] Failed to fetch choices for ${key}: ${err.message}`)
+      }
+    }
+    // Push an updated status once choices are loaded
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send('dslr-status', this.getStatus())
+    }
   }
 
   setCameraPort(port: string): void {
@@ -596,6 +636,43 @@ export class DslrManager {
     const cam = this.cameras.find((c) => c.port === port)
     if (cam) {
       this.cameraModel = cam.model
+    }
+  }
+
+  async applyExposure(iso: string, shutterspeed: string, aperture: string) {
+    if (this.isWindows || !this.connected) return
+    log.info(`[DslrManager] Applying exposure settings to camera: iso=${iso}, shutter=${shutterspeed}, aperture=${aperture}`)
+    const configArgs = []
+    if (iso && iso.toLowerCase() !== 'auto') configArgs.push('--set-config', `iso=${iso}`)
+    if (shutterspeed && shutterspeed.toLowerCase() !== 'auto') configArgs.push('--set-config', `shutterspeed=${shutterspeed}`)
+    if (aperture && aperture.toLowerCase() !== 'auto') configArgs.push('--set-config', `aperture=${aperture}`)
+    
+    if (configArgs.length === 0) return
+
+    const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+    const wasLiveview = this.liveviewActive
+    if (wasLiveview) {
+      log.info('[DslrManager] Stopping liveview temporarily to apply exposure settings')
+      this.stopLiveview()
+      await new Promise(r => setTimeout(r, 1000))
+    }
+
+    try {
+      require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null')
+    } catch (e) {}
+
+    const res = await this.execGphoto2([...configArgs, ...portArgs], 15000)
+    if (res.code !== 0) {
+      log.warn(`[DslrManager] Failed to apply exposure settings: ${res.stderr.trim()}`)
+    }
+
+    if (wasLiveview && this.mainWindow && !this.mainWindow.isDestroyed()) {
+      log.info('[DslrManager] Resuming liveview after applying exposure')
+      this.startLiveview((jpeg) => {
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
+        }
+      })
     }
   }
 
@@ -827,7 +904,7 @@ export class DslrManager {
    *  3. Filter to JPEG files only (skip RAW)
    *  4. Resume liveview
    */
-  async capture(targetPath?: string): Promise<CaptureResult> {
+  async capture(options?: { targetPath?: string; iso?: string; shutterSpeed?: string; aperture?: string }): Promise<CaptureResult> {
     log.info(`[DslrManager] capture() called (connected=${this.connected}, capturing=${this.capturing}, liveviewActive=${this.liveviewActive})`)
     if (!this.connected) {
       log.error('[DslrManager] capture() aborted — camera not connected')
@@ -852,10 +929,10 @@ export class DslrManager {
 
     if (this.isWindows) {
       log.info('[DslrManager] Triggering capture via DigiCamControl...')
-      result = await this.captureWindows(targetPath)
+      result = await this.captureWindows(options?.targetPath)
     } else {
       log.info('[DslrManager] Triggering capture via gphoto2...')
-      result = await this.captureGphoto2(targetPath)
+      result = await this.captureGphoto2(options)
     }
 
     this.capturing = false
@@ -930,9 +1007,10 @@ export class DslrManager {
     })
   }
 
-  private captureGphoto2(targetPath?: string): Promise<CaptureResult> {
+  private captureGphoto2(options?: { targetPath?: string; iso?: string; shutterSpeed?: string; aperture?: string }): Promise<CaptureResult> {
     return new Promise((resolve) => {
       // Download to temp dir; gphoto2 appends its own filename when a dir is given.
+      const targetPath = options?.targetPath
       const downloadDir = targetPath
         ? path.dirname(targetPath)
         : tempDir()
@@ -949,22 +1027,10 @@ export class DslrManager {
       }
       
       const doCapture = async () => {
-        if (!this.isWindows) {
-           log.info('[DslrManager] Re-detecting before capture to ensure port is valid...')
-           await this.detectGphoto2()
-        }
-
-        // For Canon: drop the mirror in a separate step before capture and give
-        // the mirror time to physically settle. If viewfinder=0 and
-        // --capture-image-and-download run in the same gphoto2 invocation, the
-        // mirror may still be dropping when gphoto2 starts the capture sequence,
-        // preventing the phase-detect AF sensor from receiving light.
-        if (this.cameraModel.toLowerCase().includes('canon') && !this.isWindows) {
-          log.info('[DslrManager] Canon: pre-setting viewfinder=0 for mirror settle before capture...')
-          const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
-          await this.execGphoto2(['--set-config', '/main/actions/viewfinder=0', ...portArgs], 5000)
-          await new Promise((r) => setTimeout(r, 500))
-        }
+        // Delays removed to ensure instant shutter:
+        // 1. We no longer run detectGphoto2 before capture (we trust the port)
+        // 2. We no longer apply exposure settings before capture (handled by applyExposure on save)
+        // 3. We no longer run viewfinder=0 before capture (handled by stopLiveview right before capture)
 
         const args = []
         
@@ -1117,6 +1183,7 @@ export class DslrManager {
       cameras: this.cameras,
       selectedPort: this.selectedPort,
       liveviewActive: this.liveviewActive,
+      configChoices: this.configChoices
     }
   }
 

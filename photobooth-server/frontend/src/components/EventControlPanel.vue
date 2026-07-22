@@ -183,7 +183,32 @@
               <input type="number" min="1" max="5" v-model.number="eventSettings.postCapturePreview" class="num-input" />
             </div>
           </div>
-          <button @click="saveEventSettings" class="btn-control btn-primary" :disabled="settingsSaving">
+          
+          <div class="settings-box" style="margin-top: 1rem;">
+            <div class="field-row">
+              <label>Shutter</label>
+              <div class="slider-wrapper">
+                <input type="range" min="0" :max="shutterChoices.length - 1" :value="shutterChoices.indexOf(eventSettings.dslrShutterSpeed) >= 0 ? shutterChoices.indexOf(eventSettings.dslrShutterSpeed) : 0" @input="eventSettings.dslrShutterSpeed = shutterChoices[parseInt(($event.target as HTMLInputElement).value)]" class="range-input" />
+                <span class="slider-val">{{ eventSettings.dslrShutterSpeed || 'auto' }}</span>
+              </div>
+            </div>
+            <div class="field-row">
+              <label>ISO</label>
+              <div class="slider-wrapper">
+                <input type="range" min="0" :max="isoChoices.length - 1" :value="isoChoices.indexOf(eventSettings.dslrIso) >= 0 ? isoChoices.indexOf(eventSettings.dslrIso) : 0" @input="eventSettings.dslrIso = isoChoices[parseInt(($event.target as HTMLInputElement).value)]" class="range-input" />
+                <span class="slider-val">{{ eventSettings.dslrIso || 'auto' }}</span>
+              </div>
+            </div>
+            <div class="field-row">
+              <label>Aperture</label>
+              <div class="slider-wrapper">
+                <input type="range" min="0" :max="apertureChoices.length - 1" :value="apertureChoices.indexOf(eventSettings.dslrAperture) >= 0 ? apertureChoices.indexOf(eventSettings.dslrAperture) : 0" @input="eventSettings.dslrAperture = apertureChoices[parseInt(($event.target as HTMLInputElement).value)]" class="range-input" />
+                <span class="slider-val">{{ eventSettings.dslrAperture || 'auto' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <button @click="saveEventSettings" class="btn-control btn-primary" :disabled="settingsSaving" style="margin-top: 1rem;">
             {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
           </button>
           <span v-if="settingsMsg" :class="settingsMsgType === 'success' ? 'msg-success' : 'msg-error'">{{ settingsMsg }}</span>
@@ -198,6 +223,10 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePhotosStore } from '../stores/photos'
 import axios from 'axios'
+
+const isoChoices = ['auto', '100', '200', '400', '800', '1600', '3200', '6400']
+const shutterChoices = ['auto', '1/30', '1/40', '1/50', '1/60', '1/80', '1/100', '1/125', '1/160', '1/200', '1/250', '1/320', '1/400', '1/500', '1/640', '1/800']
+const apertureChoices = ['auto', '2.8', '4', '4.5', '5', '5.6', '6.3', '7.1', '8', '9', '10', '11']
 
 const props = defineProps<{
   connected: boolean
@@ -219,7 +248,7 @@ const selectedFrame = ref('')
 const paused = ref(false)
 const otpCopied = ref(false)
 const showSettingsModal = ref(false)
-const eventSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2 })
+const eventSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto' })
 const settingsSaving = ref(false)
 const settingsMsg = ref('')
 const settingsMsgType = ref<'success' | 'error'>('success')
@@ -248,12 +277,17 @@ onMounted(async () => {
     const { data } = await axios.get(`/api/admin/events/${props.eventId}`)
     event.value = data.event
     eventSettings.value = {
-      photoCount: data.event.photo_count,
-      countdown: data.event.countdown,
-      captureInterval: data.event.capture_interval,
-      postCapturePreview: data.event.post_capture_preview,
+      photoCount: event.value.photo_count,
+      countdown: event.value.countdown,
+      captureInterval: event.value.capture_interval,
+      postCapturePreview: event.value.post_capture_preview,
+      dslrIso: event.value.dslr_iso || 'auto',
+      dslrShutterSpeed: event.value.dslr_shutterspeed || 'auto',
+      dslrAperture: event.value.dslr_aperture || 'auto'
     }
-  } catch {}
+  } catch (err) {
+    console.error('Failed to fetch event', err)
+  }
 })
 
 function sendFrameOverride() {
@@ -534,7 +568,45 @@ async function saveEventSettings() {
   box-shadow: 0 0 0 1px #555;
 }
 
+.str-input {
+  width: 120px;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #0f0f0f;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  outline: none;
+  text-align: center;
+  box-sizing: border-box;
+}
 
+.str-input:focus {
+  border-color: #666;
+  box-shadow: 0 0 0 1px #555;
+}
+
+.slider-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.range-input {
+  flex: 1;
+  max-width: 150px;
+}
+
+.slider-val {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  min-width: 50px;
+  text-align: right;
+}
 
 .msg-success {
   display: block;

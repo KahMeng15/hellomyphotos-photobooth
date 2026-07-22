@@ -32,6 +32,9 @@ db.exec(`
     countdown INTEGER NOT NULL DEFAULT 5,
     capture_interval INTEGER NOT NULL DEFAULT 1,
     post_capture_preview INTEGER NOT NULL DEFAULT 2,
+    dslr_iso TEXT NOT NULL DEFAULT 'auto',
+    dslr_shutterspeed TEXT NOT NULL DEFAULT 'auto',
+    dslr_aperture TEXT NOT NULL DEFAULT 'auto',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
 `)
@@ -42,14 +45,11 @@ db.exec(`
     photo_count INTEGER NOT NULL DEFAULT 4,
     countdown INTEGER NOT NULL DEFAULT 5,
     capture_interval INTEGER NOT NULL DEFAULT 1,
-    post_capture_preview INTEGER NOT NULL DEFAULT 2
+    post_capture_preview INTEGER NOT NULL DEFAULT 2,
+    dslr_iso TEXT NOT NULL DEFAULT 'auto',
+    dslr_shutterspeed TEXT NOT NULL DEFAULT 'auto',
+    dslr_aperture TEXT NOT NULL DEFAULT 'auto'
   )
-`)
-
-// Seed defaults row
-db.exec(`
-  INSERT OR IGNORE INTO global_settings (id, photo_count, countdown, capture_interval, post_capture_preview)
-  VALUES (1, 4, 5, 1, 2)
 `)
 
 // Add new columns if missing (for existing DBs)
@@ -57,6 +57,19 @@ try { db.exec(`ALTER TABLE events ADD COLUMN photo_count INTEGER NOT NULL DEFAUL
 try { db.exec(`ALTER TABLE events ADD COLUMN countdown INTEGER NOT NULL DEFAULT 5`) } catch {}
 try { db.exec(`ALTER TABLE events ADD COLUMN capture_interval INTEGER NOT NULL DEFAULT 1`) } catch {}
 try { db.exec(`ALTER TABLE events ADD COLUMN post_capture_preview INTEGER NOT NULL DEFAULT 2`) } catch {}
+try { db.exec(`ALTER TABLE events ADD COLUMN dslr_iso TEXT NOT NULL DEFAULT 'auto'`) } catch {}
+try { db.exec(`ALTER TABLE events ADD COLUMN dslr_shutterspeed TEXT NOT NULL DEFAULT 'auto'`) } catch {}
+try { db.exec(`ALTER TABLE events ADD COLUMN dslr_aperture TEXT NOT NULL DEFAULT 'auto'`) } catch {}
+
+try { db.exec(`ALTER TABLE global_settings ADD COLUMN dslr_iso TEXT NOT NULL DEFAULT 'auto'`) } catch {}
+try { db.exec(`ALTER TABLE global_settings ADD COLUMN dslr_shutterspeed TEXT NOT NULL DEFAULT 'auto'`) } catch {}
+try { db.exec(`ALTER TABLE global_settings ADD COLUMN dslr_aperture TEXT NOT NULL DEFAULT 'auto'`) } catch {}
+
+// Seed defaults row
+db.exec(`
+  INSERT OR IGNORE INTO global_settings (id, photo_count, countdown, capture_interval, post_capture_preview, dslr_iso, dslr_shutterspeed, dslr_aperture)
+  VALUES (1, 4, 5, 1, 2, 'auto', 'auto', 'auto')
+`)
 
 try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`) } catch {}
 
@@ -74,16 +87,16 @@ db.exec(`
 `)
 
 const insertEvent = db.prepare(`
-  INSERT INTO events (id, name, date, description, otp, status, photo_count, countdown, capture_interval, post_capture_preview)
-  VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+  INSERT INTO events (id, name, date, description, otp, status, photo_count, countdown, capture_interval, post_capture_preview, dslr_iso, dslr_shutterspeed, dslr_aperture)
+  VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
 `)
 
 const updateEvent = db.prepare(`
-  UPDATE events SET name = ?, date = ?, description = ?, photo_count = ?, countdown = ?, capture_interval = ?, post_capture_preview = ? WHERE id = ?
+  UPDATE events SET name = ?, date = ?, description = ?, photo_count = ?, countdown = ?, capture_interval = ?, post_capture_preview = ?, dslr_iso = ?, dslr_shutterspeed = ?, dslr_aperture = ? WHERE id = ?
 `)
 
 const updateEventSettings = db.prepare(`
-  UPDATE events SET photo_count = ?, countdown = ?, capture_interval = ?, post_capture_preview = ? WHERE id = ?
+  UPDATE events SET photo_count = ?, countdown = ?, capture_interval = ?, post_capture_preview = ?, dslr_iso = ?, dslr_shutterspeed = ?, dslr_aperture = ? WHERE id = ?
 `)
 
 const findEventById = db.prepare('SELECT * FROM events WHERE id = ?')
@@ -121,7 +134,7 @@ function generateOtp(): string {
   return digits
 }
 
-export function createEvent(name: string, date: string, description: string, settings?: { photoCount?: number; countdown?: number; captureInterval?: number; postCapturePreview?: number }) {
+export function createEvent(name: string, date: string, description: string, settings?: { photoCount?: number; countdown?: number; captureInterval?: number; postCapturePreview?: number; dslrIso?: string; dslrShutterSpeed?: string; dslrAperture?: string }) {
   const id = `evt_${Date.now()}_${randomInt(1000, 9999)}`
   const otp = generateOtp()
   const defaults = getGlobalSettings()
@@ -129,12 +142,15 @@ export function createEvent(name: string, date: string, description: string, set
   const countdown = settings?.countdown ?? defaults.countdown
   const captureInterval = settings?.captureInterval ?? defaults.captureInterval
   const postCapturePreview = settings?.postCapturePreview ?? defaults.postCapturePreview
-  insertEvent.run(id, name, date, description, otp, photoCount, countdown, captureInterval, postCapturePreview)
+  const dslrIso = settings?.dslrIso ?? defaults.dslrIso
+  const dslrShutterSpeed = settings?.dslrShutterSpeed ?? defaults.dslrShutterSpeed
+  const dslrAperture = settings?.dslrAperture ?? defaults.dslrAperture
+  insertEvent.run(id, name, date, description, otp, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture)
   logger.info(`Event created: ${id} (${name}) otp=${otp}`)
   return { id, otp }
 }
 
-export function updateEventById(id: string, name: string, date: string, description: string, settings?: { photoCount?: number; countdown?: number; captureInterval?: number; postCapturePreview?: number }) {
+export function updateEventById(id: string, name: string, date: string, description: string, settings?: { photoCount?: number; countdown?: number; captureInterval?: number; postCapturePreview?: number; dslrIso?: string; dslrShutterSpeed?: string; dslrAperture?: string }) {
   const existing = getEvent(id)!
   updateEvent.run(
     name, date, description,
@@ -142,19 +158,24 @@ export function updateEventById(id: string, name: string, date: string, descript
     settings?.countdown ?? existing.countdown,
     settings?.captureInterval ?? existing.capture_interval,
     settings?.postCapturePreview ?? existing.post_capture_preview,
+    settings?.dslrIso ?? existing.dslr_iso,
+    settings?.dslrShutterSpeed ?? existing.dslr_shutterspeed,
+    settings?.dslrAperture ?? existing.dslr_aperture,
     id
   )
 }
 
-export function updateEventSettingsById(id: string, settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number }) {
-  updateEventSettings.run(settings.photoCount, settings.countdown, settings.captureInterval, settings.postCapturePreview, id)
+export function updateEventSettingsById(id: string, settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; dslrIso: string; dslrShutterSpeed: string; dslrAperture: string }) {
+  updateEventSettings.run(settings.photoCount, settings.countdown, settings.captureInterval, settings.postCapturePreview, settings.dslrIso, settings.dslrShutterSpeed, settings.dslrAperture, id)
 }
 
 export function getEvent(id: string) {
   return findEventById.get(id) as {
     id: string; name: string; date: string; description: string;
     otp: string; status: string; photo_count: number; countdown: number;
-    capture_interval: number; post_capture_preview: number; created_at: string
+    capture_interval: number; post_capture_preview: number;
+    dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string;
+    created_at: string
   } | undefined
 }
 
@@ -162,7 +183,9 @@ export function getEventByOtp(otp: string) {
   return findEventByOtp.get(otp) as {
     id: string; name: string; date: string; description: string;
     otp: string; status: string; photo_count: number; countdown: number;
-    capture_interval: number; post_capture_preview: number; created_at: string
+    capture_interval: number; post_capture_preview: number;
+    dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string;
+    created_at: string
   } | undefined
 }
 
@@ -171,7 +194,9 @@ export function listEvents(includeEnded = false) {
   return stmt.all() as Array<{
     id: string; name: string; date: string; description: string;
     otp: string; status: string; photo_count: number; countdown: number;
-    capture_interval: number; post_capture_preview: number; created_at: string
+    capture_interval: number; post_capture_preview: number;
+    dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string;
+    created_at: string
   }>
 }
 
@@ -214,27 +239,33 @@ export function restoreSession(sessionId: string) {
 
 const getDefaultsStmt = db.prepare('SELECT * FROM global_settings WHERE id = 1')
 const upsertDefaultsStmt = db.prepare(`
-  INSERT INTO global_settings (id, photo_count, countdown, capture_interval, post_capture_preview)
-  VALUES (1, ?, ?, ?, ?)
+  INSERT INTO global_settings (id, photo_count, countdown, capture_interval, post_capture_preview, dslr_iso, dslr_shutterspeed, dslr_aperture)
+  VALUES (1, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(id) DO UPDATE SET
     photo_count = excluded.photo_count,
     countdown = excluded.countdown,
     capture_interval = excluded.capture_interval,
-    post_capture_preview = excluded.post_capture_preview
+    post_capture_preview = excluded.post_capture_preview,
+    dslr_iso = excluded.dslr_iso,
+    dslr_shutterspeed = excluded.dslr_shutterspeed,
+    dslr_aperture = excluded.dslr_aperture
 `)
 
 export function getGlobalSettings() {
-  const row = getDefaultsStmt.get() as { photo_count: number; countdown: number; capture_interval: number; post_capture_preview: number } | undefined
+  const row = getDefaultsStmt.get() as { photo_count: number; countdown: number; capture_interval: number; post_capture_preview: number; dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string } | undefined
   return {
     photoCount: row?.photo_count ?? 4,
     countdown: row?.countdown ?? 5,
     captureInterval: row?.capture_interval ?? 1,
     postCapturePreview: row?.post_capture_preview ?? 2,
+    dslrIso: row?.dslr_iso ?? 'auto',
+    dslrShutterSpeed: row?.dslr_shutterspeed ?? 'auto',
+    dslrAperture: row?.dslr_aperture ?? 'auto',
   }
 }
 
-export function updateGlobalSettings(settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number }) {
-  upsertDefaultsStmt.run(settings.photoCount, settings.countdown, settings.captureInterval, settings.postCapturePreview)
+export function updateGlobalSettings(settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; dslrIso: string; dslrShutterSpeed: string; dslrAperture: string }) {
+  upsertDefaultsStmt.run(settings.photoCount, settings.countdown, settings.captureInterval, settings.postCapturePreview, settings.dslrIso, settings.dslrShutterSpeed, settings.dslrAperture)
   logger.info('Global defaults updated', settings)
 }
 

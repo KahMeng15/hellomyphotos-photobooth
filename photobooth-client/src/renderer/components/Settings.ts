@@ -48,6 +48,9 @@ interface BoothSettings {
   /** 'webcam' (default) | 'dslr' — controls which capture path BoothApp uses */
   cameraMode?: 'webcam' | 'dslr'
   dslrCameraPort?: string | null
+  dslrIso?: string
+  dslrShutterSpeed?: string
+  dslrAperture?: string
 }
 
 interface MediaDeviceInfo {
@@ -60,12 +63,13 @@ export class Settings {
   private visible = false
   private dirty = false
   private onChange: (settings: BoothSettings) => void
-  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam' }
+  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto' }
   private serverInput!: HTMLInputElement
   private cameraSelect!: HTMLSelectElement
   private audioSelect!: HTMLSelectElement
   private statusText!: HTMLSpanElement
   private numInputs: HTMLInputElement[] = []
+  private strInputs: HTMLInputElement[] = []
   private connectionStatus!: HTMLDivElement
   private connectedEvent: { name: string; date: string; description: string } | null = null
   // Camera source
@@ -141,6 +145,61 @@ export class Settings {
     for (const f of fields) settingsBox.appendChild(f)
     fields[fields.length - 1].style.borderBottom = 'none'
     panel.appendChild(settingsBox)
+
+    const dslrTitle = document.createElement('h3')
+    dslrTitle.textContent = 'DSLR Exposure'
+    dslrTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 1rem 0 1rem; text-transform: uppercase; letter-spacing: 0.05em;'
+    panel.appendChild(dslrTitle)
+
+    const isoChoices = ['auto', '100', '200', '400', '800', '1600', '3200', '6400']
+    const shutterChoices = ['auto', '1/30', '1/40', '1/50', '1/60', '1/80', '1/100', '1/125', '1/160', '1/200', '1/250', '1/320', '1/400', '1/500', '1/640', '1/800']
+    const apertureChoices = ['auto', '2.8', '4', '4.5', '5', '5.6', '6.3', '7.1', '8', '9', '10', '11']
+
+    const createChoiceSlider = (labelStr: string, current: string, choices: string[], onChange: (v: string) => void, altBg: boolean) => {
+      const row = document.createElement('div')
+      row.style.cssText = `display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: ${altBg ? '#111' : '#191919'}; border-bottom: 1px solid #252525;`
+      const label = document.createElement('label')
+      label.textContent = labelStr
+      label.style.cssText = 'font-size: 0.875rem; color: #ccc; font-weight: 500; min-width: 100px;'
+      row.appendChild(label)
+
+      const wrapper = document.createElement('div')
+      wrapper.style.cssText = 'display: flex; align-items: center; gap: 1rem; flex: 1;'
+
+      const input = document.createElement('input')
+      input.type = 'range'
+      input.min = '0'
+      input.max = String(choices.length - 1)
+      const currentIndex = choices.indexOf(current)
+      input.value = String(currentIndex >= 0 ? currentIndex : 0)
+      input.style.cssText = 'flex: 1;'
+
+      const valDisplay = document.createElement('span')
+      valDisplay.style.cssText = 'font-size: 0.875rem; font-weight: 600; color: #fff; min-width: 60px; text-align: right;'
+      valDisplay.textContent = choices[parseInt(input.value)]
+
+      input.addEventListener('input', () => {
+        const val = choices[parseInt(input.value)]
+        valDisplay.textContent = val
+        onChange(val)
+      })
+
+      wrapper.appendChild(input)
+      wrapper.appendChild(valDisplay)
+      row.appendChild(wrapper)
+      return row
+    }
+
+    const dslrFields = [
+      createChoiceSlider('Shutter', this.settings.dslrShutterSpeed || 'auto', shutterChoices, (v) => { this.settings.dslrShutterSpeed = v; this.markDirty() }, false),
+      createChoiceSlider('ISO', this.settings.dslrIso || 'auto', isoChoices, (v) => { this.settings.dslrIso = v; this.markDirty() }, true),
+      createChoiceSlider('Aperture', this.settings.dslrAperture || 'auto', apertureChoices, (v) => { this.settings.dslrAperture = v; this.markDirty() }, false),
+    ]
+    const dslrBox = document.createElement('div')
+    dslrBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden; margin-bottom: 1rem;'
+    for (const f of dslrFields) dslrBox.appendChild(f)
+    dslrFields[dslrFields.length - 1].style.borderBottom = 'none'
+    panel.appendChild(dslrBox)
 
     const btnRow = document.createElement('div')
     btnRow.style.cssText = 'display: flex; gap: 0.5rem; margin-top: 1.5rem;'
@@ -617,10 +676,55 @@ export class Settings {
     return field
   }
 
+  private createStringField(
+    label: string,
+    currentValue: string,
+    onChange: (value: string) => void,
+    isEven: boolean
+  ): HTMLDivElement {
+    const field = document.createElement('div')
+    field.style.cssText = `display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: ${isEven ? '#191919' : '#111'}; border-bottom: 1px solid #252525;`
+
+    const lbl = document.createElement('label')
+    lbl.textContent = label
+    lbl.style.cssText = 'font-size: 0.8125rem; color: #ccc; font-weight: 500;'
+    field.appendChild(lbl)
+
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.value = currentValue
+    input.style.cssText = `
+      width: 100px; padding: 0.375rem 0.5rem; border: 1px solid #333; border-radius: 6px;
+      background: #0f0f0f; color: #fff; font-size: 0.875rem; font-weight: 600;
+      outline: none; text-align: center; box-sizing: border-box;
+    `
+
+    this.strInputs.push(input)
+
+    input.addEventListener('focus', () => { input.style.borderColor = '#666'; input.style.boxShadow = '0 0 0 1px #555' })
+    input.addEventListener('blur', () => { input.style.borderColor = '#333'; input.style.boxShadow = 'none' })
+
+    input.addEventListener('change', () => {
+      let val = input.value.trim()
+      if (!val) val = 'auto'
+      input.value = val
+      onChange(val)
+    })
+
+    field.appendChild(input)
+    return field
+  }
+
   private refreshFields() {
-    const values = [this.settings.photoCount, this.settings.countdown, this.settings.captureInterval, this.settings.postCapturePreview]
+    const numValues = [this.settings.photoCount, this.settings.countdown, this.settings.captureInterval, this.settings.postCapturePreview]
     for (let i = 0; i < this.numInputs.length; i++) {
-      this.numInputs[i].value = String(values[i])
+      this.numInputs[i].value = String(numValues[i])
+    }
+
+    if (this.strInputs.length === 3) {
+      this.strInputs[0].value = this.settings.dslrShutterSpeed || 'auto'
+      this.strInputs[1].value = this.settings.dslrIso || 'auto'
+      this.strInputs[2].value = this.settings.dslrAperture || 'auto'
     }
   }
 
