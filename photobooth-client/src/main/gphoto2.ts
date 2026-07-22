@@ -390,6 +390,7 @@ class Gphoto2LiveviewStream {
     }
 
     const proc = spawn('gphoto2', args)
+    this.currentProc = proc
     let procStderr = ''
     proc.stderr?.on('data', (d: Buffer) => { procStderr += d.toString() })
 
@@ -397,6 +398,7 @@ class Gphoto2LiveviewStream {
     const finish = () => {
       if (done) return
       done = true
+      if (this.currentProc === proc) this.currentProc = null
 
       const parsedPath = path.parse(frameFile)
       const thumbFile = path.join(parsedPath.dir, `thumb_${parsedPath.base}`)
@@ -491,12 +493,18 @@ class Gphoto2LiveviewStream {
     proc.on('error', onDone) // bash missing — just continue
   }
 
+  private currentProc: any = null
+
   stop(): void {
     log.info(`[gphoto2 stream] Stopping (${this.frameCount} frames, ${this.missCount} misses, ${this.ptpKillCount} PTP kills)`)
     this.active = false
     if (this.frameTimer) {
       clearTimeout(this.frameTimer)
       this.frameTimer = null
+    }
+    if (this.currentProc) {
+      this.currentProc.kill()
+      this.currentProc = null
     }
   }
 
@@ -831,83 +839,110 @@ export class DslrManager {
         ? path.basename(targetPath)
         : `booth_%Y%m%d_%H%M%S.%C`
 
-      const args = [
-        '--capture-image-and-download',
-        '--keep',                            // keep copy on SD card
-        `--filename=${path.join(downloadDir, filenameTemplate)}`,
-        '--force-overwrite',
-        '--wait-event-and-download=CAPTURECOMPLETE',
-      ]
-      if (this.selectedPort) args.push(`--port=${this.selectedPort}`)
-
-      log.info(`[DslrManager] gphoto2 capture args: ${args.join(' ')}`)
-      log.info(`[DslrManager] Download dir: ${downloadDir}`)
-      
-      const proc = spawn('gphoto2', args)
-      let stdout = ''
-      let stderr = ''
-
-      proc.stdout?.on('data', (d: Buffer) => {
-        const chunk = d.toString()
-        stdout += chunk
-        log.info(`[DslrManager] gphoto2 stdout: ${chunk.trim()}`)
-      })
-      proc.stderr?.on('data', (d: Buffer) => {
-        const chunk = d.toString()
-        stderr += chunk
-        log.warn(`[DslrManager] gphoto2 stderr: ${chunk.trim()}`)
-      })
-
-      proc.on('close', (code: number | null) => {
-        log.info(`[DslrManager] gphoto2 capture exited code=${code}`)
-        // Find downloaded JPEG — gphoto2 prints "Saving file as <path>"
-        const match = stdout.match(/Saving file as (.+\.jpe?g)/i)
-        if (match) {
-          const filePath = match[1].trim()
-          log.info(`[DslrManager] Found JPEG path from stdout: ${filePath}`)
-          if (fs.existsSync(filePath)) {
-            resolve({ success: true, path: filePath })
-            return
-          }
-          log.warn(`[DslrManager] Path from stdout doesn't exist on disk: ${filePath}`)
-        } else {
-          log.warn('[DslrManager] Could not find "Saving file as ..." in stdout — falling back to dir scan')
-        }
-
-        // Fallback: scan download dir for the newest JPEG
+      // Forcefully kill PTPCamera just before capture so it doesn't steal the USB lock
+      if (!this.isWindows) {
         try {
-          const jpegs = fs.readdirSync(downloadDir)
-            .filter((f) => /\.(jpe?g)$/i.test(f))
-            .map((f) => ({ f, t: fs.statSync(path.join(downloadDir, f)).mtimeMs }))
-            .sort((a, b) => b.t - a.t)
+          require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null; pkill -9 -f imagecaptured 2>/dev/null')
+        } catch (e) {}
+      }
+      
+      const doCapture = async () => {
+        if (!this.isWindows) {
+           log.info('[DslrManager] Re-detecting before capture to ensure port is valid...')
+           await this.detectGphoto2()
+        }
 
-          log.info(`[DslrManager] Dir scan found ${jpegs.length} JPEG(s) in ${downloadDir}`)
-          if (jpegs.length > 0) {
-            log.ok(`[DslrManager] Using newest JPEG: ${jpegs[0].f}`)
-            resolve({ success: true, path: path.join(downloadDir, jpegs[0].f) })
-            return
+        const args = []
+        
+        // If we were in liveview, Canon cameras often get stuck with the mirror up (viewfinder=1).
+        // This causes "Canon EOS Half-Press failed (0x2019: PTP Device Busy)" during capture.
+        // Drop the mirror first.
+        if (this.cameraModel.toLowerCase().includes('canon')) {
+          args.push('--set-config', '/main/actions/viewfinder=0')
+        }
+
+        args.push(
+          '--capture-image-and-download',
+          '--keep',                            // keep copy on SD card
+          `--filename=${path.join(downloadDir, filenameTemplate)}`,
+          '--force-overwrite',
+        )
+        if (this.selectedPort) args.push(`--port=${this.selectedPort}`)
+
+        log.info(`[DslrManager] gphoto2 capture args: ${args.join(' ')}`)
+        log.info(`[DslrManager] Download dir: ${downloadDir}`)
+        
+        const proc = spawn('gphoto2', args)
+        let stdout = ''
+        let stderr = ''
+
+        proc.stdout?.on('data', (d: Buffer) => {
+          const chunk = d.toString()
+          stdout += chunk
+          log.info(`[DslrManager] gphoto2 stdout: ${chunk.trim()}`)
+        })
+        proc.stderr?.on('data', (d: Buffer) => {
+          const chunk = d.toString()
+          stderr += chunk
+          log.warn(`[DslrManager] gphoto2 stderr: ${chunk.trim()}`)
+        })
+
+        proc.on('close', (code: number | null) => {
+          log.info(`[DslrManager] gphoto2 capture exited code=${code}`)
+          // Find downloaded file — gphoto2 prints "Saving file as <path>"
+          // Prefer JPEG if multiple exist.
+          const matches = [...stdout.matchAll(/Saving file as (.+\.(?:jpe?g|png|cr2|cr3|arw|nef|dng))/ig)]
+          if (matches.length > 0) {
+            // Find a jpeg match first
+            let bestMatch = matches.find((m) => /\.(jpe?g|png)$/i.test(m[1])) || matches[0]
+            const filePath = bestMatch[1].trim()
+            log.info(`[DslrManager] Found image path from stdout: ${filePath}`)
+            if (fs.existsSync(filePath)) {
+              resolve({ success: true, path: filePath })
+              return
+            }
+            log.warn(`[DslrManager] Path from stdout doesn't exist on disk: ${filePath}`)
+          } else {
+            log.warn('[DslrManager] Could not find "Saving file as ..." in stdout — falling back to dir scan')
           }
-        } catch (scanErr: any) {
-          log.error(`[DslrManager] Dir scan error: ${scanErr.message}`)
-        }
 
-        log.error(`[DslrManager] Capture failed. stderr: ${stderr.trim()}`)
-        resolve({ success: false, error: stderr || `gphoto2 exited with code ${code}` })
-      })
+          // Fallback: scan download dir for the newest image
+          try {
+            const jpegs = fs.readdirSync(downloadDir)
+              .filter((f) => /\.(jpe?g|png|cr2|cr3|arw|nef|dng)$/i.test(f))
+              .map((f) => ({ f, t: fs.statSync(path.join(downloadDir, f)).mtimeMs }))
+              .sort((a, b) => b.t - a.t)
 
-      proc.on('error', (err) => {
-        log.error(`[DslrManager] gphoto2 spawn error during capture: ${err.message}`)
-        resolve({ success: false, error: err.message })
-      })
+            log.info(`[DslrManager] Dir scan found ${jpegs.length} image(s) in ${downloadDir}`)
+            if (jpegs.length > 0) {
+              const bestFile = jpegs.find(j => /\.(jpe?g|png)$/i.test(j.f)) || jpegs[0]
+              log.ok(`[DslrManager] Using newest image: ${bestFile.f}`)
+              resolve({ success: true, path: path.join(downloadDir, bestFile.f) })
+              return
+            }
+          } catch (scanErr: any) {
+            log.error(`[DslrManager] Dir scan error: ${scanErr.message}`)
+          }
 
-      // 30-second overall timeout
-      setTimeout(() => {
-        if (this.capturing) {
-          log.error('[DslrManager] Capture timed out after 30 s — killing gphoto2')
-          proc.kill()
-          resolve({ success: false, error: 'Capture timeout (30 s)' })
-        }
-      }, 30000)
+          log.error(`[DslrManager] Capture failed. stderr: ${stderr.trim()}`)
+          resolve({ success: false, error: stderr || `gphoto2 exited with code ${code}` })
+        })
+
+        proc.on('error', (err) => {
+          log.error(`[DslrManager] gphoto2 spawn error during capture: ${err.message}`)
+          resolve({ success: false, error: err.message })
+        })
+
+        // 30-second overall timeout
+        setTimeout(() => {
+          if (this.capturing) {
+            log.error('[DslrManager] Capture timed out after 30 s — killing gphoto2')
+            proc.kill()
+            resolve({ success: false, error: 'Capture timeout (30 s)' })
+          }
+        }, 30000)
+      }
+      doCapture()
     })
   }
 
