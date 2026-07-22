@@ -668,8 +668,10 @@ export class BoothApp {
   private async goHome() {
     this.photoPreview.hide()
 
-    // Stop whichever preview source is active
-    if (this.cameraMode === 'dslr' && this.dslrPreview.isActive()) {
+    // Stop whichever preview source is active.
+    // Always send the IPC stop — the camera may have liveview/mirror up even
+    // if the renderer-side DslrPreviewManager is not active.
+    if (this.cameraMode === 'dslr') {
       await this.dslrPreview.stop()
     }
     this.camera.stop()
@@ -776,8 +778,11 @@ export class BoothApp {
         this.offlineIndicator.setQueueDepth(1)
       }
 
-      // Stop liveview before switching to preview screen
-      if (this.cameraMode === 'dslr' && this.dslrPreview.isActive()) {
+      // Stop liveview before switching to preview screen.
+      // Always send the IPC stop — DslrManager.capture() restarts liveview on
+      // the camera after each shot, so the camera may still have the mirror up
+      // even though the renderer-side preview was not restarted for the last shot.
+      if (this.cameraMode === 'dslr') {
         await this.dslrPreview.stop()
       }
 

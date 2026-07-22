@@ -427,7 +427,7 @@ class Gphoto2LiveviewStream {
         // PTPCamera can cause either "Could not claim" or "Error (-1" (corrupted USB state)
         const isPtpConflict = procStderr.includes('Could not claim') ||
           procStderr.includes('Error (-53') ||
-          procStderr.includes('Error (-1')
+          (procStderr.includes('Error (-1') && !procStderr.includes('Error (-110'))
 
         if (isPtpConflict && this.frameCount === 0) {
           // Kill PTPCamera immediately and retry right away (no delay)
@@ -476,21 +476,49 @@ class Gphoto2LiveviewStream {
   }
 
   /**
-   * pkill -9 all PTPCamera/ptpcamerad processes immediately, and reset the USB port.
-   * No settle delay — we want gphoto2 to claim USB before launchd respawns.
+   * pkill -9 all PTPCamera/ptpcamerad processes, reset the USB port (without
+   * a specific port argument to avoid "Port not found"), then re-detect the
+   * camera so `this.port` stays valid after the USB re-enumeration.
+   *
+   * pkill alone is NOT sufficient to clear the USB endpoint stalled state
+   * that PTPCamera leaves behind (Error -110 'I/O in progress'). A USB reset
+   * via `gphoto2 --reset` is required. But `--reset --port=X` would make
+   * port X invalid after the re-enumeration — so we reset without --port,
+   * then run --auto-detect to find the fresh USB path.
    */
   private killPtpNow(onDone: () => void): void {
-    const portArg = this.port ? ` --port=${this.port}` : ''
+    const detect = () => {
+      const det = spawn('gphoto2', ['--auto-detect'])
+      let out = ''
+      det.stdout?.on('data', (d: Buffer) => { out += d.toString() })
+      det.on('close', () => {
+        const lines = out.split('\n').filter((l) => l.includes('usb:'))
+        if (lines.length > 0) {
+          const parts = lines[0].split('usb:')
+          this.port = 'usb:' + (parts[1] || '').trim()
+        } else {
+          this.port = null
+        }
+        setTimeout(() => {
+          onDone()
+        }, 500)
+      })
+      det.on('error', () => {
+        setTimeout(() => {
+          onDone()
+        }, 500)
+      })
+    }
     const proc = spawn('bash', [
       '-c',
       'pkill -9 -f PTPCamera 2>/dev/null; ' +
       'pkill -9 -f ptpcamerad 2>/dev/null; ' +
       'pkill -9 -f imagecaptured 2>/dev/null; ' +
-      `gphoto2 --reset${portArg} 2>/dev/null; ` +
+      'gphoto2 --reset 2>/dev/null; ' +
       'exit 0',
     ])
-    proc.on('close', onDone)
-    proc.on('error', onDone) // bash missing — just continue
+    proc.on('close', detect)
+    proc.on('error', () => { this.port = null; onDone() })
   }
 
   private currentProc: any = null
@@ -744,11 +772,9 @@ export class DslrManager {
 
   /** Stop the live preview stream. */
   stopLiveview(): void {
-    log.info(`[DslrManager] stopLiveview() called (liveviewActive=${this.liveviewActive})`)
-    if (!this.liveviewActive) {
-      log.warn('[DslrManager] stopLiveview() called but liveview was not active')
-      return
-    }
+    const wasActive = this.liveviewActive
+    log.info(`[DslrManager] stopLiveview() called (liveviewActive=${wasActive})`)
+
     this.liveviewActive = false
 
     if (this.isWindows) {
@@ -756,9 +782,25 @@ export class DslrManager {
     } else {
       this.gphoto2Stream?.stop()
       this.gphoto2Stream = null
+      
+      // Deactivate liveview on the camera side (drop the mirror).
+      // Always attempt this for Canon cameras — even if liveviewActive was
+      // already false, the camera may still have the mirror up from a prior
+      // DslrManager.capture() call that restarted liveview internally.
+      if (this.cameraModel.toLowerCase().includes('canon')) {
+        log.info('[DslrManager] Dropping Canon mirror (viewfinder=0) to deactivate liveview...')
+        try {
+          require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null; pkill -9 -f imagecaptured 2>/dev/null')
+          const args = ['--set-config', '/main/actions/viewfinder=0']
+          if (this.selectedPort) args.push(`--port=${this.selectedPort}`)
+          require('child_process').execSync(`gphoto2 ${args.join(' ')} 2>/dev/null`)
+        } catch (e) {}
+      }
     }
 
-    this.stopDisconnectPoll()
+    if (wasActive) {
+      this.stopDisconnectPoll()
+    }
     this.pushStatus()
     log.ok('[DslrManager] stopLiveview() complete')
   }
@@ -825,7 +867,47 @@ export class DslrManager {
       })
     }
 
+    // Canon post-capture: ensure liveview is disabled on the camera.
+    //
+    // Even though --capture-image-and-download is preceded by --set-config
+    // viewfinder=0 in the args, some Canon cameras re-enter liveview after the
+    // PTP session ends (the camera reverts to its pre-session state). Running a
+    // separate viewfinder=0 command after the capture process has fully exited
+    // forces the mirror down and disables the sensor live feed, saving battery.
+    //
+    // We only do this when liveview is NOT being restarted (wasLiveviewActive
+    // was false), which is the normal case when called from captureDslrShot()
+    // (since dslrPreview.stop() already ran before the capture IPC).
+    if (!wasLiveviewActive && result.success && this.cameraModel.toLowerCase().includes('canon') && !this.isWindows) {
+      log.info('[DslrManager] Post-capture: ensuring Canon mirror is down (viewfinder=0)...')
+      const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+      await this.execGphoto2(['--set-config', '/main/actions/viewfinder=0', ...portArgs], 5000)
+    }
+
     return result
+  }
+
+  /** Run a gphoto2 command and collect stdout/stderr/exit code. */
+  private execGphoto2(args: string[], timeoutMs = 15000): Promise<{ code: number | null; stdout: string; stderr: string }> {
+    return new Promise((resolve) => {
+      const proc = spawn('gphoto2', args)
+      let stdout = ''
+      let stderr = ''
+      proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
+      proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+      const timer = setTimeout(() => {
+        proc.kill()
+        resolve({ code: null, stdout, stderr })
+      }, timeoutMs)
+      proc.on('close', (code) => {
+        clearTimeout(timer)
+        resolve({ code, stdout, stderr })
+      })
+      proc.on('error', () => {
+        clearTimeout(timer)
+        resolve({ code: null, stdout, stderr })
+      })
+    })
   }
 
   private captureGphoto2(targetPath?: string): Promise<CaptureResult> {
@@ -852,11 +934,23 @@ export class DslrManager {
            await this.detectGphoto2()
         }
 
+        // For Canon: drop the mirror in a separate step before capture and give
+        // the mirror time to physically settle. If viewfinder=0 and
+        // --capture-image-and-download run in the same gphoto2 invocation, the
+        // mirror may still be dropping when gphoto2 starts the capture sequence,
+        // preventing the phase-detect AF sensor from receiving light.
+        if (this.cameraModel.toLowerCase().includes('canon') && !this.isWindows) {
+          log.info('[DslrManager] Canon: pre-setting viewfinder=0 for mirror settle before capture...')
+          const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+          await this.execGphoto2(['--set-config', '/main/actions/viewfinder=0', ...portArgs], 5000)
+          await new Promise((r) => setTimeout(r, 500))
+        }
+
         const args = []
         
-        // If we were in liveview, Canon cameras often get stuck with the mirror up (viewfinder=1).
-        // This causes "Canon EOS Half-Press failed (0x2019: PTP Device Busy)" during capture.
-        // Drop the mirror first.
+        // Also set viewfinder=0 in the capture args for safety (redundant if the
+        // separate command above succeeded, but guards against PTP Device Busy if
+        // detectGphoto2 or the autofocus trigger reset the camera state).
         if (this.cameraModel.toLowerCase().includes('canon')) {
           args.push('--set-config', '/main/actions/viewfinder=0')
         }
@@ -906,14 +1000,18 @@ export class DslrManager {
             log.warn('[DslrManager] Could not find "Saving file as ..." in stdout — falling back to dir scan')
           }
 
-          // Fallback: scan download dir for the newest image
+          // Fallback: scan download dir for the newest image.
+          // Only consider files from the last 30 s to avoid picking up stale
+          // images from a previous session when the capture itself failed.
+          const RECENT_CUTOFF = Date.now() - 30000
           try {
             const jpegs = fs.readdirSync(downloadDir)
               .filter((f) => /\.(jpe?g|png|cr2|cr3|arw|nef|dng)$/i.test(f))
               .map((f) => ({ f, t: fs.statSync(path.join(downloadDir, f)).mtimeMs }))
+              .filter((f) => f.t >= RECENT_CUTOFF)
               .sort((a, b) => b.t - a.t)
 
-            log.info(`[DslrManager] Dir scan found ${jpegs.length} image(s) in ${downloadDir}`)
+            log.info(`[DslrManager] Dir scan found ${jpegs.length} recent image(s) (cutoff=30s) in ${downloadDir}`)
             if (jpegs.length > 0) {
               const bestFile = jpegs.find(j => /\.(jpe?g|png)$/i.test(j.f)) || jpegs[0]
               log.ok(`[DslrManager] Using newest image: ${bestFile.f}`)

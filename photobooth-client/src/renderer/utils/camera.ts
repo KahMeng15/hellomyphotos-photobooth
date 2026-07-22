@@ -159,13 +159,19 @@ export class DslrPreviewManager {
   /**
    * Stop the DSLR liveview stream.
    * Clears the preview image and tells the main process to stop pumping frames.
+   *
+   * Always sends the IPC stop command to the main process, even if the renderer
+   * side is not active. This ensures the camera's viewfinder/mirror is properly
+   * turned off after a capture session (the main process restarts liveview
+   * internally after each capture via DslrManager.capture()).
    */
   async stop(): Promise<void> {
-    if (!this.active) {
-      console.warn('[DslrPreviewManager] stop() called but was not active')
-      return
+    const wasActive = this.active
+    if (!wasActive) {
+      console.warn('[DslrPreviewManager] stop() called but was not active — sending IPC stop anyway (liveview may still be active on camera)')
+    } else {
+      console.log(`[DslrPreviewManager] Stopping liveview (${this.frameCount} frames rendered)`)
     }
-    console.log(`[DslrPreviewManager] Stopping liveview (${this.frameCount} frames rendered)`)
     this.active = false
     this.element.src = ''
     await window.hellomyphoto?.stopDslrLiveview()
