@@ -58,6 +58,10 @@ app.on('ready', async () => {
     mainWindow.webContents.openDevTools()
   }
 
+  // Give DslrManager a reference to the window so it can push liveview frames
+  // and status events (dslr-frame, dslr-status, dslr-disconnected) to the renderer.
+  dslrManager.setWindow(mainWindow!)
+
   initIpcHandlers(mainWindow!, dslrManager, offlineQueue, activeServerUrl, setActiveServerUrl)
 
   await dslrManager.detect()

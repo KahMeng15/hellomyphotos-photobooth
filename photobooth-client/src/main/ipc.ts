@@ -6,11 +6,21 @@ import path from 'path'
 import fs from 'fs'
 
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'booth-settings.json')
-const DEFAULT_SETTINGS = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
+const DEFAULT_SETTINGS = {
+  photoCount: 4,
+  countdown: 5,
+  captureInterval: 1,
+  postCapturePreview: 2,
+  serverUrl: 'http://localhost:3000',
+  cameraMode: 'webcam' as 'webcam' | 'dslr',
+  dslrCameraPort: null as string | null,
+}
 
 let _offlineQueue: OfflineQueue
 let _serverUrl: string
 let _setServerUrl: (url: string) => void
+let _dslrManager: DslrManager
+let _mainWindow: BrowserWindow
 
 function getSettingsSync() {
   try {
@@ -30,6 +40,124 @@ export function initIpcHandlers(
   _offlineQueue = offlineQueue
   _serverUrl = serverUrl
   _setServerUrl = setServerUrl
+  _dslrManager = dslrManager
+  _mainWindow = mainWindow
+
+  const settings = getSettingsSync()
+  if (settings.dslrCameraPort) {
+    _dslrManager.setCameraPort(settings.dslrCameraPort)
+  }
+
+  // ------------------------------------------------------------------
+  // DSLR liveview — start
+  // ------------------------------------------------------------------
+  ipcMain.handle('start-dslr-liveview', async (): Promise<{ success: boolean; error?: string }> => {
+    console.log('[IPC] start-dslr-liveview called')
+    try {
+      console.log('[IPC] Running detect before starting liveview...')
+      const { connected } = await dslrManager.detect()
+      console.log(`[IPC] detect() result: connected=${connected}, model="${dslrManager.getStatus().model}"`)
+      if (!connected) {
+        const msg = 'No DSLR camera detected. Check USB connection.'
+        console.warn(`[IPC] start-dslr-liveview — ${msg}`)
+        return { success: false, error: msg }
+      }
+
+      console.log('[IPC] Camera detected — starting liveview stream (will kill PTPCamera on macOS, then wait for first frame)...')
+      let framesSent = 0
+      const liveviewOk = await dslrManager.startLiveview((jpeg) => {
+        if (!mainWindow.isDestroyed()) {
+          framesSent++
+          if (framesSent === 1) console.log(`[IPC] First dslr-frame sent to renderer (${jpeg.length} bytes base64)`)
+          if (framesSent % 150 === 0) console.log(`[IPC] dslr-frame: ${framesSent} frames pushed to renderer`)
+          // Send as base64 string; renderer wraps in data:image/jpeg;base64,
+          mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
+        }
+      })
+
+      if (!liveviewOk) {
+        const msg = 'Camera found but liveview failed to start. The macOS PTPCamera daemon may still be holding the USB interface. Unplug and re-plug the camera, then try again.'
+        console.error(`[IPC] start-dslr-liveview — ${msg}`)
+        return { success: false, error: msg }
+      }
+
+      console.log('[IPC] start-dslr-liveview — returning success=true')
+      return { success: true }
+    } catch (err: any) {
+      console.error('[IPC] start-dslr-liveview error:', err.message)
+      return { success: false, error: err.message }
+    }
+  })
+
+  // ------------------------------------------------------------------
+  // DSLR liveview — stop
+  // ------------------------------------------------------------------
+  ipcMain.handle('stop-dslr-liveview', (): { success: boolean } => {
+    console.log('[IPC] stop-dslr-liveview called')
+    dslrManager.stopLiveview()
+    console.log('[IPC] stop-dslr-liveview done')
+    return { success: true }
+  })
+
+  // ------------------------------------------------------------------
+  // Detect DSLR (on-demand from renderer / settings panel)
+  // ------------------------------------------------------------------
+  ipcMain.handle('detect-dslr', async (): Promise<{ connected: boolean; model: string; cameras: any[] }> => {
+    console.log('[IPC] detect-dslr called')
+    const { connected } = await dslrManager.detect()
+    const status = dslrManager.getStatus()
+    console.log(`[IPC] detect-dslr result: connected=${connected}, model="${status.model}"`)
+    // Push updated status to renderer
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('dslr-status', status)
+    }
+    return { connected, model: status.model, cameras: status.cameras }
+  })
+
+  // ------------------------------------------------------------------
+  // Camera mode persist
+  // ------------------------------------------------------------------
+  ipcMain.handle('get-camera-mode', (): 'webcam' | 'dslr' => {
+    const settings = getSettingsSync()
+    return settings.cameraMode || 'webcam'
+  })
+
+  ipcMain.handle('set-camera-mode', (_event, mode: 'webcam' | 'dslr'): { success: boolean } => {
+    try {
+      const settings = getSettingsSync()
+      settings.cameraMode = mode
+      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2))
+      return { success: true }
+    } catch (err: any) {
+      return { success: false }
+    }
+  })
+
+  // ------------------------------------------------------------------
+  // DSLR Camera Port
+  // ------------------------------------------------------------------
+  ipcMain.handle('set-dslr-camera-port', (_event, port: string): { success: boolean } => {
+    try {
+      console.log(`[IPC] set-dslr-camera-port called: ${port}`)
+      dslrManager.setCameraPort(port)
+      const settings = getSettingsSync()
+      settings.dslrCameraPort = port
+      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2))
+      // Trigger a re-detect so the model name updates and status is pushed
+      dslrManager.detect().then(() => {
+        if (!mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('dslr-status', dslrManager.getStatus())
+        }
+      })
+      return { success: true }
+    } catch (err: any) {
+      return { success: false }
+    }
+  })
+
+  // ------------------------------------------------------------------
+  // Capture photo (DSLR or webcam blob — unified endpoint)
+  // ------------------------------------------------------------------
   ipcMain.handle('capture-photo', async (): Promise<{ success: boolean; path?: string; error?: string }> => {
     try {
       const result = await dslrManager.capture()
@@ -39,6 +167,9 @@ export function initIpcHandlers(
     }
   })
 
+  // ------------------------------------------------------------------
+  // Upload photos
+  // ------------------------------------------------------------------
   ipcMain.handle('upload-photos', async (event, data: {
     sessionId: string
     imagePaths: string[]
@@ -67,7 +198,7 @@ export function initIpcHandlers(
       const headers: Record<string, string> = {}
       if (settings.otp) headers['X-Booth-OTP'] = settings.otp
 
-      const response = await fetch(`${serverUrl}/api/booth/upload`, {
+      const response = await fetch(`${_serverUrl}/api/booth/upload`, {
         method: 'POST',
         body: formData,
         headers,
@@ -107,7 +238,7 @@ export function initIpcHandlers(
         formData.append('photoCount', String(metadata.photoCount || 1))
         if (metadata.frameName) formData.append('frameName', metadata.frameName)
 
-        const response = await fetch(`${serverUrl}/api/booth/upload`, {
+        const response = await fetch(`${_serverUrl}/api/booth/upload`, {
           method: 'POST',
           body: formData,
           headers,
@@ -130,14 +261,22 @@ export function initIpcHandlers(
   })
 
   ipcMain.handle('get-hardware-status', () => {
-    return { dslrConnected: dslrManager.isConnected() }
+    return dslrManager.getStatus()
   })
 
   ipcMain.handle('get-settings', () => {
     return getSettingsSync()
   })
 
-  ipcMain.handle('save-settings', async (event, settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; serverUrl?: string; otp?: string }) => {
+  ipcMain.handle('save-settings', async (event, settings: {
+    photoCount: number
+    countdown: number
+    captureInterval: number
+    postCapturePreview: number
+    serverUrl?: string
+    otp?: string
+    cameraMode?: 'webcam' | 'dslr'
+  }) => {
     try {
       const existing = getSettingsSync()
       const merged = { ...existing, ...settings }

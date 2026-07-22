@@ -3,7 +3,28 @@ import { BoothApp } from './components/BoothApp.js'
 declare global {
   interface Window {
     hellomyphoto: {
+      // ----------------------------------------------------------------
+      // Capture
+      // ----------------------------------------------------------------
       capture: () => Promise<{ success: boolean; path?: string; error?: string }>
+
+      // ----------------------------------------------------------------
+      // DSLR liveview
+      // ----------------------------------------------------------------
+      startDslrLiveview: () => Promise<{ success: boolean; error?: string }>
+      stopDslrLiveview: () => Promise<{ success: boolean }>
+      detectDslr: () => Promise<{ connected: boolean; model: string; cameras?: any[] }>
+      setDslrCameraPort: (port: string) => Promise<{ success: boolean }>
+
+      // ----------------------------------------------------------------
+      // Camera mode persistence
+      // ----------------------------------------------------------------
+      getCameraMode: () => Promise<'webcam' | 'dslr'>
+      setCameraMode: (mode: 'webcam' | 'dslr') => Promise<{ success: boolean }>
+
+      // ----------------------------------------------------------------
+      // Upload
+      // ----------------------------------------------------------------
       uploadPhotos: (data: {
         sessionId: string
         imagePaths: string[]
@@ -13,18 +34,54 @@ declare global {
       }) => Promise<{ success: boolean; error?: string; queued?: boolean }>
       uploadQueued: () => Promise<{ flushed: number }>
       getQueueDepth: () => Promise<number>
-      getHardwareStatus: () => Promise<{ dslrConnected: boolean }>
-      getSettings: () => Promise<{ photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; serverUrl?: string; cameraDeviceId?: string; audioDeviceId?: string; otp?: string }>
-      saveSettings: (settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; serverUrl?: string; cameraDeviceId?: string; audioDeviceId?: string; otp?: string }) => Promise<any>
+
+      // ----------------------------------------------------------------
+      // Hardware / settings
+      // ----------------------------------------------------------------
+      getHardwareStatus: () => Promise<{ connected: boolean; model: string; liveviewActive: boolean }>
+      getSettings: () => Promise<{
+        photoCount: number
+        countdown: number
+        captureInterval: number
+        postCapturePreview: number
+        serverUrl?: string
+        cameraDeviceId?: string
+        audioDeviceId?: string
+        otp?: string
+        cameraMode?: 'webcam' | 'dslr'
+      }>
+      saveSettings: (settings: {
+        photoCount: number
+        countdown: number
+        captureInterval: number
+        postCapturePreview: number
+        serverUrl?: string
+        cameraDeviceId?: string
+        audioDeviceId?: string
+        otp?: string
+        cameraMode?: 'webcam' | 'dslr'
+      }) => Promise<any>
       getServerConfig: () => Promise<{ serverUrl: string }>
+
+      // ----------------------------------------------------------------
+      // Push listeners (main → renderer)
+      // ----------------------------------------------------------------
       onUploadComplete: (callback: (data: { sessionId: string; success: boolean }) => void) => void
       onServerStatus: (callback: (status: { online: boolean }) => void) => void
       onServerConfig: (callback: (config: { serverUrl: string; dslrConnected: boolean }) => void) => void
       onQueueUpdate: (callback: (data: { offline: number }) => void) => void
       onBoothCommand: (callback: (command: { id: string; type: string; settings?: any }) => void) => void
+
+      /** Receive a DSLR liveview JPEG frame as a base64 string. */
+      onDslrFrame: (callback: (base64Jpeg: string) => void) => void
+      /** Receive DSLR status updates (detect, liveview start/stop, disconnect poll). */
+      onDslrStatus: (callback: (status: { connected: boolean; model: string; liveviewActive: boolean }) => void) => void
+      /** Fired when the camera is unplugged mid-session. */
+      onDslrDisconnected: (callback: (info: { model: string }) => void) => void
     }
   }
 }
+
 
 const app = new BoothApp()
 app.mount()

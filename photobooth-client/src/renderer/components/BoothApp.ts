@@ -1,4 +1,4 @@
-import { CameraManager } from '../utils/camera.js'
+import { CameraManager, DslrPreviewManager } from '../utils/camera.js'
 import { AudioManager } from '../utils/audio.js'
 import { CountdownUI } from './Countdown.js'
 import { FrameCarousel } from './FrameCarousel.js'
@@ -7,10 +7,12 @@ import { OfflineIndicator } from './OfflineIndicator.js'
 import { Settings, connectBoothSocket, boothSocket } from './Settings.js'
 
 type BoothState = 'idle' | 'live' | 'capturing' | 'preview' | 'paused'
+type CameraMode = 'webcam' | 'dslr'
 
 export class BoothApp {
   private container: HTMLElement
   private camera: CameraManager
+  private dslrPreview: DslrPreviewManager
   private audio: AudioManager
   private countdown: CountdownUI
   private frameCarousel: FrameCarousel
@@ -32,10 +34,24 @@ export class BoothApp {
   private startBtn: HTMLButtonElement
   private confirmModal: HTMLDivElement
 
-  private   isCapturing = false
+  // DSLR disconnect error overlay
+  private dslrErrorOverlay: HTMLDivElement
+
+  private isCapturing = false
   private isLive = false
   private isPaused = false
-  private settingsData: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; serverUrl: string; cameraDeviceId?: string; audioDeviceId?: string; otp?: string } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
+  private cameraMode: CameraMode = 'webcam'
+  private settingsData: {
+    photoCount: number
+    countdown: number
+    captureInterval: number
+    postCapturePreview: number
+    serverUrl: string
+    cameraDeviceId?: string
+    audioDeviceId?: string
+    otp?: string
+    cameraMode?: CameraMode
+  } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
   private serverOnline = true
   private selectedFrame: string | null = null
   private serverUrl = 'http://localhost:3000'
@@ -50,6 +66,9 @@ export class BoothApp {
       background: '#000', color: '#fff', position: 'relative', overflow: 'hidden',
     })
 
+    // ------------------------------------------------------------------
+    // Webcam preview element (used in webcam mode)
+    // ------------------------------------------------------------------
     this.webcamPreview = document.createElement('video')
     Object.assign(this.webcamPreview.style, {
       width: '100%', height: '100%', display: 'block',
@@ -58,12 +77,18 @@ export class BoothApp {
     this.webcamPreview.muted = true
     this.webcamPreview.playsInline = true
 
+    // ------------------------------------------------------------------
+    // Post-capture still preview (shared between modes)
+    // ------------------------------------------------------------------
     this.postCaptureEl = document.createElement('img')
     Object.assign(this.postCaptureEl.style, {
       position: 'absolute', inset: '0', width: '100%', height: '100%',
       objectFit: 'contain', background: '#000', display: 'none',
     })
 
+    // ------------------------------------------------------------------
+    // Preview box (contains the active preview source + postCaptureEl)
+    // ------------------------------------------------------------------
     this.previewBox = document.createElement('div')
     Object.assign(this.previewBox.style, {
       maxWidth: '100%', maxHeight: '100%', width: '100%',
@@ -120,6 +145,9 @@ export class BoothApp {
     })
     this.captureBtn.addEventListener('click', () => this.startCapture())
 
+    // ------------------------------------------------------------------
+    // Landing screen
+    // ------------------------------------------------------------------
     this.landingEl = document.createElement('div')
     Object.assign(this.landingEl.style, {
       position: 'absolute', inset: '0', zIndex: '20',
@@ -153,6 +181,9 @@ export class BoothApp {
     })
     this.landingEl.appendChild(this.startBtn)
 
+    // ------------------------------------------------------------------
+    // Offline confirm modal
+    // ------------------------------------------------------------------
     this.confirmModal = document.createElement('div')
     Object.assign(this.confirmModal.style, {
       position: 'absolute', inset: '0', zIndex: '35',
@@ -195,25 +226,134 @@ export class BoothApp {
     settingsBtn.addEventListener('click', () => this.settings.toggle())
     this.landingEl.appendChild(settingsBtn)
 
+    // ------------------------------------------------------------------
+    // Flash overlay
+    // ------------------------------------------------------------------
     this.flashOverlay = document.createElement('div')
     Object.assign(this.flashOverlay.style, {
       position: 'absolute', inset: '0', zIndex: '45',
       background: '#fff', pointerEvents: 'none', opacity: '0',
     })
 
-    this.container.append(this.landingEl, this.previewWindow, this.overlay, this.stateDisplay, this.stopBtn, this.statusBar, this.flashOverlay)
+    // ------------------------------------------------------------------
+    // DSLR disconnect error overlay
+    // ------------------------------------------------------------------
+    this.dslrErrorOverlay = this.buildDslrErrorOverlay()
+
+    this.container.append(
+      this.landingEl,
+      this.previewWindow,
+      this.overlay,
+      this.stateDisplay,
+      this.stopBtn,
+      this.statusBar,
+      this.flashOverlay,
+      this.dslrErrorOverlay,
+    )
 
     this.camera = new CameraManager()
+    this.dslrPreview = new DslrPreviewManager()
     this.audio = new AudioManager()
     this.countdown = new CountdownUI(this.overlay)
     this.frameCarousel = new FrameCarousel(this.statusBar, (frameId) => { this.selectedFrame = frameId })
     this.photoPreview = new PhotoPreview(this.container, () => this.reset(), () => this.goHome(), () => this.goHome())
     this.offlineIndicator = new OfflineIndicator(this.statusBar)
-    this.settings = new Settings(this.container, (s) => { this.settingsData = s })
+    this.settings = new Settings(this.container, (s) => {
+      const prevMode = this.cameraMode
+      this.settingsData = s
+      this.cameraMode = (s.cameraMode as CameraMode) || 'webcam'
+      // If mode changed while live, restart preview in new mode
+      if (this.isLive && prevMode !== this.cameraMode) {
+        this.restartPreview()
+      }
+    })
 
     this.setupKeyboardShortcuts()
     this.setupIpcListeners()
   }
+
+  // -------------------------------------------------------------------------
+  // DSLR error overlay builder
+  // -------------------------------------------------------------------------
+
+  private buildDslrErrorOverlay(): HTMLDivElement {
+    const overlay = document.createElement('div')
+    Object.assign(overlay.style, {
+      position: 'absolute', inset: '0', zIndex: '60',
+      display: 'none', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0,0,0,0.85)',
+    })
+
+    const box = document.createElement('div')
+    Object.assign(box.style, {
+      background: '#1a1a1a', border: '1px solid #3a1a1a', borderRadius: '16px',
+      padding: '2rem', maxWidth: '400px', width: '90%', textAlign: 'center',
+    })
+
+    box.innerHTML = `
+      <div style="font-size:3rem;margin-bottom:1rem;">📷</div>
+      <h2 style="font-size:1.25rem;font-weight:700;margin:0 0 0.5rem;">Camera Disconnected</h2>
+      <p id="dslr-error-msg" style="font-size:0.875rem;color:#888;margin:0 0 1.5rem;line-height:1.5;">
+        The camera was unplugged. Please reconnect it via USB and press Retry.
+      </p>
+      <div style="display:flex;gap:0.75rem;justify-content:center;">
+        <button id="dslr-retry-btn" style="padding:0.75rem 2rem;background:#fff;color:#000;border:none;border-radius:100px;font-size:1rem;font-weight:700;cursor:pointer;">Retry</button>
+        <button id="dslr-go-home-btn" style="padding:0.75rem 2rem;background:transparent;color:#888;border:1px solid #333;border-radius:100px;font-size:1rem;cursor:pointer;">Exit</button>
+      </div>
+    `
+
+    overlay.appendChild(box)
+
+    box.querySelector('#dslr-retry-btn')!.addEventListener('click', () => this.retryDslrConnection())
+    box.querySelector('#dslr-go-home-btn')!.addEventListener('click', () => {
+      this.hideDslrError()
+      this.goHome()
+    })
+
+    return overlay
+  }
+
+  private showDslrError(message?: string) {
+    // Stop any active capture sequence
+    this.isCapturing = false
+    this._state = 'idle'
+
+    const msgEl = this.dslrErrorOverlay.querySelector<HTMLParagraphElement>('#dslr-error-msg')
+    if (msgEl && message) msgEl.textContent = message
+
+    this.dslrErrorOverlay.style.display = 'flex'
+  }
+
+  private hideDslrError() {
+    this.dslrErrorOverlay.style.display = 'none'
+  }
+
+  private async retryDslrConnection() {
+    const retryBtn = this.dslrErrorOverlay.querySelector<HTMLButtonElement>('#dslr-retry-btn')!
+    retryBtn.textContent = 'Detecting...'
+    retryBtn.disabled = true
+
+    const result = await window.hellomyphoto?.detectDslr()
+
+    retryBtn.disabled = false
+    retryBtn.textContent = 'Retry'
+
+    if (result?.connected) {
+      this.hideDslrError()
+      // Re-start liveview
+      const started = await this.dslrPreview.start()
+      if (!started) {
+        this.showDslrError('Camera detected but liveview failed to start. Try unplugging and reconnecting.')
+      }
+    } else {
+      const msgEl = this.dslrErrorOverlay.querySelector<HTMLParagraphElement>('#dslr-error-msg')
+      if (msgEl) msgEl.textContent = 'Camera still not detected. Check the USB cable and try again.'
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Keyboard shortcuts
+  // -------------------------------------------------------------------------
 
   private setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
@@ -229,6 +369,10 @@ export class BoothApp {
       }
     })
   }
+
+  // -------------------------------------------------------------------------
+  // Command handling
+  // -------------------------------------------------------------------------
 
   private handleBoothCommand(cmd: { type: string; settings?: any }) {
     if (cmd.type === 'capture') {
@@ -266,6 +410,10 @@ export class BoothApp {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // IPC listeners
+  // -------------------------------------------------------------------------
+
   private setupIpcListeners() {
     window.hellomyphoto?.onServerConfig((config) => {
       this.serverUrl = config.serverUrl
@@ -292,7 +440,22 @@ export class BoothApp {
       const cmd = (e as CustomEvent).detail
       this.handleBoothCommand(cmd)
     })
+
+    // DSLR camera unplugged mid-session
+    window.hellomyphoto?.onDslrDisconnected(({ model }) => {
+      if (!this.isLive) return
+      // Stop liveview gracefully
+      this.dslrPreview.stop()
+      const modelStr = model ? `"${model}"` : 'The camera'
+      this.showDslrError(
+        `${modelStr} was unplugged. Please reconnect it via USB and press Retry.`
+      )
+    })
   }
+
+  // -------------------------------------------------------------------------
+  // Misc helpers
+  // -------------------------------------------------------------------------
 
   private isEventConnected(): boolean {
     return !!(boothSocket?.connected)
@@ -312,15 +475,23 @@ export class BoothApp {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Mount
+  // -------------------------------------------------------------------------
+
   async mount() {
     const settings = await window.hellomyphoto?.getSettings()
     if (settings) {
       this.settingsData = { ...this.settingsData, ...settings }
+      this.cameraMode = (settings.cameraMode as CameraMode) || 'webcam'
+      console.log(`[BoothApp] mount() — cameraMode loaded from settings: "${this.cameraMode}"`)
       const otp = (settings as any).otp
       if (otp) {
         connectBoothSocket(this.settingsData.serverUrl.replace(/\/+$/, ''), otp)
         this.fetchEventSettings()
       }
+    } else {
+      console.warn('[BoothApp] mount() — getSettings() returned null/undefined, using defaults')
     }
     await this.frameCarousel.loadFrames(this.serverUrl)
     this.updateStartBtn()
@@ -354,21 +525,53 @@ export class BoothApp {
     try { boothSocket?.emit('booth-state', { state }) } catch {}
   }
 
-  private async goLive() {
-    this.landingEl.style.display = 'none'
-    const stream = await this.camera.startWebcam(this.settingsData.cameraDeviceId)
-    if (stream) {
-      this.webcamPreview.srcObject = stream
-      await this.webcamPreview.play()
-      const track = stream.getVideoTracks()[0]
-      const settings = track.getSettings()
-      if (settings.width && settings.height) {
-        this.previewBox.style.aspectRatio = `${settings.width} / ${settings.height}`
+  // -------------------------------------------------------------------------
+  // Preview management helpers
+  // -------------------------------------------------------------------------
+
+  /**
+   * Swap the active preview source in previewBox.
+   *
+   * DSLR mode: remove <video>, insert <img> (DslrPreviewManager.element)
+   * Webcam mode: remove <img>, insert <video>
+   */
+  private setPreviewSource(mode: CameraMode) {
+    const dslrEl = this.dslrPreview.element
+
+    if (mode === 'dslr') {
+      if (!this.previewBox.contains(dslrEl)) {
+        this.previewBox.insertBefore(dslrEl, this.webcamPreview)
       }
+      this.webcamPreview.style.display = 'none'
+      dslrEl.style.display = 'block'
+    } else {
+      if (this.previewBox.contains(dslrEl)) {
+        this.previewBox.removeChild(dslrEl)
+      }
+      this.webcamPreview.style.display = 'block'
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // goLive
+  // -------------------------------------------------------------------------
+
+  private async goLive() {
+    console.log(`[BoothApp] goLive() — cameraMode="${this.cameraMode}"`)
+    this.landingEl.style.display = 'none'
+
     if (this.settingsData.audioDeviceId) {
       await this.audio.setSinkId(this.settingsData.audioDeviceId)
     }
+
+    if (this.cameraMode === 'dslr') {
+      console.log('[BoothApp] goLive() — branching to DSLR preview')
+      await this.startDslrPreview()
+    } else {
+      console.log('[BoothApp] goLive() — branching to webcam preview')
+      await this.startWebcamPreview()
+    }
+
     this.isLive = true
     this._state = 'live'
     this.emitBoothState()
@@ -380,9 +583,97 @@ export class BoothApp {
     setTimeout(() => { this.stateDisplay.style.opacity = '0' }, 3000)
   }
 
-  private goHome() {
+  private async startDslrPreview() {
+    console.log('[BoothApp] startDslrPreview() — swapping to DSLR <img> element')
+    this.setPreviewSource('dslr')
+
+    // Show a connecting state so the user doesn't see a blank screen
+    const connectingOverlay = this.showConnectingOverlay()
+
+    console.log('[BoothApp] startDslrPreview() — calling dslrPreview.start()...')
+    const started = await this.dslrPreview.start()
+    console.log(`[BoothApp] startDslrPreview() — dslrPreview.start() returned: ${started}`)
+
+    connectingOverlay.remove()
+
+    if (!started) {
+      const errMsg = this.dslrPreview.lastError ||
+        'Camera liveview failed. Unplug and re-plug the USB cable, then try again.\n\n' +
+        'If the problem persists, run in a terminal:\nkillall PTPCamera'
+      console.error('[BoothApp] DSLR liveview failed — showing error overlay')
+      this.showDslrError(errMsg)
+    }
+  }
+
+  /**
+   * Show a "Connecting camera…" overlay on the preview box while liveview starts.
+   * Returns the overlay element so the caller can remove it when done.
+   */
+  private showConnectingOverlay(): HTMLDivElement {
+    const overlay = document.createElement('div')
+    overlay.style.cssText = `
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: #000; color: #fff; font-family: sans-serif; z-index: 20;
+    `
+    overlay.innerHTML = `
+      <div style="font-size: 3rem; animation: spin 1.5s linear infinite;">&#128247;</div>
+      <div style="margin-top: 1rem; font-size: 1rem; opacity: 0.7;">Connecting camera…</div>
+      <div style="margin-top: 0.5rem; font-size: 0.75rem; opacity: 0.4;">Releasing USB interface</div>
+      <style>@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }</style>
+    `
+    // Insert into previewBox (needs position: relative)
+    this.previewBox.style.position = 'relative'
+    this.previewBox.appendChild(overlay)
+    return overlay
+  }
+
+  private async startWebcamPreview() {
+    console.log(`[BoothApp] startWebcamPreview() — deviceId="${this.settingsData.cameraDeviceId || 'default'}"`)
+    this.setPreviewSource('webcam')
+    const stream = await this.camera.startWebcam(this.settingsData.cameraDeviceId)
+    if (stream) {
+      this.webcamPreview.srcObject = stream
+      await this.webcamPreview.play()
+      const track = stream.getVideoTracks()[0]
+      const settings = track.getSettings()
+      if (settings.width && settings.height) {
+        this.previewBox.style.aspectRatio = `${settings.width} / ${settings.height}`
+      }
+      console.log(`[BoothApp] startWebcamPreview() — stream active (${settings.width}x${settings.height})`)
+    } else {
+      console.error('[BoothApp] startWebcamPreview() — getUserMedia returned null stream')
+    }
+  }
+
+  /** Called when camera mode changes while live — restart in new mode. */
+  private async restartPreview() {
+    // Stop current source
+    if (this.cameraMode === 'webcam') {
+      // Was DSLR, now webcam
+      await this.dslrPreview.stop()
+      await this.startWebcamPreview()
+    } else {
+      // Was webcam, now DSLR
+      this.camera.stop()
+      this.webcamPreview.srcObject = null
+      await this.startDslrPreview()
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // goHome
+  // -------------------------------------------------------------------------
+
+  private async goHome() {
     this.photoPreview.hide()
+
+    // Stop whichever preview source is active
+    if (this.cameraMode === 'dslr' && this.dslrPreview.isActive()) {
+      await this.dslrPreview.stop()
+    }
     this.camera.stop()
+
     this.isLive = false
     this.isCapturing = false
     this._state = 'idle'
@@ -394,8 +685,13 @@ export class BoothApp {
     this.webcamPreview.srcObject = null
     this.landingEl.style.display = 'flex'
     this.confirmModal.style.display = 'none'
+    this.hideDslrError()
     this.updateStartBtn()
   }
+
+  // -------------------------------------------------------------------------
+  // startCapture
+  // -------------------------------------------------------------------------
 
   private async startCapture() {
     if (this.isCapturing || !this.isLive) return
@@ -415,9 +711,8 @@ export class BoothApp {
 
       let result: { success: boolean; path?: string; error?: string }
 
-      const hw = await window.hellomyphoto?.getHardwareStatus()
-      if (hw?.dslrConnected) {
-        result = await window.hellomyphoto.capture()
+      if (this.cameraMode === 'dslr') {
+        result = await this.captureDslrShot()
       } else {
         result = await this.camera.captureStill()
       }
@@ -427,9 +722,21 @@ export class BoothApp {
         this.audio.playShutter()
         await this.flashWhite()
         this.stateDisplay.textContent = ''
+
         if (this.settingsData.postCapturePreview > 0) {
           await this.showPostCapture(result.path, this.settingsData.postCapturePreview)
         }
+
+        // Resume DSLR liveview after each shot (done inside captureDslrShot but
+        // resume after post-capture display so the preview is ready for next shot)
+        if (this.cameraMode === 'dslr' && i < photoCount - 1) {
+          // Liveview is resumed by gphoto2.ts capture() after the shot,
+          // but we still need to restart the renderer's frame listener
+          if (!this.dslrPreview.isActive()) {
+            await this.dslrPreview.start()
+          }
+        }
+
         if (i < photoCount - 1 && this.settingsData.captureInterval > 0) {
           await this.delay(this.settingsData.captureInterval * 1000)
         }
@@ -437,6 +744,7 @@ export class BoothApp {
         this.stateDisplay.textContent = 'Capture failed — tap to retry'
         this.isCapturing = false
         this.captureBtn.style.visibility = 'visible'
+        audioCtx.close()
         return
       }
     }
@@ -468,6 +776,11 @@ export class BoothApp {
         this.offlineIndicator.setQueueDepth(1)
       }
 
+      // Stop liveview before switching to preview screen
+      if (this.cameraMode === 'dslr' && this.dslrPreview.isActive()) {
+        await this.dslrPreview.stop()
+      }
+
       this._state = 'preview'
       this.emitBoothState()
       this.photoPreview.show(paths)
@@ -480,6 +793,62 @@ export class BoothApp {
     }
   }
 
+  /**
+   * Fire the DSLR shutter for one shot.
+   *
+   * Sequence:
+   *  1. Pause liveview renderer (stop frame listener)
+   *  2. Call capture-photo IPC → main stops liveview, fires shutter, resumes liveview
+   *  3. Show "Processing…" overlay while waiting
+   *  4. Return result
+   */
+  private async captureDslrShot(): Promise<{ success: boolean; path?: string; error?: string }> {
+    console.log('[BoothApp] captureDslrShot() — stopping liveview renderer before capture')
+    // Stop receiving frames so the img element doesn't update during capture
+    await this.dslrPreview.stop()
+
+    // Show processing state
+    this.showProcessingOverlay()
+
+    console.log('[BoothApp] captureDslrShot() — calling capture-photo IPC...')
+    const result = await window.hellomyphoto?.capture()
+    console.log('[BoothApp] captureDslrShot() — capture result:', JSON.stringify(result))
+
+    this.hideProcessingOverlay()
+
+    return result ?? { success: false, error: 'IPC unavailable' }
+  }
+
+  private processingOverlay: HTMLDivElement | null = null
+
+  private showProcessingOverlay() {
+    if (!this.processingOverlay) {
+      this.processingOverlay = document.createElement('div')
+      Object.assign(this.processingOverlay.style, {
+        position: 'absolute', inset: '0', zIndex: '55',
+        background: 'rgba(0,0,0,0.85)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column', gap: '1rem',
+      })
+      this.processingOverlay.innerHTML = `
+        <div style="font-size:2rem;">📷</div>
+        <p style="color:#fff;font-size:1rem;font-weight:600;margin:0;">Processing…</p>
+      `
+      this.container.appendChild(this.processingOverlay)
+    }
+    this.processingOverlay.style.display = 'flex'
+  }
+
+  private hideProcessingOverlay() {
+    if (this.processingOverlay) {
+      this.processingOverlay.style.display = 'none'
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // reset (retake)
+  // -------------------------------------------------------------------------
+
   private async reset() {
     this.isCapturing = false
     this._state = 'live'
@@ -487,17 +856,26 @@ export class BoothApp {
     this.captureBtn.style.visibility = 'visible'
     this.photoPreview.hide()
     this.stateDisplay.textContent = ''
-    const stream = await this.camera.startWebcam(this.settingsData.cameraDeviceId)
-    if (stream) {
-      this.webcamPreview.srcObject = stream
-      await this.webcamPreview.play()
-      const track = stream.getVideoTracks()[0]
-      const settings = track.getSettings()
-      if (settings.width && settings.height) {
-        this.previewBox.style.aspectRatio = `${settings.width} / ${settings.height}`
+
+    if (this.cameraMode === 'dslr') {
+      await this.startDslrPreview()
+    } else {
+      const stream = await this.camera.startWebcam(this.settingsData.cameraDeviceId)
+      if (stream) {
+        this.webcamPreview.srcObject = stream
+        await this.webcamPreview.play()
+        const track = stream.getVideoTracks()[0]
+        const settings = track.getSettings()
+        if (settings.width && settings.height) {
+          this.previewBox.style.aspectRatio = `${settings.width} / ${settings.height}`
+        }
       }
     }
   }
+
+  // -------------------------------------------------------------------------
+  // Visual effects
+  // -------------------------------------------------------------------------
 
   private async flashWhite() {
     this.flashOverlay.style.transition = 'none'
@@ -511,11 +889,18 @@ export class BoothApp {
   private async showPostCapture(path: string, duration: number) {
     this.postCaptureEl.src = path
     this.postCaptureEl.style.display = 'block'
-    this.webcamPreview.style.opacity = '0'
-    await this.delay(duration * 1000)
+
+    if (this.cameraMode === 'dslr') {
+      // In DSLR mode the live preview is already paused — just show the still
+      await this.delay(duration * 1000)
+    } else {
+      this.webcamPreview.style.opacity = '0'
+      await this.delay(duration * 1000)
+      this.webcamPreview.style.opacity = '1'
+    }
+
     this.postCaptureEl.style.display = 'none'
     this.postCaptureEl.src = ''
-    this.webcamPreview.style.opacity = '1'
   }
 
   private delay(ms: number): Promise<void> {

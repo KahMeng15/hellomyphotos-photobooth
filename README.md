@@ -42,12 +42,40 @@ npm run dev
 
 Compiles TypeScript and launches the booth in a framed window with DevTools open.
 
+## Camera Support
+
+hellomyphoto supports two capture modes, switchable from the Settings panel (`Cmd/Ctrl+Shift+S`):
+
+| Mode | Description |
+|---|---|
+| **Webcam** (default) | Uses any `getUserMedia`-compatible webcam. Zero setup. |
+| **DSLR / Mirrorless** | USB tethered camera. Live preview + hardware shutter fire. |
+
+### DSLR / Mirrorless — Quick Setup
+
+**macOS** — install gphoto2:
+```bash
+brew install gphoto2
+# Kill the macOS PTP daemon before each session:
+killall PTPCamera 2>/dev/null
+```
+
+**Windows** — install [DigiCamControl](http://digicamcontrol.com/) and ensure it is
+running in the system tray before launching the booth.
+
+Tested cameras: **Canon EOS 80D**, **Sony A7RII**. Any gphoto2 / DigiCamControl
+compatible camera should work.
+
+→ See [`docs/CAMERAS.md`](docs/CAMERAS.md) for the full guide, camera settings,
+and troubleshooting.
+
 ## Auth
 
 Default: `operator@hellomyphoto.local` / `admin123`
 
 ## Docs
 
+- `docs/CAMERAS.md` — DSLR/mirrorless camera setup (macOS & Windows)
 - `docs/DEPLOYMENT.md` — Local + public hosting
 - `docs/SECURITY.md` — OAuth2, JWT, CSRF, headers
 - `docs/BANDWIDTH.md` — Image compression, caching, targets

@@ -45,6 +45,9 @@ interface BoothSettings {
   cameraDeviceId?: string
   audioDeviceId?: string
   otp?: string
+  /** 'webcam' (default) | 'dslr' — controls which capture path BoothApp uses */
+  cameraMode?: 'webcam' | 'dslr'
+  dslrCameraPort?: string | null
 }
 
 interface MediaDeviceInfo {
@@ -57,7 +60,7 @@ export class Settings {
   private visible = false
   private dirty = false
   private onChange: (settings: BoothSettings) => void
-  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
+  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam' }
   private serverInput!: HTMLInputElement
   private cameraSelect!: HTMLSelectElement
   private audioSelect!: HTMLSelectElement
@@ -65,6 +68,13 @@ export class Settings {
   private numInputs: HTMLInputElement[] = []
   private connectionStatus!: HTMLDivElement
   private connectedEvent: { name: string; date: string; description: string } | null = null
+  // Camera source
+  private webcamModeBtn!: HTMLButtonElement
+  private dslrModeBtn!: HTMLButtonElement
+  private dslrStatusEl!: HTMLDivElement
+  private dslrSelectContainer!: HTMLDivElement
+  private dslrSelect!: HTMLSelectElement
+  private webcamDeviceRow!: HTMLDivElement
 
   constructor(container: HTMLElement, onChange: (settings: BoothSettings) => void) {
     this.onChange = onChange
@@ -108,6 +118,9 @@ export class Settings {
 
     const otpSection = this.createOtpSection()
     panel.appendChild(otpSection)
+
+    const cameraSourceSection = this.createCameraSourceSection()
+    panel.appendChild(cameraSourceSection)
 
     const devicesSection = this.createDevicesSection()
     panel.appendChild(devicesSection)
@@ -328,6 +341,150 @@ export class Settings {
     return section
   }
 
+  // -------------------------------------------------------------------------
+  // Camera Source section — segmented control: Webcam vs DSLR
+  // -------------------------------------------------------------------------
+
+  private createCameraSourceSection(): HTMLDivElement {
+    const section = document.createElement('div')
+    section.style.cssText = 'margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #2a2a2a;'
+
+    const title = document.createElement('h3')
+    title.textContent = 'Camera Source'
+    title.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0 0 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;'
+    section.appendChild(title)
+
+    // Segmented control
+    const segRow = document.createElement('div')
+    segRow.style.cssText = `
+      display: flex; border: 1px solid #333; border-radius: 8px; overflow: hidden;
+      margin-bottom: 0.75rem;
+    `
+
+    this.webcamModeBtn = document.createElement('button')
+    this.webcamModeBtn.textContent = '📷  Webcam'
+    this.webcamModeBtn.id = 'cam-mode-webcam'
+
+    this.dslrModeBtn = document.createElement('button')
+    this.dslrModeBtn.textContent = '📸  DSLR / Mirrorless'
+    this.dslrModeBtn.id = 'cam-mode-dslr'
+
+    const segBtnBase = `
+      flex: 1; padding: 0.625rem; font-size: 0.8125rem; font-weight: 600;
+      border: none; cursor: pointer; transition: background 150ms;
+    `
+    this.webcamModeBtn.style.cssText = segBtnBase
+    this.dslrModeBtn.style.cssText = segBtnBase
+
+    segRow.appendChild(this.webcamModeBtn)
+    segRow.appendChild(this.dslrModeBtn)
+    section.appendChild(segRow)
+
+    // DSLR status line (model name or "Not detected")
+    this.dslrStatusEl = document.createElement('div')
+    this.dslrStatusEl.style.cssText = 'font-size: 0.75rem; color: #666; min-height: 1.2em; margin-bottom: 0.375rem;'
+    section.appendChild(this.dslrStatusEl)
+
+    this.dslrSelectContainer = document.createElement('div')
+    this.dslrSelectContainer.style.cssText = 'margin-bottom: 0.75rem; display: none;'
+    
+    this.dslrSelect = document.createElement('select')
+    this.dslrSelect.style.cssText = `
+      width: 100%; padding: 0.625rem; border: 1px solid #333;
+      border-radius: 8px; background: #222; color: #fff;
+      font-size: 0.8125rem; outline: none; margin-top: 0.375rem;
+    `
+    this.dslrSelect.addEventListener('change', () => {
+      if (window.hellomyphoto && window.hellomyphoto.setDslrCameraPort) {
+        window.hellomyphoto.setDslrCameraPort(this.dslrSelect.value)
+      }
+    })
+    this.dslrSelectContainer.appendChild(this.dslrSelect)
+    section.appendChild(this.dslrSelectContainer)
+
+    // Scan button
+    const scanBtn = document.createElement('button')
+    scanBtn.textContent = 'Scan for Camera'
+    scanBtn.id = 'dslr-scan-btn'
+    scanBtn.style.cssText = `
+      padding: 0.375rem 0.875rem; border: 1px solid #444; border-radius: 6px;
+      background: #222; color: #ccc; font-size: 0.75rem; cursor: pointer;
+    `
+    scanBtn.addEventListener('click', async () => {
+      scanBtn.disabled = true
+      scanBtn.textContent = 'Scanning…'
+      try {
+        const result = await window.hellomyphoto?.detectDslr()
+        this.dslrSelectContainer.style.display = 'none'
+        
+        if (result?.connected) {
+          this.dslrStatusEl.style.color = '#4caf50'
+          this.dslrStatusEl.textContent = `● Connected — ${result.model || 'Unknown camera'}`
+          
+          if (result.cameras && result.cameras.length > 1) {
+            this.dslrSelect.innerHTML = ''
+            result.cameras.forEach((c: any) => {
+              const opt = document.createElement('option')
+              opt.value = c.port
+              opt.textContent = `${c.model} (${c.port})`
+              // Attempt to match the saved or currently connected one
+              if (c.model === result.model) opt.selected = true
+              this.dslrSelect.appendChild(opt)
+            })
+            this.dslrSelectContainer.style.display = 'block'
+          }
+        } else {
+          this.dslrStatusEl.style.color = '#f44336'
+          this.dslrStatusEl.textContent = '● No camera detected — check USB cable'
+        }
+      } catch {
+        this.dslrStatusEl.style.color = '#f44336'
+        this.dslrStatusEl.textContent = '● Detection failed'
+      }
+      scanBtn.disabled = false
+      scanBtn.textContent = 'Scan for Camera'
+    })
+    section.appendChild(scanBtn)
+
+    // Wire up button events
+    this.webcamModeBtn.addEventListener('click', () => {
+      this.settings.cameraMode = 'webcam'
+      this.refreshCameraSourceUI()
+      this.markDirty()
+    })
+    this.dslrModeBtn.addEventListener('click', () => {
+      this.settings.cameraMode = 'dslr'
+      this.refreshCameraSourceUI()
+      this.markDirty()
+    })
+
+    this.refreshCameraSourceUI()
+    return section
+  }
+
+  /**
+   * Update the segmented control and webcam row visibility to reflect
+   * the current settings.cameraMode value.
+   */
+  private refreshCameraSourceUI() {
+    const isDslr = this.settings.cameraMode === 'dslr'
+
+    // Active button styling
+    const active = 'background: #fff; color: #000;'
+    const inactive = 'background: #111; color: #888;'
+    this.webcamModeBtn.style.cssText = `flex: 1; padding: 0.625rem; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; transition: background 150ms; ${isDslr ? inactive : active}`
+    this.dslrModeBtn.style.cssText = `flex: 1; padding: 0.625rem; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; transition: background 150ms; ${isDslr ? active : inactive}`
+
+    // Show/hide the webcam device row in Devices section
+    if (this.webcamDeviceRow) {
+      this.webcamDeviceRow.style.display = isDslr ? 'none' : ''
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Devices section
+  // -------------------------------------------------------------------------
+
   private createDevicesSection(): HTMLDivElement {
     const section = document.createElement('div')
     section.style.cssText = 'margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #2a2a2a;'
@@ -337,11 +494,15 @@ export class Settings {
     title.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0 0 1rem; text-transform: uppercase; letter-spacing: 0.05em;'
     section.appendChild(title)
 
+    // Wrap webcam camera select so we can hide it in DSLR mode
+    this.webcamDeviceRow = document.createElement('div')
+
     this.cameraSelect = document.createElement('select')
     this.cameraSelect.style.cssText = this.selectStyle()
-    const cameraLabel = this.createSelectLabel('Camera', this.cameraSelect)
-    section.appendChild(cameraLabel)
-    section.appendChild(this.cameraSelect)
+    const cameraLabel = this.createSelectLabel('Webcam Device', this.cameraSelect)
+    this.webcamDeviceRow.appendChild(cameraLabel)
+    this.webcamDeviceRow.appendChild(this.cameraSelect)
+    section.appendChild(this.webcamDeviceRow)
 
     this.audioSelect = document.createElement('select')
     this.audioSelect.style.cssText = this.selectStyle()
@@ -547,11 +708,23 @@ export class Settings {
         this.settings = { ...this.settings, ...s }
         this.refreshFields()
         this.refreshConnectionStatus()
+        this.refreshCameraSourceUI()
         if (this.settings.otp && boothSocket?.connected && !this.connectedEvent) {
           this.fetchConnectedEvent(this.settings.otp)
         }
       })
       this.populateDevices()
+      // Show current DSLR detection status when panel opens
+      window.hellomyphoto?.detectDslr().then((result) => {
+        if (!this.visible) return
+        if (result?.connected) {
+          this.dslrStatusEl.style.color = '#4caf50'
+          this.dslrStatusEl.textContent = `● ${result.model || 'Camera'} connected`
+        } else {
+          this.dslrStatusEl.style.color = '#555'
+          this.dslrStatusEl.textContent = '○ No DSLR detected'
+        }
+      }).catch(() => {})
     }
   }
 
