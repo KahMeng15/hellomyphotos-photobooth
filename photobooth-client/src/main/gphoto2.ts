@@ -749,6 +749,8 @@ export class DslrManager {
             }
           }, 5000)
         })
+        log.info('[DslrManager] Waiting 1s for mirror to fully open before streaming...')
+        await new Promise((r) => setTimeout(r, 1000))
       }
 
       log.info('[DslrManager] Using gphoto2 backend — PTPCamera racing mode')
@@ -771,7 +773,7 @@ export class DslrManager {
   }
 
   /** Stop the live preview stream. */
-  stopLiveview(): void {
+  async stopLiveview(): Promise<void> {
     const wasActive = this.liveviewActive
     log.info(`[DslrManager] stopLiveview() called (liveviewActive=${wasActive})`)
 
@@ -789,12 +791,19 @@ export class DslrManager {
       // DslrManager.capture() call that restarted liveview internally.
       if (this.cameraModel.toLowerCase().includes('canon')) {
         log.info('[DslrManager] Dropping Canon mirror (viewfinder=0) to deactivate liveview...')
-        try {
-          require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null; pkill -9 -f imagecaptured 2>/dev/null')
-          const args = ['--set-config', '/main/actions/viewfinder=0']
-          if (this.selectedPort) args.push(`--port=${this.selectedPort}`)
-          require('child_process').execSync(`gphoto2 ${args.join(' ')} 2>/dev/null`)
-        } catch (e) {}
+        const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+        for (let i = 0; i < 3; i++) {
+          try {
+            require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null; pkill -9 -f imagecaptured 2>/dev/null')
+          } catch (e) {}
+          const res = await this.execGphoto2(['--set-config', '/main/actions/viewfinder=0', ...portArgs], 5000)
+          if (res.code === 0) {
+            log.ok('[DslrManager] Canon mirror dropped successfully')
+            break
+          }
+          log.warn(`[DslrManager] Canon mirror drop failed (attempt ${i + 1}/3): ${res.stderr.trim()}`)
+          if (i < 2) await new Promise(r => setTimeout(r, 1000))
+        }
       }
     }
 
@@ -832,7 +841,7 @@ export class DslrManager {
     const wasLiveviewActive = this.liveviewActive
     if (wasLiveviewActive) {
       log.info('[DslrManager] Stopping liveview before capture...')
-      this.stopLiveview()
+      await this.stopLiveview()
       // Small pause to let the PTP session close cleanly
       log.info('[DslrManager] Waiting 300 ms for PTP session to release...')
       await new Promise((r) => setTimeout(r, 300))
@@ -881,7 +890,18 @@ export class DslrManager {
     if (!wasLiveviewActive && result.success && this.cameraModel.toLowerCase().includes('canon') && !this.isWindows) {
       log.info('[DslrManager] Post-capture: ensuring Canon mirror is down (viewfinder=0)...')
       const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
-      await this.execGphoto2(['--set-config', '/main/actions/viewfinder=0', ...portArgs], 5000)
+      for (let i = 0; i < 3; i++) {
+        try {
+          require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null; pkill -9 -f imagecaptured 2>/dev/null')
+        } catch (e) {}
+        const res = await this.execGphoto2(['--set-config', '/main/actions/viewfinder=0', ...portArgs], 5000)
+        if (res.code === 0) {
+          log.ok('[DslrManager] Canon mirror dropped successfully')
+          break
+        }
+        log.warn(`[DslrManager] Canon mirror drop failed (attempt ${i + 1}/3): ${res.stderr.trim()}`)
+        if (i < 2) await new Promise(r => setTimeout(r, 1000))
+      }
     }
 
     return result

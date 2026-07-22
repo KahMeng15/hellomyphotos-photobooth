@@ -92,9 +92,9 @@ export function initIpcHandlers(
   // ------------------------------------------------------------------
   // DSLR liveview — stop
   // ------------------------------------------------------------------
-  ipcMain.handle('stop-dslr-liveview', (): { success: boolean } => {
+  ipcMain.handle('stop-dslr-liveview', async (): Promise<{ success: boolean }> => {
     console.log('[IPC] stop-dslr-liveview called')
-    dslrManager.stopLiveview()
+    await dslrManager.stopLiveview()
     console.log('[IPC] stop-dslr-liveview done')
     return { success: true }
   })
