@@ -308,9 +308,12 @@ class Gphoto2LiveviewStream {
   private currentProc: any = null
   private pollingRetryTimer: NodeJS.Timeout | null = null
 
-  constructor(onFrame: (jpeg: Buffer) => void, port: string | null = null) {
+  private cameraModel: string
+
+  constructor(onFrame: (jpeg: Buffer) => void, port: string | null = null, cameraModel: string = '') {
     this.onFrame = onFrame
     this.port = port
+    this.cameraModel = cameraModel
   }
 
   /**
@@ -344,6 +347,11 @@ class Gphoto2LiveviewStream {
     if (mjpegOk) return true
     if (!this.active) return false
 
+    if (this.cameraModel.toLowerCase().includes('canon')) {
+      log.error('[gphoto2 stream] MJPEG failed to produce frames. Skipping Phase 2 polling because it flaps the Canon mirror.')
+      return false
+    }
+
     // Phase 2: Fall back to polling --capture-preview at ~3 fps.
     // Give Phase 2 its OWN fresh deadline regardless of how long Phase 1 ran.
     // This ensures Sony cameras (which don't support --capture-movie) always
@@ -367,9 +375,13 @@ class Gphoto2LiveviewStream {
       let procStderr = ''
       let isRetrying = false
 
-      const remainingMs = Math.max(1, Math.min(deadline - Date.now(), 5000))
+      const remainingMs = Math.max(1, deadline - Date.now())
 
-      const args = ['--capture-movie', '--stdout']
+      const args: string[] = []
+      if (this.cameraModel.toLowerCase().includes('canon')) {
+        args.push('--set-config', '/main/actions/viewfinder=1', '--wait-event=1s')
+      }
+      args.push('--capture-movie', '--stdout')
       if (this.port) args.push(`--port=${this.port}`)
 
       this.currentProc = spawn('gphoto2', args)
@@ -1031,36 +1043,8 @@ export class DslrManager {
       this.dcc.startLiveview(onFrame)
       firstFrameOk = true
     } else {
-      if (this.cameraModel.toLowerCase().includes('canon')) {
-        log.info('[DslrManager] Attempting to enable EOS viewfinder (Canon only) before liveview...')
-        await new Promise<void>((resolve) => {
-          const args = ['--set-config', '/main/actions/viewfinder=1']
-          if (this.selectedPort) args.push(`--port=${this.selectedPort}`)
-          const proc = spawn('gphoto2', args)
-          
-          let done = false
-          const finish = () => {
-            if (!done) {
-              done = true
-              resolve()
-            }
-          }
-          proc.on('close', finish)
-          proc.on('error', finish)
-          setTimeout(() => {
-            if (!done) {
-              log.warn('[DslrManager] Viewfinder config timed out')
-              proc.kill()
-              finish()
-            }
-          }, 5000)
-        })
-        log.info('[DslrManager] Waiting 1s for mirror to fully open before streaming...')
-        await new Promise((r) => setTimeout(r, 1000))
-      }
-
       log.info('[DslrManager] Using gphoto2 backend — PTPCamera racing mode')
-      this.gphoto2Stream = new Gphoto2LiveviewStream(onFrame, this.selectedPort)
+      this.gphoto2Stream = new Gphoto2LiveviewStream(onFrame, this.selectedPort, this.cameraModel)
       // Phase 1 (MJPEG): 15 s to exhaust launchd's PTPCamera throttle for Canon/Nikon.
       // Phase 2 (polling): 15 s independent budget for Sony --capture-preview fallback.
       // These two budgets are independent so Sony cameras are never starved by Phase 1.
