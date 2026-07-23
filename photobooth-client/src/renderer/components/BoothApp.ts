@@ -899,9 +899,14 @@ export class BoothApp {
 
       let prepDone = false
       let prepPromise: Promise<void> | null = null
+      let tLastTick = 0
+      const tCountdownStart = Date.now()
+
       const onLastTick = () => {
         if (this.cameraMode === 'dslr' && !prepDone) {
           prepDone = true
+          tLastTick = Date.now()
+          console.log(`[BoothApp] ⏱ onLastTick fired at t+${tLastTick - tCountdownStart} ms from countdown start — starting prepDslrCapture()`)
           prepPromise = this.prepDslrCapture()
           prepPromise.catch((err) => {
             console.error('[BoothApp] prepDslrCapture failed:', err)
@@ -910,22 +915,28 @@ export class BoothApp {
       }
 
       await this.countdown.play(this.settingsData.countdown, audioCtx, onLastTick)
+      const tCountdownEnd = Date.now()
+      console.log(`[BoothApp] ⏱ COUNTDOWN = 0 at t+${tCountdownEnd - tCountdownStart} ms`)
 
       let result: { success: boolean; path?: string; error?: string }
 
       if (this.cameraMode === 'dslr') {
         // Wait for prep to FULLY complete before firing the shutter.
         // prepDslrCapture() runs fire-and-forget during the countdown (onLastTick
-        // at tick "2"), but it may take longer than 2 s (USB re-enumeration +
-        // viewfinder=0 + AF). Without this await, capture() fires while
-        // stopLiveview() is still running, causing concurrent gphoto2 processes
-        // to fight over the USB interface and both fail with "Could not claim".
+        // at tick "1"), so it overlaps the last second of countdown. We await it
+        // here in case it's not finished by the time the countdown ends.
         if (prepPromise !== null) {
-          console.log('[BoothApp] Waiting for DSLR prep to complete before shutter...')
+          const tWaitStart = Date.now()
+          console.log(`[BoothApp] ⏱ Awaiting prepDslrCapture (started ${tWaitStart - tLastTick} ms ago)...`)
           await (prepPromise as Promise<void>).catch(() => {})  // errors already logged in onLastTick
           prepPromise = null
+          const tWaitEnd = Date.now()
+          const extraWait = tWaitEnd - tCountdownEnd
+          console.log(`[BoothApp] ⏱ prepDslrCapture DONE — total ${tWaitEnd - tLastTick} ms, added ${extraWait} ms delay after countdown=0`)
         }
+        console.log(`[BoothApp] ⏱ Calling captureDslrShot() at t+${Date.now() - tCountdownStart} ms from countdown start`)
         result = await this.captureDslrShot(prepDone)
+        console.log(`[BoothApp] ⏱ captureDslrShot() returned at t+${Date.now() - tCountdownStart} ms`)
       } else {
         result = await this.camera.captureStill()
       }

@@ -23,9 +23,13 @@ export class CountdownUI {
 
       this.playBeep(audioCtx, i === 1 ? 880 : 660)
 
-      // Trigger DSLR prep at "2" so the mirror has time to drop + AF to run
-      // before the shutter fires at the end of the "1" second.
-      if (i === 2 && onLastTick) {
+      // Fire DSLR prep at "1" — this stops liveview and begins camera readiness
+      // steps so that when the countdown hits 0 the shutter fires immediately.
+      // Moved from i===2: the extra second of waiting was adding dead time because
+      // the renderer awaits prepPromise before calling the shutter IPC, so any
+      // work done during i===2 still blocks at i===0. Starting at i===1 overlaps
+      // prep with the last visible countdown second instead.
+      if (i === 1 && onLastTick) {
         onLastTick()
       }
 

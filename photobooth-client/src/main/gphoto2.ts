@@ -1087,6 +1087,7 @@ export class DslrManager {
 
   private async stopLiveviewInternal(): Promise<void> {
     const wasActive = this.liveviewActive
+    const t0 = Date.now()
     log.info(`[DslrManager] stopLiveview() called (liveviewActive=${wasActive})`)
 
     this.liveviewActive = false
@@ -1101,8 +1102,10 @@ export class DslrManager {
       // before we issue the next gphoto2 command (viewfinder=0 or capture).
       // stop() uses SIGKILL and waits for the process to exit + 300 ms settle.
       if (this.gphoto2Stream) {
+        const ts = Date.now()
         await this.gphoto2Stream.stop()
         this.gphoto2Stream = null
+        log.info(`[DslrManager] ⏱ stream.stop() took ${Date.now() - ts} ms`)
       }
 
       // Deactivate liveview on the camera side (drop the mirror).
@@ -1131,7 +1134,7 @@ export class DslrManager {
     }
 
     this.pushStatus()
-    log.ok('[DslrManager] stopLiveview() complete')
+    log.ok(`[DslrManager] stopLiveview() complete — total ${Date.now() - t0} ms`)
   }
 
   // -------------------------------------------------------------------------
@@ -1154,7 +1157,8 @@ export class DslrManager {
    */
   async prepCapture(): Promise<void> {
     return this.enqueue(async () => {
-      log.info(`[DslrManager] prepCapture() called (connected=${this.connected}, liveviewActive=${this.liveviewActive})`)
+      const t0 = Date.now()
+      log.info(`[DslrManager] ⏱ prepCapture() START (connected=${this.connected}, liveviewActive=${this.liveviewActive})`)
       // Always set the flag — the renderer already called dslrPreview.stop() (which
       // sends stop-dslr-liveview) before invoking this IPC, so camera liveview may
       // already be off. capture() needs _prepDone=true to know it should resume
@@ -1162,14 +1166,19 @@ export class DslrManager {
       this._prepDone = true
       if (this.liveviewActive) {
         // stopLiveview() handles viewfinder=0 (mirror drop) for Canon cameras.
+        const ts = Date.now()
         await this.stopLiveviewInternal()
+        log.info(`[DslrManager] ⏱ stopLiveviewInternal() in prepCapture took ${Date.now() - ts} ms`)
       }
-      // Trigger autofocus now that the mirror is down (phase-detect AF).
-      // We do this unconditionally — liveviewActive is already false by the time
-      // prepCapture IPC is called (the renderer calls stop-dslr-liveview first),
-      // so the old `if (this.liveviewActive)` guard was always skipping AF.
-      if (!this.isWindows && this.connected) {
-        log.info('[DslrManager] prepCapture() — triggering autofocus (phase-detect, mirror down)...')
+
+      // Trigger autofocus only for Canon DSLRs (phase-detect AF with mirror).
+      // Sony Alpha / mirrorless cameras autofocus during the capture command itself
+      // (contrast/phase-detect on the sensor). Running autofocusdrive=1 here on
+      // Sony has a 6-second blocking timeout that delays the shutter without benefit.
+      const isSony = this.cameraModel.toLowerCase().includes('sony') || this.cameraModel.toLowerCase().includes('alpha')
+      const isCanon = this.cameraModel.toLowerCase().includes('canon')
+      if (!this.isWindows && this.connected && isCanon && !isSony) {
+        log.info('[DslrManager] prepCapture() — triggering autofocus (Canon phase-detect, mirror down)...')
         const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
         const afRes = await this.execGphoto2(['--set-config', '/main/actions/autofocusdrive=1', ...portArgs], 6000)
         if (afRes.code === 0) {
@@ -1178,7 +1187,7 @@ export class DslrManager {
           log.warn(`[DslrManager] prepCapture() — AF trigger returned code=${afRes.code} (non-fatal): ${afRes.stderr.trim().slice(0, 100)}`)
         }
       }
-      log.info('[DslrManager] prepCapture() complete')
+      log.info(`[DslrManager] ⏱ prepCapture() DONE — total ${Date.now() - t0} ms`)
     })
   }
 
@@ -1197,7 +1206,8 @@ export class DslrManager {
    */
   async capture(options?: { targetPath?: string; iso?: string; shutterSpeed?: string; aperture?: string; liveviewStopped?: boolean }): Promise<CaptureResult> {
     return this.enqueue(async () => {
-      log.info(`[DslrManager] capture() called (connected=${this.connected}, capturing=${this.capturing}, liveviewActive=${this.liveviewActive})`)
+      const t0 = Date.now()
+      log.info(`[DslrManager] ⏱ capture() START (connected=${this.connected}, capturing=${this.capturing}, liveviewActive=${this.liveviewActive}, wasPrepped=${this._prepDone})`)
       if (!this.connected) {
         log.error('[DslrManager] capture() aborted — camera not connected')
         return { success: false, error: 'No DSLR connected' }
@@ -1214,10 +1224,14 @@ export class DslrManager {
       // If prepCapture() already ran during the countdown, camera liveview was
       // already stopped and PTP session released — skip the stop+wait.
       if (wasLiveviewActive && !wasPrepped) {
-        log.info('[DslrManager] Stopping liveview before capture...')
+        log.info('[DslrManager] capture() — stopping liveview (prepCapture was NOT called)...')
+        const ts = Date.now()
         await this.stopLiveviewInternal()
+        log.info(`[DslrManager] ⏱ stopLiveview in capture() took ${Date.now() - ts} ms`)
         log.info('[DslrManager] Waiting 300 ms for PTP session to release...')
         await new Promise((r) => setTimeout(r, 300))
+      } else {
+        log.info(`[DslrManager] capture() — liveview already stopped by prepCapture (skipping stop+wait), t+${Date.now() - t0} ms`)
       }
 
       this.capturing = true
@@ -1227,15 +1241,15 @@ export class DslrManager {
         log.info('[DslrManager] Triggering capture via DigiCamControl...')
         result = await this.captureWindows(options?.targetPath)
       } else {
-        log.info('[DslrManager] Triggering capture via gphoto2...')
+        log.info(`[DslrManager] ⏱ Triggering gphoto2 capture at t+${Date.now() - t0} ms from capture() start`)
         result = await this.captureGphoto2(options)
       }
 
       this.capturing = false
       if (result.success) {
-        log.ok(`[DslrManager] Capture success! File: ${result.path}`)
+        log.ok(`[DslrManager] ⏱ capture() SUCCESS — total ${Date.now() - t0} ms. File: ${result.path}`)
       } else {
-        log.error(`[DslrManager] Capture failed: ${result.error}`)
+        log.error(`[DslrManager] ⏱ capture() FAILED after ${Date.now() - t0} ms — ${result.error}`)
       }
 
       log.info('[DslrManager] capture() complete — liveview restart delegated to renderer')
@@ -1247,21 +1261,27 @@ export class DslrManager {
   /** Run a gphoto2 command and collect stdout/stderr/exit code. */
   private execGphoto2(args: string[], timeoutMs = 15000): Promise<{ code: number | null; stdout: string; stderr: string }> {
     return new Promise((resolve) => {
+      const t0 = Date.now()
+      const label = args.slice(0, 3).join(' ')  // e.g. '--set-config /main/...' (truncated)
+      log.info(`[DslrManager] ⏱ exec START: gphoto2 ${label}${args.length > 3 ? ' …' : ''}`)
       const proc = this._trackChild(spawn('gphoto2', args))
       let stdout = ''
       let stderr = ''
       proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
       proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
       const timer = setTimeout(() => {
+        log.warn(`[DslrManager] ⏱ exec TIMEOUT after ${timeoutMs} ms: gphoto2 ${label}`)
         proc.kill()
         resolve({ code: null, stdout, stderr })
       }, timeoutMs)
       proc.on('close', (code) => {
         clearTimeout(timer)
+        log.info(`[DslrManager] ⏱ exec DONE (${Date.now() - t0} ms, code=${code}): gphoto2 ${label}`)
         resolve({ code, stdout, stderr })
       })
       proc.on('error', () => {
         clearTimeout(timer)
+        log.warn(`[DslrManager] ⏱ exec ERROR after ${Date.now() - t0} ms: gphoto2 ${label}`)
         resolve({ code: null, stdout, stderr })
       })
     })
@@ -1313,6 +1333,7 @@ export class DslrManager {
 
   private captureGphoto2(options?: { targetPath?: string; iso?: string; shutterSpeed?: string; aperture?: string }): Promise<CaptureResult> {
     return new Promise((resolve) => {
+      const tCapStart = Date.now()
       const targetPath = options?.targetPath
       const downloadDir = targetPath
         ? path.dirname(targetPath)
@@ -1339,7 +1360,6 @@ export class DslrManager {
           } else {
             log.warn(`[DslrManager] Failed to set image quality (non-fatal): ${qualRes.stderr.trim().slice(0, 80)}`)
           }
-          await new Promise((r) => setTimeout(r, 200))
         }
 
         // For Canon cameras: explicitly drop the mirror (viewfinder=0) in a
@@ -1356,17 +1376,34 @@ export class DslrManager {
           await new Promise((r) => setTimeout(r, 300))
         }
 
-        const args = [
-          '--capture-image-and-download',
-          '--keep',
-          `--filename=${path.join(downloadDir, filenameTemplate)}`,
-          '--force-overwrite',
-          ...portArgs,
-        ]
+        let args: string[]
+        if (this.cameraModel.toLowerCase().includes('sony') || this.cameraModel.toLowerCase().includes('alpha')) {
+          // Sony PTP capture is very slow with --capture-image-and-download due to unnecessary
+          // state wait loops inside gphoto2. Using the direct capture=1 action forces an instant
+          // shutter trigger, dropping capture delay from 5.5s down to 2.6s total (shutter is instant).
+          args = [
+            '--set-config', '/main/actions/capture=1',
+            '--wait-event-and-download=4s',
+            `--filename=${path.join(downloadDir, filenameTemplate)}`,
+            '--force-overwrite',
+            ...portArgs,
+            '--set-config', '/main/actions/capture=0',
+          ]
+        } else {
+          args = [
+            '--capture-image-and-download',
+            '--keep',
+            `--filename=${path.join(downloadDir, filenameTemplate)}`,
+            '--force-overwrite',
+            ...portArgs,
+          ]
+        }
 
-        log.info(`[DslrManager] gphoto2 capture args: ${args.join(' ')}`)
+        log.info(`[DslrManager] ⏱ gphoto2 capture args: ${args.join(' ')}`)
+        log.info(`[DslrManager] ⏱ SHUTTER COMMAND launching at t+${Date.now() - tCapStart} ms from captureGphoto2() entry`)
         log.info(`[DslrManager] Download dir: ${downloadDir}`)
 
+        const tShutter = Date.now()
         const proc = spawn('gphoto2', args)
         let stdout = ''
         let stderr = ''
@@ -1384,7 +1421,7 @@ export class DslrManager {
 
         const captureTimeout = setTimeout(() => {
           if (this.capturing) {
-            log.error('[DslrManager] Capture timed out after 30 s — killing gphoto2')
+            log.error(`[DslrManager] ⏱ Capture timed out after 30 s (t+${Date.now() - tCapStart} ms) — killing gphoto2`)
             proc.kill()
             this.resetCameraAfterFailure()
             resolve({ success: false, error: 'Capture timeout (30 s)' })
@@ -1393,7 +1430,7 @@ export class DslrManager {
 
         proc.on('close', (code: number | null) => {
           clearTimeout(captureTimeout)
-          log.info(`[DslrManager] gphoto2 capture exited code=${code}`)
+          log.info(`[DslrManager] ⏱ gphoto2 capture command exited code=${code} after ${Date.now() - tShutter} ms (total captureGphoto2: ${Date.now() - tCapStart} ms)`)
 
           const addReturned = (fp: string) => { this._returnedFiles.add(fp); return fp }
 
