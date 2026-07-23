@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { initIpcHandlers } from './ipc'
 import { OfflineQueue } from './offlineQueue'
-import { DslrManager } from './gphoto2'
+import { DslrManager, enablePtpDaemon } from './gphoto2'
 
 let mainWindow: BrowserWindow | null = null
 let dslrManager: DslrManager
@@ -128,16 +128,17 @@ async function checkServerOnline(url: string): Promise<boolean> {
   }
 }
 
-app.on('before-quit', () => {
+function cleanupAndQuit() {
   intervals.forEach(clearInterval)
   intervals = []
   offlineQueue?.close()
-})
+  enablePtpDaemon()
+}
+
+app.on('before-quit', cleanupAndQuit)
 
 app.on('window-all-closed', () => {
-  intervals.forEach(clearInterval)
-  intervals = []
-  offlineQueue?.close()
+  cleanupAndQuit()
   if (process.platform !== 'darwin') {
     app.quit()
   }

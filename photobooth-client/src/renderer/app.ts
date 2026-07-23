@@ -6,7 +6,8 @@ declare global {
       // ----------------------------------------------------------------
       // Capture
       // ----------------------------------------------------------------
-      capture: () => Promise<{ success: boolean; path?: string; error?: string }>
+      capture: (options?: { liveviewStopped?: boolean }) => Promise<{ success: boolean; path?: string; error?: string }>
+      prepDslrCapture: () => Promise<{ success: boolean }>
 
       // ----------------------------------------------------------------
       // DSLR liveview
@@ -62,6 +63,7 @@ declare global {
         cameraMode?: 'webcam' | 'dslr'
       }) => Promise<any>
       getServerConfig: () => Promise<{ serverUrl: string }>
+      killPtpDaemon: () => Promise<{ success: boolean; error?: string }>
 
       // ----------------------------------------------------------------
       // Push listeners (main → renderer)

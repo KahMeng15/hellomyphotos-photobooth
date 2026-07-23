@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain, app } from 'electron'
-import { DslrManager } from './gphoto2'
+import { DslrManager, killPtpDaemon } from './gphoto2'
 import { OfflineQueue } from './offlineQueue'
 import { readFile, writeFile, readdir } from 'fs/promises'
 import path from 'path'
@@ -159,15 +159,25 @@ export function initIpcHandlers(
   })
 
   // ------------------------------------------------------------------
+  // Prep DSLR capture (stop liveview, begin AF during countdown)
+  // ------------------------------------------------------------------
+  ipcMain.handle('prep-dslr-capture', async (): Promise<{ success: boolean }> => {
+    console.log('[IPC] prep-dslr-capture called')
+    await dslrManager.prepCapture()
+    return { success: true }
+  })
+
+  // ------------------------------------------------------------------
   // Capture photo (DSLR or webcam blob — unified endpoint)
   // ------------------------------------------------------------------
-  ipcMain.handle('capture-photo', async (): Promise<{ success: boolean; path?: string; error?: string }> => {
+  ipcMain.handle('capture-photo', async (_event, options?: { liveviewStopped?: boolean }): Promise<{ success: boolean; path?: string; error?: string }> => {
     try {
       const settings = getSettingsSync()
       const result = await dslrManager.capture({
         iso: settings.dslrIso,
         shutterSpeed: settings.dslrShutterSpeed,
         aperture: settings.dslrAperture,
+        liveviewStopped: options?.liveviewStopped,
       })
       return result
     } catch (error: any) {
@@ -331,6 +341,19 @@ export function initIpcHandlers(
 
   ipcMain.handle('get-server-config', () => {
     return { serverUrl }
+  })
+
+  // ------------------------------------------------------------------
+  // macOS: kill PTPCamera daemon and re-detect
+  // ------------------------------------------------------------------
+  ipcMain.handle('kill-ptp-daemon', async (): Promise<{ success: boolean; error?: string }> => {
+    console.log('[IPC] kill-ptp-daemon called')
+    try {
+      await killPtpDaemon()
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
   })
 }
 

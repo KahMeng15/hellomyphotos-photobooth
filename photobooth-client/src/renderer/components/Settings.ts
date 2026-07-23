@@ -505,6 +505,45 @@ export class Settings {
     })
     section.appendChild(scanBtn)
 
+    // Kill PTPCamera button (macOS: PTPCamera daemon steals USB from gphoto2)
+    const killPtpBtn = document.createElement('button')
+    killPtpBtn.textContent = 'Kill Camera Daemon'
+    killPtpBtn.id = 'dslr-kill-ptp-btn'
+    killPtpBtn.style.cssText = `
+      padding: 0.375rem 0.875rem; border: 1px solid #c0392b; border-radius: 6px;
+      background: #2a0f0d; color: #e74c3c; font-size: 0.75rem; cursor: pointer;
+      margin-left: 0.5rem;
+    `
+    killPtpBtn.addEventListener('click', async () => {
+      killPtpBtn.disabled = true
+      killPtpBtn.textContent = 'Killing…'
+      try {
+        const result = await window.hellomyphoto?.killPtpDaemon()
+        if (result?.success) {
+          this.dslrStatusEl.textContent = '● Daemon killed — re-scanning…'
+          this.dslrStatusEl.style.color = '#f0ad4e'
+          // Auto re-scan after killing
+          const detectResult = await window.hellomyphoto?.detectDslr()
+          if (detectResult?.connected) {
+            this.dslrStatusEl.style.color = '#4caf50'
+            this.dslrStatusEl.textContent = `● Connected — ${detectResult.model || 'Unknown camera'}`
+          } else {
+            this.dslrStatusEl.style.color = '#f44336'
+            this.dslrStatusEl.textContent = '● No camera detected — check USB cable'
+          }
+        } else {
+          this.dslrStatusEl.style.color = '#f44336'
+          this.dslrStatusEl.textContent = '● Failed to kill daemon'
+        }
+      } catch {
+        this.dslrStatusEl.style.color = '#f44336'
+        this.dslrStatusEl.textContent = '● Failed to kill daemon'
+      }
+      killPtpBtn.disabled = false
+      killPtpBtn.textContent = 'Kill Camera Daemon'
+    })
+    section.appendChild(killPtpBtn)
+
     // Wire up button events
     this.webcamModeBtn.addEventListener('click', () => {
       this.settings.cameraMode = 'webcam'

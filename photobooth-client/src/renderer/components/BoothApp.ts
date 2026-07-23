@@ -139,7 +139,7 @@ export class BoothApp {
     Object.assign(this.statusBar.style, {
       display: 'flex', gap: '1rem', alignItems: 'center', justifyContent: 'center',
       padding: '2rem', zIndex: '10', width: '100%', boxSizing: 'border-box',
-      flexShrink: '0',
+      flexShrink: '0', position: 'relative'
     })
 
     this.captureBtn = document.createElement('button')
@@ -162,7 +162,8 @@ export class BoothApp {
       padding: '1rem',
       background: 'rgba(255, 255, 255, 0.1)', color: '#fff', border: 'none', borderRadius: '50%',
       cursor: 'pointer', pointerEvents: 'all', display: 'none',
-      alignItems: 'center', justifyContent: 'center'
+      alignItems: 'center', justifyContent: 'center',
+      position: 'absolute', right: '2rem'
     })
     this.dslrSettingsBtn.addEventListener('click', () => this.toggleDslrSettingsModal())
 
@@ -821,20 +822,37 @@ export class BoothApp {
 
     for (let i = 0; i < photoCount; i++) {
       this.stateDisplay.textContent = `Shot ${i + 1} of ${photoCount}`
-      await this.countdown.play(this.settingsData.countdown, audioCtx)
+
+      let prepDone = false
+      let prepFailed = false
+      const onLastTick = () => {
+        if (this.cameraMode === 'dslr' && !prepDone) {
+          prepDone = true
+          this.prepDslrCapture().catch((err) => {
+            prepFailed = true
+            console.error('[BoothApp] prepDslrCapture failed:', err)
+          })
+        }
+      }
+
+      await this.countdown.play(this.settingsData.countdown, audioCtx, onLastTick)
 
       let result: { success: boolean; path?: string; error?: string }
 
       if (this.cameraMode === 'dslr') {
-        result = await this.captureDslrShot()
+        result = await this.captureDslrShot(prepDone)
       } else {
         result = await this.camera.captureStill()
       }
 
       if (result?.success && result.path) {
         paths.push(result.path)
-        this.audio.playShutter()
-        await this.flashWhite()
+        // Webcam capture is instant so sound+flash happens here;
+        // DSLR captureDslrShot already played it optimistically before download.
+        if (this.cameraMode !== 'dslr') {
+          this.audio.playShutter()
+          await this.flashWhite()
+        }
         this.stateDisplay.textContent = ''
 
         if (this.settingsData.postCapturePreview > 0) {
@@ -921,21 +939,42 @@ export class BoothApp {
    *  3. Show "Processing…" overlay while waiting
    *  4. Return result
    */
-  private async captureDslrShot(): Promise<{ success: boolean; path?: string; error?: string }> {
-    console.log('[BoothApp] captureDslrShot() — stopping liveview renderer before capture')
-    // Stop receiving frames so the img element doesn't update during capture
+  private async prepDslrCapture(): Promise<void> {
+    console.log('[BoothApp] prepDslrCapture() — stopping liveview renderer + camera liveview early')
     await this.dslrPreview.stop()
+    await window.hellomyphoto?.prepDslrCapture()
+  }
 
-    // Show processing state
+  private async captureDslrShot(prepDone = false): Promise<{ success: boolean; path?: string; error?: string }> {
+    if (!prepDone) {
+      console.log('[BoothApp] captureDslrShot() — stopping liveview renderer before capture')
+      await this.dslrPreview.stop()
+    }
+
     this.showProcessingOverlay()
 
     console.log('[BoothApp] captureDslrShot() — calling capture-photo IPC...')
-    const result = await window.hellomyphoto?.capture()
+    const capturePromise = window.hellomyphoto?.capture({ liveviewStopped: prepDone })
+
+    // If the IPC bridge is unavailable, bail immediately — no false flash/sound.
+    if (!capturePromise) {
+      console.error('[BoothApp] captureDslrShot() — IPC bridge unavailable')
+      this.hideProcessingOverlay()
+      return { success: false, error: 'IPC bridge unavailable' }
+    }
+
+    // Play shutter sound + flash optimistically (before download completes)
+    this.audio.playShutter()
+    this.flashWhite().catch(() => {})
+
+    const result = await capturePromise
     console.log('[BoothApp] captureDslrShot() — capture result:', JSON.stringify(result))
 
     this.hideProcessingOverlay()
 
-    return result ?? { success: false, error: 'IPC unavailable' }
+    if (!result) return { success: false, error: 'Capture returned no result' }
+
+    return result
   }
 
   private processingOverlay: HTMLDivElement | null = null

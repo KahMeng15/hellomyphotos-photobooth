@@ -4,7 +4,10 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
   // ------------------------------------------------------------------
   // Capture (DSLR or webcam blob path — same endpoint for both modes)
   // ------------------------------------------------------------------
-  capture: () => ipcRenderer.invoke('capture-photo'),
+  capture: (options?: { liveviewStopped?: boolean }) => ipcRenderer.invoke('capture-photo', options),
+
+  /** Prep the camera during the last second of countdown (stop liveview, begin AF). */
+  prepDslrCapture: () => ipcRenderer.invoke('prep-dslr-capture'),
 
   // ------------------------------------------------------------------
   // DSLR liveview controls
@@ -71,6 +74,9 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
   }) => ipcRenderer.invoke('save-settings', settings),
 
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),
+
+  /** macOS: kill PTPCamera daemon that steals the USB interface. */
+  killPtpDaemon: () => ipcRenderer.invoke('kill-ptp-daemon'),
 
   // ------------------------------------------------------------------
   // Push listeners (main → renderer)

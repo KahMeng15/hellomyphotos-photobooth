@@ -15,13 +15,17 @@ export class CountdownUI {
     this.overlay.appendChild(this.countdownEl)
   }
 
-  async play(seconds: number, audioCtx: AudioContext): Promise<void> {
+  async play(seconds: number, audioCtx: AudioContext, onLastTick?: () => void): Promise<void> {
     for (let i = seconds; i > 0; i--) {
       this.countdownEl.textContent = String(i)
       this.countdownEl.style.opacity = '1'
       this.countdownEl.style.transform = 'scale(1.2)'
 
       this.playBeep(audioCtx, i === 1 ? 880 : 660)
+
+      if (i === 1 && onLastTick) {
+        onLastTick()
+      }
 
       await this.delay(500)
       this.countdownEl.style.transform = 'scale(1)'

@@ -80,19 +80,25 @@ function tempDir(): string {
  *
  * Safe to call on non-macOS — it no-ops on Windows/Linux.
  */
-function killPtpDaemon(): Promise<void> {
+export function killPtpDaemon(): Promise<void> {
   if (process.platform !== 'darwin') return Promise.resolve()
 
   return new Promise((resolve) => {
     // Use a shell script that:
     // 1. Boots out the launchd agent so it can't respawn
-    // 2. Force-kills any still-running PTPCamera processes
-    // 3. Waits 1.5s for the OS to release the USB interface
+    // 2. Disables the service so launchd won't re-load it on USB reconnect
+    // 3. Force-kills any still-running PTPCamera processes
+    // 4. Waits 1.5s for the OS to release the USB interface
+    const UID = `gui/$(id -u)`
     const script = [
-      // Stop & unload all known PTP/Image Capture agents for the current user
-      `launchctl bootout gui/$(id -u) /System/Library/LaunchAgents/com.apple.ptpcamerad.plist 2>/dev/null`,
-      `launchctl bootout gui/$(id -u) /System/Library/LaunchAgents/com.apple.imagecaptured.plist 2>/dev/null`,
-      `launchctl bootout gui/$(id -u) /System/Library/LaunchAgents/com.apple.photolibraryd.plist 2>/dev/null`,
+      // Disable so launchd won't re-load when the USB device re-appears
+      `launchctl disable ${UID}/com.apple.ptpcamerad 2>/dev/null`,
+      `launchctl disable ${UID}/com.apple.imagecaptured 2>/dev/null`,
+      `launchctl disable ${UID}/com.apple.PTPCamera 2>/dev/null`,
+      // Stop & unload
+      `launchctl bootout ${UID} /System/Library/LaunchAgents/com.apple.ptpcamerad.plist 2>/dev/null`,
+      `launchctl bootout ${UID} /System/Library/LaunchAgents/com.apple.imagecaptured.plist 2>/dev/null`,
+      `launchctl bootout ${UID} /System/Library/LaunchAgents/com.apple.photolibraryd.plist 2>/dev/null`,
       // Hard-kill any process still holding the camera
       `pkill -9 -f PTPCamera 2>/dev/null`,
       `pkill -9 -f imagecaptured 2>/dev/null`,
@@ -108,13 +114,11 @@ function killPtpDaemon(): Promise<void> {
     proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
 
     proc.on('close', () => {
-      log.ok('[macOS] PTPCamera / Image Capture daemons evicted via launchctl + pkill')
+      log.ok('[macOS] PTPCamera / Image Capture daemons evicted + disabled via launchctl')
       if (stderr.trim()) {
         log.warn('[macOS] killPtpDaemon stderr (expected for non-running services):', stderr.trim())
       }
-      
-      // Reset the USB port to clear any bad state left by PTPCamera
-      // killPtpDaemon doesn't have the port context, but resetting all is usually fine
+
       const resetProc = spawn('gphoto2', ['--reset'])
       resetProc.on('close', () => {
         log.ok('[macOS] USB port reset via gphoto2 --reset')
@@ -123,11 +127,26 @@ function killPtpDaemon(): Promise<void> {
       resetProc.on('error', () => resolve())
     })
     proc.on('error', () => {
-      // bash not found — shouldn't happen on macOS but resolve anyway
       log.warn('[macOS] killPtpDaemon: bash spawn error — skipping')
       resolve()
     })
   })
+}
+
+/** Re-enable macOS daemons that killPtpDaemon disabled (call on app quit). */
+export function enablePtpDaemon(): void {
+  if (process.platform !== 'darwin') return
+  const UID = `gui/$(id -u)`
+  const script = [
+    `launchctl enable ${UID}/com.apple.ptpcamerad 2>/dev/null`,
+    `launchctl enable ${UID}/com.apple.imagecaptured 2>/dev/null`,
+    `launchctl enable ${UID}/com.apple.PTPCamera 2>/dev/null`,
+    `launchctl bootstrap ${UID} /System/Library/LaunchAgents/com.apple.ptpcamerad.plist 2>/dev/null`,
+    `launchctl bootstrap ${UID} /System/Library/LaunchAgents/com.apple.imagecaptured.plist 2>/dev/null`,
+    `exit 0`,
+  ].join('; ')
+  spawn('bash', ['-c', script])
+  log.info('[macOS] PTPCamera / Image Capture daemons re-enabled')
 }
 
 
@@ -323,7 +342,7 @@ class Gphoto2LiveviewStream {
       log.warn('[gphoto2 stream] start() called but already active')
       return Promise.resolve(true)
     }
-    log.info('[gphoto2 stream] Starting — PTPCamera racing mode enabled')
+    log.info('[gphoto2 stream] Starting MJPEG stream mode')
     this.active = true
     this.frameCount = 0
     this.missCount = 0
@@ -331,149 +350,82 @@ class Gphoto2LiveviewStream {
 
     return new Promise<boolean>((resolve) => {
       let resolved = false
+      let buffer = Buffer.alloc(0)
+      
+      const args = ['--capture-movie', '--stdout']
+      if (this.port) args.push(`--port=${this.port}`)
 
-      const origOnFrame = this.onFrame
-      const onFirstFrame = (jpeg: Buffer) => {
-        if (!resolved) {
-          resolved = true
-          clearTimeout(timeout)
-          log.ok(`[gphoto2 stream] ✅ First frame confirmed after ${this.ptpKillCount} PTP kill(s) — liveview working`)
-          resolve(true)
-        }
-        origOnFrame(jpeg)
-      }
-
-      // Replace internal callback so racing loop calls onFirstFrame
-      this.onFrame = onFirstFrame
-      // origOnFrame is already captured in onFirstFrame closure via this.onFrame;
-      // restore it after first frame is confirmed
-      const origStop = this.stop.bind(this)
-      this.stop = () => {
-        if (!resolved) {
-          resolved = true
-          clearTimeout(timeout)
-          resolve(false)
-        }
-        origStop()
-      }
+      this.currentProc = spawn('gphoto2', args)
 
       const timeout = setTimeout(() => {
         if (!resolved) {
           resolved = true
-          log.error(
-            `[gphoto2 stream] No frame in ${firstFrameTimeoutMs}ms after ${this.ptpKillCount} PTP kill attempt(s). ` +
-            'Try unplugging and re-plugging the USB cable.'
-          )
+          log.error(`[gphoto2 stream] No MJPEG frame in ${firstFrameTimeoutMs}ms.`)
           resolve(false)
           this.stop()
         }
       }, firstFrameTimeoutMs)
 
-      // Kick off the frame loop — it will self-manage PTPCamera killing
-      this.scheduleNextFrame()
-      log.ok(`[gphoto2 stream] Racing loop started — timeout=${firstFrameTimeoutMs}ms`)
-    })
-  }
-
-  private scheduleNextFrame(delayMs = 67): void {
-    if (!this.active) return
-    this.frameTimer = setTimeout(() => this.captureOneFrame(), delayMs)
-  }
-
-  private captureOneFrame(): void {
-    if (!this.active) return
-    const frameFile = path.join(tempDir(), `lv_${Date.now()}.jpg`)
-    const args = ['--capture-preview', `--filename=${frameFile}`, '--force-overwrite']
-    if (this.port) args.push(`--port=${this.port}`)
-
-    if (this.frameCount === 0 && this.missCount === 0) {
-      log.info(`[gphoto2 stream] First attempt: gphoto2 ${args.join(' ')}`)
-    }
-
-    const proc = spawn('gphoto2', args)
-    this.currentProc = proc
-    let procStderr = ''
-    proc.stderr?.on('data', (d: Buffer) => { procStderr += d.toString() })
-
-    let done = false
-    const finish = () => {
-      if (done) return
-      done = true
-      if (this.currentProc === proc) this.currentProc = null
-
-      const parsedPath = path.parse(frameFile)
-      const thumbFile = path.join(parsedPath.dir, `thumb_${parsedPath.base}`)
-      const actualFile = fs.existsSync(frameFile) ? frameFile : (fs.existsSync(thumbFile) ? thumbFile : null)
-
-      if (actualFile) {
-        // ✅ Got a frame
-        try {
-          const buf = fs.readFileSync(actualFile)
-          fs.unlinkSync(actualFile)
-          if (this.active) {
+      this.currentProc.stdout.on('data', (chunk: Buffer) => {
+        buffer = Buffer.concat([buffer, chunk])
+        
+        // Find JPEG start (FF D8) and end (FF D9)
+        let startIdx = buffer.indexOf(Buffer.from([0xff, 0xd8]))
+        while (startIdx !== -1) {
+          const endIdx = buffer.indexOf(Buffer.from([0xff, 0xd9]), startIdx + 2)
+          if (endIdx !== -1) {
+            // We have a full frame!
+            const frame = buffer.slice(startIdx, endIdx + 2)
+            buffer = buffer.slice(endIdx + 2)
+            
             this.frameCount++
             if (this.frameCount % 150 === 0) {
-              log.frame(`[gphoto2 stream] ${this.frameCount} frames delivered`)
+              log.frame(`[gphoto2 stream] ${this.frameCount} frames delivered via MJPEG`)
             }
-            this.onFrame(buf)
+            this.onFrame(frame)
+            
+            if (!resolved) {
+               resolved = true
+               clearTimeout(timeout)
+               log.ok(`[gphoto2 stream] ✅ First MJPEG frame confirmed — liveview working`)
+               resolve(true)
+            }
+            
+            // Look for next frame
+            startIdx = buffer.indexOf(Buffer.from([0xff, 0xd8]))
+          } else {
+            break // Wait for more data to get the end of this frame
           }
-        } catch (readErr: any) {
-          this.missCount++
-          log.warn(`[gphoto2 stream] Frame read error: ${readErr.message}`)
         }
-        // Schedule next frame at normal cadence
-        this.scheduleNextFrame(67)
-      } else {
-        // ❌ No frame — check if it's a PTPCamera USB conflict
-        // PTPCamera can cause either "Could not claim" or "Error (-1" (corrupted USB state)
-        const isPtpConflict = procStderr.includes('Could not claim') ||
-          procStderr.includes('Error (-53') ||
-          (procStderr.includes('Error (-1') && !procStderr.includes('Error (-110'))
-
-        if (isPtpConflict && this.frameCount === 0) {
-          // Kill PTPCamera immediately and retry right away (no delay)
-          // — we want gphoto2 to claim USB before launchd can respawn PTPCamera
-          this.ptpKillCount++
-          log.warn(
-            `[gphoto2 stream] USB claimed by PTPCamera (kill #${this.ptpKillCount}) — ` +
-            'pkilling and retrying immediately...'
-          )
+      })
+      
+      let procStderr = ''
+      this.currentProc.stderr?.on('data', (d: Buffer) => {
+        procStderr += d.toString()
+        if (procStderr.includes('Could not claim') && !resolved) {
+          log.warn(`[gphoto2 stream] USB claimed by PTPCamera (kill #${++this.ptpKillCount}) — pkilling and retrying...`)
           this.killPtpNow(() => {
-            // Retry immediately — race launchd's respawn
-            this.captureOneFrame()
+            // Re-spawn the movie capture
+            this.currentProc.kill()
+            this.start(firstFrameTimeoutMs)
           })
-        } else {
-          this.missCount++
-          if (this.missCount <= 3 || this.missCount % 30 === 0) {
-            log.warn(
-              `[gphoto2 stream] Frame miss #${this.missCount}` +
-              (procStderr ? ` — stderr: ${procStderr.trim().slice(0, 120)}` : '')
-            )
-          }
-          this.scheduleNextFrame(67)
         }
-      }
-    }
+      })
 
-    proc.on('close', (code) => {
-      if (this.frameCount === 0 && code !== 0 && !procStderr.includes('Could not claim')) {
-        log.error(`[gphoto2 stream] gphoto2 exited code=${code}. stderr: ${procStderr.trim().slice(0, 200)}`)
-      }
-      finish()
+      this.currentProc.on('close', (code: number) => {
+        if (this.frameCount === 0 && code !== 0 && !procStderr.includes('Could not claim')) {
+          log.error(`[gphoto2 stream] MJPEG stream exited code=${code}. stderr: ${procStderr.trim().slice(0, 200)}`)
+        }
+        if (!resolved) {
+          resolved = true
+          clearTimeout(timeout)
+          resolve(false)
+        }
+        if (this.active) {
+          this.active = false
+        }
+      })
     })
-    proc.on('error', (err) => {
-      log.error(`[gphoto2 stream] gphoto2 spawn error: ${err.message}`)
-      log.error('[gphoto2 stream] Is gphoto2 installed? Run: brew install gphoto2')
-      finish()
-    })
-
-    // Safety net: abort individual frame attempt after 2.5 s
-    setTimeout(() => {
-      if (!done) {
-        proc.kill()
-        finish()
-      }
-    }, 2500)
   }
 
   /**
@@ -892,6 +844,43 @@ export class DslrManager {
   }
 
   // -------------------------------------------------------------------------
+  // Prep capture (called during last second of countdown)
+  // -------------------------------------------------------------------------
+
+  private _prepDone = false
+
+  /**
+   * Begin capture preparation while the countdown is still running.
+   *
+   * Steps:
+   *  1. Stop liveview (drops mirror, releases PTP session)
+   *  2. Wait 300ms for PTP session release
+   *  3. Best-effort autofocus trigger (gphoto2 only)
+   *
+   * When capture() is subsequently called with liveviewStopped:true,
+   * it will skip the liveview-stop + PTP-wait steps and just fire the shutter.
+   */
+  async prepCapture(): Promise<void> {
+    log.info(`[DslrManager] prepCapture() called (connected=${this.connected}, liveviewActive=${this.liveviewActive})`)
+    if (this.liveviewActive) {
+      this._prepDone = true
+      await this.stopLiveview()
+      log.info('[DslrManager] prepCapture() — waiting 300ms for PTP session to release...')
+      await new Promise((r) => setTimeout(r, 300))
+      // Best-effort autofocus trigger while mirror is down (phase-detect AF is fast)
+      if (!this.isWindows) {
+        try {
+          const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+          await this.execGphoto2(['--set-config', '/main/actions/autofocusdrive=1', ...portArgs], 5000)
+        } catch (e) {
+          // AF trigger is best-effort; capture will still work without it
+        }
+      }
+    }
+    log.info('[DslrManager] prepCapture() complete')
+  }
+
+  // -------------------------------------------------------------------------
   // Capture
   // -------------------------------------------------------------------------
 
@@ -899,12 +888,12 @@ export class DslrManager {
    * Fire the camera shutter and download the JPEG.
    *
    * Steps:
-   *  1. Stop liveview (required to release the PTP session)
+   *  1. Stop liveview (required to release the PTP session) — skipped if liveviewStopped=true
    *  2. Run gphoto2 --capture-image-and-download --keep (saves to SD + downloads)
    *  3. Filter to JPEG files only (skip RAW)
    *  4. Resume liveview
    */
-  async capture(options?: { targetPath?: string; iso?: string; shutterSpeed?: string; aperture?: string }): Promise<CaptureResult> {
+  async capture(options?: { targetPath?: string; iso?: string; shutterSpeed?: string; aperture?: string; liveviewStopped?: boolean }): Promise<CaptureResult> {
     log.info(`[DslrManager] capture() called (connected=${this.connected}, capturing=${this.capturing}, liveviewActive=${this.liveviewActive})`)
     if (!this.connected) {
       log.error('[DslrManager] capture() aborted — camera not connected')
@@ -916,10 +905,14 @@ export class DslrManager {
     }
 
     const wasLiveviewActive = this.liveviewActive
-    if (wasLiveviewActive) {
+    const wasPrepped = this._prepDone
+    this._prepDone = false
+
+    // If prepCapture() already ran during the countdown, camera liveview was
+    // already stopped and PTP session released — skip the stop+wait.
+    if (wasLiveviewActive && !wasPrepped) {
       log.info('[DslrManager] Stopping liveview before capture...')
       await this.stopLiveview()
-      // Small pause to let the PTP session close cleanly
       log.info('[DslrManager] Waiting 300 ms for PTP session to release...')
       await new Promise((r) => setTimeout(r, 300))
     }
@@ -942,10 +935,11 @@ export class DslrManager {
       log.error(`[DslrManager] Capture failed: ${result.error}`)
     }
 
-    // Resume liveview after capture
-    if (wasLiveviewActive && this.mainWindow && !this.mainWindow.isDestroyed()) {
+    // Resume liveview after capture. If prepCapture() ran, liveview was
+    // active before prep even though this.liveviewActive is now false.
+    const shouldResume = wasLiveviewActive || wasPrepped
+    if (shouldResume && this.mainWindow && !this.mainWindow.isDestroyed()) {
       log.info('[DslrManager] Resuming liveview after capture...')
-      // Re-attach the frame push callback
       this.startLiveview((jpeg) => {
         if (this.mainWindow && !this.mainWindow.isDestroyed()) {
           this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
@@ -961,10 +955,10 @@ export class DslrManager {
     // separate viewfinder=0 command after the capture process has fully exited
     // forces the mirror down and disables the sensor live feed, saving battery.
     //
-    // We only do this when liveview is NOT being restarted (wasLiveviewActive
+    // We only do this when liveview is NOT being restarted (shouldResume
     // was false), which is the normal case when called from captureDslrShot()
     // (since dslrPreview.stop() already ran before the capture IPC).
-    if (!wasLiveviewActive && result.success && this.cameraModel.toLowerCase().includes('canon') && !this.isWindows) {
+    if (!shouldResume && result.success && this.cameraModel.toLowerCase().includes('canon') && !this.isWindows) {
       log.info('[DslrManager] Post-capture: ensuring Canon mirror is down (viewfinder=0)...')
       const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
       for (let i = 0; i < 3; i++) {
