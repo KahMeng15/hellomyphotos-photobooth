@@ -130,23 +130,6 @@ export function killPtpDaemon(): Promise<void> {
   })
 }
 
-/** Re-enable macOS daemons that killPtpDaemon disabled (call on app quit). */
-export function enablePtpDaemon(): void {
-  if (process.platform !== 'darwin') return
-  const UID = `gui/$(id -u)`
-  const script = [
-    `launchctl enable ${UID}/com.apple.ptpcamerad 2>/dev/null`,
-    `launchctl enable ${UID}/com.apple.imagecaptured 2>/dev/null`,
-    `launchctl enable ${UID}/com.apple.PTPCamera 2>/dev/null`,
-    `launchctl bootstrap ${UID} /System/Library/LaunchAgents/com.apple.ptpcamerad.plist 2>/dev/null`,
-    `launchctl bootstrap ${UID} /System/Library/LaunchAgents/com.apple.imagecaptured.plist 2>/dev/null`,
-    `exit 0`,
-  ].join('; ')
-  spawn('bash', ['-c', script])
-  log.info('[macOS] PTPCamera / Image Capture daemons re-enabled')
-}
-
-
 /**
  * Download a URL to a buffer using Node's built-in `http` module.
  * Used for DigiCamControl live.jpg polling on Windows.
@@ -335,11 +318,14 @@ class Gphoto2LiveviewStream {
    *
    * Two-phase approach:
    *   1. Try --capture-movie --stdout (fast MJPEG streaming — Canon/Nikon)
-   *   2. If no frame after 5 s, fall back to polling --capture-preview (Sony, etc.)
+   *   2. If no frame, fall back to polling --capture-preview (Sony, etc.)
    *
-   * @param firstFrameTimeoutMs Total timeout for the first frame.
+   * @param firstFrameTimeoutMs  Budget for Phase 1 (MJPEG). If Phase 1 fails,
+   *   Phase 2 (polling) always gets its own dedicated pollingBudgetMs window.
+   * @param pollingBudgetMs      Dedicated budget for Phase 2 --capture-preview
+   *   polling. This is independent of Phase 1 so Sony cameras are never starved.
    */
-  async start(firstFrameTimeoutMs = 20000): Promise<boolean> {
+  async start(firstFrameTimeoutMs = 15000, pollingBudgetMs = 15000): Promise<boolean> {
     if (this.active) {
       log.warn('[gphoto2 stream] start() called but already active')
       return true
@@ -351,17 +337,22 @@ class Gphoto2LiveviewStream {
     this.ptpKillCount = 0
     this.usingPolling = false
 
-    const deadline = Date.now() + firstFrameTimeoutMs
-
-    // Phase 1: --capture-movie --stdout (wait up to 5 s for first frame)
-    const mjpegOk = await this.tryMjpegStream(deadline)
+    // Phase 1: --capture-movie --stdout.
+    // Use a private deadline so Phase 1 can never consume the polling budget.
+    const mjpegDeadline = Date.now() + firstFrameTimeoutMs
+    const mjpegOk = await this.tryMjpegStream(mjpegDeadline)
     if (mjpegOk) return true
     if (!this.active) return false
 
-    // Phase 2: Fall back to polling --capture-preview at ~3 fps
+    // Phase 2: Fall back to polling --capture-preview at ~3 fps.
+    // Give Phase 2 its OWN fresh deadline regardless of how long Phase 1 ran.
+    // This ensures Sony cameras (which don't support --capture-movie) always
+    // get a real polling window even if Phase 1 burned the entire firstFrameTimeoutMs
+    // in PTPCamera kill-retry loops.
     log.info('[gphoto2 stream] MJPEG produced no frames — falling back to --capture-preview polling')
     this.usingPolling = true
-    return this.tryPreviewPolling(deadline)
+    const pollingDeadline = Date.now() + pollingBudgetMs
+    return this.tryPreviewPolling(pollingDeadline)
   }
 
   /**
@@ -481,8 +472,7 @@ class Gphoto2LiveviewStream {
       let isPollingActive = true
 
       const scheduleNextPoll = (delayMs: number) => {
-        if (!this.active || resolved) {
-          isPollingActive = false
+        if (!this.active || !isPollingActive) {
           if (!resolved) { resolved = true; resolve(false) }
           return
         }
@@ -490,15 +480,18 @@ class Gphoto2LiveviewStream {
       }
 
       const doPoll = async () => {
-        if (!isPollingActive || !this.active || resolved) {
+        if (!isPollingActive || !this.active) {
           if (!resolved) { resolved = true; resolve(false) }
           return
         }
 
-        if (Date.now() >= deadline) {
+        // Only enforce the deadline until the first frame is confirmed.
+        // After that, polling runs indefinitely until stop() is called.
+        if (!resolved && Date.now() >= deadline) {
           log.error('[gphoto2 stream] Preview polling timed out — no frames received')
           isPollingActive = false
-          if (!resolved) { resolved = true; resolve(false) }
+          resolved = true
+          resolve(false)
           return
         }
 
@@ -523,8 +516,7 @@ class Gphoto2LiveviewStream {
               resolved = true
               log.ok(`[gphoto2 stream] First preview frame confirmed — liveview working (polling mode)`)
               resolve(true)
-              isPollingActive = false
-              return
+              // Keep isPollingActive=true so the loop continues delivering frames
             }
           } else if (result.stderr.includes('Could not claim')) {
             this.missCount++
@@ -628,11 +620,17 @@ class Gphoto2LiveviewStream {
       })
       det.on('error', () => setTimeout(onDone, 500))
     }
+    const UID = `gui/$(id -u)`
     const proc = spawn('bash', [
       '-c',
-      'pkill -9 -f PTPCamera 2>/dev/null; ' +
-      'pkill -9 -f ptpcamerad 2>/dev/null; ' +
-      'pkill -9 -f imagecaptured 2>/dev/null; ' +
+      // Disable + bootout PTPCamera from launchd so it can't respawn
+      `launchctl disable ${UID}/com.apple.ptpcamerad 2>/dev/null; ` +
+      `launchctl disable ${UID}/com.apple.imagecaptured 2>/dev/null; ` +
+      `launchctl bootout ${UID} /System/Library/LaunchAgents/com.apple.ptpcamerad.plist 2>/dev/null; ` +
+      `launchctl bootout ${UID} /System/Library/LaunchAgents/com.apple.imagecaptured.plist 2>/dev/null; ` +
+      `pkill -9 -f PTPCamera 2>/dev/null; ` +
+      `pkill -9 -f ptpcamerad 2>/dev/null; ` +
+      `pkill -9 -f imagecaptured 2>/dev/null; ` +
       // --reset intentionally omitted — breaks Sony PTP sessions
       'exit 0',
     ])
@@ -730,6 +728,21 @@ export class DslrManager {
   // macOS backend
   private gphoto2Stream: Gphoto2LiveviewStream | null = null
 
+  /**
+   * Registry of every gphoto2 child process spawned by this manager.
+   * Used by shutdown() to SIGKILL all of them on app exit so they don't
+   * outlive the Electron process and keep holding the USB interface.
+   */
+  private _childProcs: Set<import('child_process').ChildProcess> = new Set()
+
+  /** Register a child, auto-removing it when it exits. */
+  private _trackChild(proc: import('child_process').ChildProcess): import('child_process').ChildProcess {
+    this._childProcs.add(proc)
+    proc.once('close', () => this._childProcs.delete(proc))
+    proc.once('error', () => this._childProcs.delete(proc))
+    return proc
+  }
+
   // Operation Mutex to prevent USB collisions between exposure, liveview, and capture
   private _mutex = Promise.resolve()
 
@@ -789,7 +802,11 @@ export class DslrManager {
       }
       const res = await this.detectGphoto2()
       if (res.connected && !skipConfigFetch) {
-        this.fetchConfigChoices()
+        // Enqueue fetchConfigChoices through the mutex so it cannot hold
+        // the USB interface concurrently with liveview or capture operations.
+        // Previously this was fire-and-forget which left stale gphoto2 processes
+        // (e.g. "--get-config aperture") holding the USB claim when liveview started.
+        this.enqueue(() => this.fetchConfigChoices()).catch(() => {})
       }
       return res
     })
@@ -1044,12 +1061,14 @@ export class DslrManager {
 
       log.info('[DslrManager] Using gphoto2 backend — PTPCamera racing mode')
       this.gphoto2Stream = new Gphoto2LiveviewStream(onFrame, this.selectedPort)
-      // 20 s timeout: give the racing loop time to exhaust launchd's throttle
-      firstFrameOk = await this.gphoto2Stream.start(20000)
+      // Phase 1 (MJPEG): 15 s to exhaust launchd's PTPCamera throttle for Canon/Nikon.
+      // Phase 2 (polling): 15 s independent budget for Sony --capture-preview fallback.
+      // These two budgets are independent so Sony cameras are never starved by Phase 1.
+      firstFrameOk = await this.gphoto2Stream.start(15000, 15000)
     }
 
     if (!firstFrameOk) {
-      log.error('[DslrManager] Liveview failed after 20 s — no frames received. Check USB cable.')
+      log.error('[DslrManager] Liveview failed — no frames received from MJPEG or preview polling. Check USB cable.')
       this.liveviewActive = false
       this.gphoto2Stream = null
       return false
@@ -1228,7 +1247,7 @@ export class DslrManager {
   /** Run a gphoto2 command and collect stdout/stderr/exit code. */
   private execGphoto2(args: string[], timeoutMs = 15000): Promise<{ code: number | null; stdout: string; stderr: string }> {
     return new Promise((resolve) => {
-      const proc = spawn('gphoto2', args)
+      const proc = this._trackChild(spawn('gphoto2', args))
       let stdout = ''
       let stderr = ''
       proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
@@ -1246,6 +1265,50 @@ export class DslrManager {
         resolve({ code: null, stdout, stderr })
       })
     })
+  }
+
+  /**
+   * Gracefully shut down the DSLR manager.
+   *
+   * Call this from app 'before-quit' and on SIGINT/SIGTERM to ensure all
+   * child gphoto2 processes are killed and the USB interface is released
+   * before the Electron process exits. Without this, spawned gphoto2
+   * subprocesses outlive the app and hold the camera USB claim, causing
+   * "Could not claim the USB device" errors on the next launch.
+   */
+  async shutdown(): Promise<void> {
+    log.info(`[DslrManager] shutdown() — killing ${this._childProcs.size} tracked child(ren) + liveview stream`)
+
+    // Stop the liveview stream (kills MJPEG proc or stops polling timer)
+    if (this.gphoto2Stream) {
+      try { await this.gphoto2Stream.stop() } catch {}
+      this.gphoto2Stream = null
+    }
+    this.liveviewActive = false
+
+    // Stop disconnect polling
+    if (this.disconnectPollTimer) {
+      clearTimeout(this.disconnectPollTimer)
+      this.disconnectPollTimer = null
+    }
+
+    // SIGKILL every tracked child (fetchConfigChoices, applyExposure, capture, etc.)
+    for (const proc of this._childProcs) {
+      try { proc.kill('SIGKILL') } catch {}
+    }
+    this._childProcs.clear()
+
+    // Final sweep: any gphoto2 we may have missed (e.g. from Gphoto2LiveviewStream internals)
+    if (process.platform !== 'win32') {
+      try {
+        require('child_process').execSync(
+          'pkill -9 -f gphoto2 2>/dev/null; exit 0',
+          { stdio: 'ignore' }
+        )
+      } catch {}
+    }
+
+    log.ok('[DslrManager] shutdown() complete — USB interface released')
   }
 
   private captureGphoto2(options?: { targetPath?: string; iso?: string; shutterSpeed?: string; aperture?: string }): Promise<CaptureResult> {

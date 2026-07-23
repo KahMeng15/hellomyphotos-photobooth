@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { initIpcHandlers } from './ipc'
 import { OfflineQueue } from './offlineQueue'
-import { DslrManager, enablePtpDaemon } from './gphoto2'
+import { DslrManager } from './gphoto2'
 
 let mainWindow: BrowserWindow | null = null
 let dslrManager: DslrManager
@@ -132,10 +132,28 @@ function cleanupAndQuit() {
   intervals.forEach(clearInterval)
   intervals = []
   offlineQueue?.close()
-  enablePtpDaemon()
+  // Kill all tracked gphoto2 child processes so the USB interface is released
+  // before the process exits. Without this, Ctrl+C or window-close leaves
+  // orphaned gphoto2 subprocesses holding the camera, causing "Could not claim
+  // the USB device" errors on the next launch.
+  dslrManager?.shutdown().catch(() => {})
 }
 
 app.on('before-quit', cleanupAndQuit)
+
+// Handle Ctrl+C (SIGINT from terminal) and kill signals from the OS.
+// Electron doesn't forward these to 'before-quit' automatically when the
+// process is launched from a terminal with electron-forge start.
+process.on('SIGINT', () => {
+  console.log('[App] SIGINT received — shutting down')
+  cleanupAndQuit()
+  setTimeout(() => process.exit(0), 1500)
+})
+process.on('SIGTERM', () => {
+  console.log('[App] SIGTERM received — shutting down')
+  cleanupAndQuit()
+  setTimeout(() => process.exit(0), 1500)
+})
 
 app.on('window-all-closed', () => {
   cleanupAndQuit()
