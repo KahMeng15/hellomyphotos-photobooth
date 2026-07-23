@@ -57,6 +57,7 @@ export class BoothApp {
     dslrIso?: string
     dslrShutterSpeed?: string
     dslrAperture?: string
+    dslrFocusMode?: string
   } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
   private serverOnline = true
   private selectedFrame: string | null = null
@@ -97,7 +98,7 @@ export class BoothApp {
     // ------------------------------------------------------------------
     this.previewBox = document.createElement('div')
     Object.assign(this.previewBox.style, {
-      maxWidth: '100%', maxHeight: '100%', width: '100%',
+      maxWidth: '100%', maxHeight: '100%', width: '100%', height: '100%',
       position: 'relative', overflow: 'hidden',
     })
     this.previewBox.appendChild(this.webcamPreview)
@@ -427,6 +428,76 @@ export class BoothApp {
     this.dslrSettingsModal.appendChild(createSliderRow('ISO', isoChoices, 'dslrIso'))
     this.dslrSettingsModal.appendChild(createSliderRow('Aperture', apertureChoices, 'dslrAperture'))
 
+    // --- Focus Mode ---
+    const focusSection = document.createElement('div')
+    focusSection.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
+
+    const focusHeader = document.createElement('div')
+    focusHeader.textContent = 'Focus'
+    focusHeader.style.cssText = 'font-weight: 600; font-size: 0.9rem; color: #aaa;'
+    focusSection.appendChild(focusHeader)
+
+    const focusToggleRow = document.createElement('div')
+    focusToggleRow.style.cssText = 'display: flex; border: 1px solid #333; border-radius: 6px; overflow: hidden;'
+
+    const currentFocusMode = this.settingsData.dslrFocusMode || 'auto'
+    const afBtn = document.createElement('button')
+    afBtn.textContent = 'AF'
+    afBtn.style.cssText = `flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; ${currentFocusMode === 'auto' ? 'background: #fff; color: #000;' : 'background: #222; color: #888;'}`
+    const mfBtn = document.createElement('button')
+    mfBtn.textContent = 'MF'
+    mfBtn.style.cssText = `flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; ${currentFocusMode === 'manual' ? 'background: #fff; color: #000;' : 'background: #222; color: #888;'}`
+
+    const actionRow = document.createElement('div')
+    actionRow.style.cssText = 'display: flex; gap: 0.5rem;'
+
+    const applyFocusModeStyle = (mode: string) => {
+      afBtn.style.cssText = `flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; ${mode === 'auto' ? 'background: #fff; color: #000;' : 'background: #222; color: #888;'}`
+      mfBtn.style.cssText = `flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; ${mode === 'manual' ? 'background: #fff; color: #000;' : 'background: #222; color: #888;'}`
+      actionRow.innerHTML = ''
+      if (mode === 'auto') {
+        const afTrigger = document.createElement('button')
+        afTrigger.textContent = 'Trigger AF'
+        afTrigger.style.cssText = 'flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; background: #2196F3; color: #fff;'
+        afTrigger.addEventListener('click', () => {
+          window.hellomyphoto?.dslrTriggerAutofocus()
+        })
+        actionRow.appendChild(afTrigger)
+      } else {
+        const nearBtn = document.createElement('button')
+        nearBtn.textContent = 'Near'
+        nearBtn.style.cssText = 'flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: 1px solid #555; border-radius: 6px; cursor: pointer; background: #333; color: #fff;'
+        nearBtn.addEventListener('mousedown', () => window.hellomyphoto?.dslrTriggerFocusNear())
+        const farBtn = document.createElement('button')
+        farBtn.textContent = 'Far'
+        farBtn.style.cssText = 'flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: 1px solid #555; border-radius: 6px; cursor: pointer; background: #333; color: #fff;'
+        farBtn.addEventListener('mousedown', () => window.hellomyphoto?.dslrTriggerFocusFar())
+        actionRow.appendChild(nearBtn)
+        actionRow.appendChild(farBtn)
+      }
+    }
+
+    afBtn.addEventListener('click', () => {
+      this.settingsData.dslrFocusMode = 'auto'
+      applyFocusModeStyle('auto')
+      window.hellomyphoto?.dslrSetFocusMode('auto')
+      window.hellomyphoto?.saveSettings(this.settingsData)
+    })
+    mfBtn.addEventListener('click', () => {
+      this.settingsData.dslrFocusMode = 'manual'
+      applyFocusModeStyle('manual')
+      window.hellomyphoto?.dslrSetFocusMode('manual')
+      window.hellomyphoto?.saveSettings(this.settingsData)
+    })
+
+    focusToggleRow.appendChild(afBtn)
+    focusToggleRow.appendChild(mfBtn)
+    focusSection.appendChild(focusToggleRow)
+    applyFocusModeStyle(currentFocusMode)
+    focusSection.appendChild(actionRow)
+
+    this.dslrSettingsModal.appendChild(focusSection)
+
     // Update modal when global settings are updated remotely
     window.hellomyphoto?.getSettings().then((s) => {
       if (s) {
@@ -508,6 +579,9 @@ export class BoothApp {
     } else if (cmd.type === 'settings-update') {
       this.settingsData = { ...this.settingsData, ...cmd.settings }
       window.hellomyphoto?.saveSettings(this.settingsData)
+      if (cmd.settings?.dslrFocusMode) {
+        window.hellomyphoto?.dslrSetFocusMode(cmd.settings.dslrFocusMode)
+      }
     }
   }
 

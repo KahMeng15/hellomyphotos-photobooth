@@ -51,6 +51,7 @@ interface BoothSettings {
   dslrIso?: string
   dslrShutterSpeed?: string
   dslrAperture?: string
+  dslrFocusMode?: string
 }
 
 interface MediaDeviceInfo {
@@ -63,7 +64,7 @@ export class Settings {
   private visible = false
   private dirty = false
   private onChange: (settings: BoothSettings) => void
-  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto' }
+  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto' }
   private serverInput!: HTMLInputElement
   private cameraSelect!: HTMLSelectElement
   private audioSelect!: HTMLSelectElement
@@ -200,6 +201,47 @@ export class Settings {
     for (const f of dslrFields) dslrBox.appendChild(f)
     dslrFields[dslrFields.length - 1].style.borderBottom = 'none'
     panel.appendChild(dslrBox)
+
+    // --- Focus Mode ---
+    const focusTitle = document.createElement('h3')
+    focusTitle.textContent = 'Focus'
+    focusTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 1rem 0 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;'
+    panel.appendChild(focusTitle)
+
+    const focusBox = document.createElement('div')
+    focusBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden; margin-bottom: 1rem;'
+
+    const focusRow = document.createElement('div')
+    focusRow.style.cssText = 'display: flex; padding: 0.75rem 1rem; background: #191919; align-items: center; justify-content: space-between;'
+
+    const focusLabel = document.createElement('label')
+    focusLabel.textContent = 'Focus Mode'
+    focusLabel.style.cssText = 'font-size: 0.875rem; color: #ccc; font-weight: 500;'
+    focusRow.appendChild(focusLabel)
+
+    const focusToggle = document.createElement('div')
+    focusToggle.style.cssText = 'display: flex; border: 1px solid #333; border-radius: 6px; overflow: hidden;'
+
+    const afBtn = document.createElement('button')
+    afBtn.textContent = 'Auto (AF)'
+    const mfBtn = document.createElement('button')
+    mfBtn.textContent = 'Manual (MF)'
+
+    const focusMode = this.settings.dslrFocusMode || 'auto'
+    const applyFocusStyle = (mode: string) => {
+      afBtn.style.cssText = `padding: 0.375rem 0.75rem; font-size: 0.75rem; font-weight: 600; border: none; cursor: pointer; ${mode === 'auto' ? 'background: #fff; color: #000;' : 'background: #111; color: #888;'}`
+      mfBtn.style.cssText = `padding: 0.375rem 0.75rem; font-size: 0.75rem; font-weight: 600; border: none; cursor: pointer; ${mode === 'manual' ? 'background: #fff; color: #000;' : 'background: #111; color: #888;'}`
+    }
+    applyFocusStyle(focusMode)
+
+    afBtn.addEventListener('click', () => { this.settings.dslrFocusMode = 'auto'; applyFocusStyle('auto'); this.markDirty() })
+    mfBtn.addEventListener('click', () => { this.settings.dslrFocusMode = 'manual'; applyFocusStyle('manual'); this.markDirty() })
+
+    focusToggle.appendChild(afBtn)
+    focusToggle.appendChild(mfBtn)
+    focusRow.appendChild(focusToggle)
+    focusBox.appendChild(focusRow)
+    panel.appendChild(focusBox)
 
     const btnRow = document.createElement('div')
     btnRow.style.cssText = 'display: flex; gap: 0.5rem; margin-top: 1.5rem;'

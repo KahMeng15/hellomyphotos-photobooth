@@ -37,6 +37,14 @@ declare global {
       getQueueDepth: () => Promise<number>
 
       // ----------------------------------------------------------------
+      // DSLR Focus Controls
+      // ----------------------------------------------------------------
+      dslrSetFocusMode: (mode: 'auto' | 'manual') => Promise<{ success: boolean; error?: string }>
+      dslrTriggerAutofocus: () => Promise<{ success: boolean; error?: string }>
+      dslrTriggerFocusNear: () => Promise<{ success: boolean; error?: string }>
+      dslrTriggerFocusFar: () => Promise<{ success: boolean; error?: string }>
+
+      // ----------------------------------------------------------------
       // Hardware / settings
       // ----------------------------------------------------------------
       getHardwareStatus: () => Promise<{ connected: boolean; model: string; liveviewActive: boolean }>
@@ -50,6 +58,7 @@ declare global {
         audioDeviceId?: string
         otp?: string
         cameraMode?: 'webcam' | 'dslr'
+        dslrFocusMode?: string
       }>
       saveSettings: (settings: {
         photoCount: number
@@ -61,6 +70,7 @@ declare global {
         audioDeviceId?: string
         otp?: string
         cameraMode?: 'webcam' | 'dslr'
+        dslrFocusMode?: string
       }) => Promise<any>
       getServerConfig: () => Promise<{ serverUrl: string }>
       killPtpDaemon: () => Promise<{ success: boolean; error?: string }>

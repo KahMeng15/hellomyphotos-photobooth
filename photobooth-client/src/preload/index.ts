@@ -75,6 +75,22 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
 
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),
 
+  // ------------------------------------------------------------------
+  // DSLR Focus Controls
+  // ------------------------------------------------------------------
+
+  /** Set focus mode: 'auto' (AF) or 'manual' (MF). */
+  dslrSetFocusMode: (mode: 'auto' | 'manual') => ipcRenderer.invoke('dslr-set-focus-mode', mode),
+
+  /** Trigger autofocus drive. */
+  dslrTriggerAutofocus: () => ipcRenderer.invoke('dslr-trigger-autofocus'),
+
+  /** Step focus toward the camera. */
+  dslrTriggerFocusNear: () => ipcRenderer.invoke('dslr-trigger-focus-near'),
+
+  /** Step focus away from the camera. */
+  dslrTriggerFocusFar: () => ipcRenderer.invoke('dslr-trigger-focus-far'),
+
   /** macOS: kill PTPCamera daemon that steals the USB interface. */
   killPtpDaemon: () => ipcRenderer.invoke('kill-ptp-daemon'),
 

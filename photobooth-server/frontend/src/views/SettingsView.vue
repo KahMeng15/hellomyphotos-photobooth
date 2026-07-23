@@ -50,15 +50,22 @@
               <span class="slider-val">{{ settings.dslrIso || 'auto' }}</span>
             </div>
           </div>
-          <div class="field-row">
-            <label>Aperture</label>
-            <div class="slider-wrapper">
-              <input type="range" min="0" :max="apertureChoices.length - 1" :value="apertureChoices.indexOf(settings.dslrAperture) >= 0 ? apertureChoices.indexOf(settings.dslrAperture) : 0" @input="settings.dslrAperture = apertureChoices[parseInt(($event.target as HTMLInputElement).value)]" class="range-input" />
-              <span class="slider-val">{{ settings.dslrAperture || 'auto' }}</span>
+            <div class="field-row">
+              <label>Aperture</label>
+              <div class="slider-wrapper">
+                <input type="range" min="0" :max="apertureChoices.length - 1" :value="apertureChoices.indexOf(settings.dslrAperture) >= 0 ? apertureChoices.indexOf(settings.dslrAperture) : 0" @input="settings.dslrAperture = apertureChoices[parseInt(($event.target as HTMLInputElement).value)]" class="range-input" />
+                <span class="slider-val">{{ settings.dslrAperture || 'auto' }}</span>
+              </div>
+            </div>
+            <div class="field-row">
+              <label>Focus Mode</label>
+              <div class="focus-toggle">
+                <button :class="['focus-btn', settings.dslrFocusMode === 'auto' ? 'focus-active' : '']" @click="settings.dslrFocusMode = 'auto'">AF</button>
+                <button :class="['focus-btn', settings.dslrFocusMode === 'manual' ? 'focus-active' : '']" @click="settings.dslrFocusMode = 'manual'">MF</button>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
       <div class="actions">
         <button @click="saveAndClose" class="btn-primary">Save</button>
@@ -79,8 +86,8 @@ const shutterChoices = ['auto', '1/30', '1/40', '1/50', '1/60', '1/80', '1/100',
 const apertureChoices = ['auto', '2.8', '4', '4.5', '5', '5.6', '6.3', '7.1', '8', '9', '10', '11']
 
 const router = useRouter()
-const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto' })
-const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto' })
+const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto' })
+const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto' })
 const saved = ref(false)
 
 const dirty = computed(() =>
@@ -90,7 +97,8 @@ const dirty = computed(() =>
   settings.value.postCapturePreview !== originalSettings.value.postCapturePreview ||
   settings.value.dslrIso !== originalSettings.value.dslrIso ||
   settings.value.dslrShutterSpeed !== originalSettings.value.dslrShutterSpeed ||
-  settings.value.dslrAperture !== originalSettings.value.dslrAperture
+  settings.value.dslrAperture !== originalSettings.value.dslrAperture ||
+  settings.value.dslrFocusMode !== originalSettings.value.dslrFocusMode
 )
 
 onMounted(async () => {
@@ -334,6 +342,28 @@ function cancelChanges() {
   border-radius: 8px;
   font-size: 0.9375rem;
   cursor: pointer;
+}
+
+.focus-toggle {
+  display: flex;
+  border: 1px solid #333;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.focus-btn {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  background: #111;
+  color: #888;
+}
+
+.focus-btn.focus-active {
+  background: #fff;
+  color: #000;
 }
 
 .saved-msg {

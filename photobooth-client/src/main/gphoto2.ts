@@ -848,6 +848,7 @@ export class DslrManager {
   // -------------------------------------------------------------------------
 
   private _prepDone = false
+  private _returnedFiles: Set<string> = new Set()
 
   /**
    * Begin capture preparation while the countdown is still running.
@@ -862,8 +863,12 @@ export class DslrManager {
    */
   async prepCapture(): Promise<void> {
     log.info(`[DslrManager] prepCapture() called (connected=${this.connected}, liveviewActive=${this.liveviewActive})`)
+    // Always set the flag — the renderer already called dslrPreview.stop() (which
+    // sends stop-dslr-liveview) before invoking this IPC, so camera liveview may
+    // already be off. capture() needs _prepDone=true to know it should resume
+    // liveview after the shot even though liveviewActive is now false.
+    this._prepDone = true
     if (this.liveviewActive) {
-      this._prepDone = true
       await this.stopLiveview()
       log.info('[DslrManager] prepCapture() — waiting 300ms for PTP session to release...')
       await new Promise((r) => setTimeout(r, 300))
@@ -1003,7 +1008,6 @@ export class DslrManager {
 
   private captureGphoto2(options?: { targetPath?: string; iso?: string; shutterSpeed?: string; aperture?: string }): Promise<CaptureResult> {
     return new Promise((resolve) => {
-      // Download to temp dir; gphoto2 appends its own filename when a dir is given.
       const targetPath = options?.targetPath
       const downloadDir = targetPath
         ? path.dirname(targetPath)
@@ -1013,31 +1017,26 @@ export class DslrManager {
         ? path.basename(targetPath)
         : `booth_%Y%m%d_%H%M%S.%C`
 
-      // Forcefully kill PTPCamera just before capture so it doesn't steal the USB lock
+      // Record timestamp before capture so the fallback scan only accepts
+      // files created during THIS capture attempt, not previous ones.
+      const captureStartTime = Date.now()
+
       if (!this.isWindows) {
         try {
           require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null; pkill -9 -f imagecaptured 2>/dev/null')
         } catch (e) {}
       }
-      
-      const doCapture = async () => {
-        // Delays removed to ensure instant shutter:
-        // 1. We no longer run detectGphoto2 before capture (we trust the port)
-        // 2. We no longer apply exposure settings before capture (handled by applyExposure on save)
-        // 3. We no longer run viewfinder=0 before capture (handled by stopLiveview right before capture)
 
+      const doCapture = async () => {
         const args = []
-        
-        // Also set viewfinder=0 in the capture args for safety (redundant if the
-        // separate command above succeeded, but guards against PTP Device Busy if
-        // detectGphoto2 or the autofocus trigger reset the camera state).
+
         if (this.cameraModel.toLowerCase().includes('canon')) {
           args.push('--set-config', '/main/actions/viewfinder=0')
         }
 
         args.push(
           '--capture-image-and-download',
-          '--keep',                            // keep copy on SD card
+          '--keep',
           `--filename=${path.join(downloadDir, filenameTemplate)}`,
           '--force-overwrite',
         )
@@ -1045,7 +1044,7 @@ export class DslrManager {
 
         log.info(`[DslrManager] gphoto2 capture args: ${args.join(' ')}`)
         log.info(`[DslrManager] Download dir: ${downloadDir}`)
-        
+
         const proc = spawn('gphoto2', args)
         let stdout = ''
         let stderr = ''
@@ -1063,16 +1062,16 @@ export class DslrManager {
 
         proc.on('close', (code: number | null) => {
           log.info(`[DslrManager] gphoto2 capture exited code=${code}`)
-          // Find downloaded file — gphoto2 prints "Saving file as <path>"
-          // Prefer JPEG if multiple exist.
+
+          const addReturned = (fp: string) => { this._returnedFiles.add(fp); return fp }
+
           const matches = [...stdout.matchAll(/Saving file as (.+\.(?:jpe?g|png|cr2|cr3|arw|nef|dng))/ig)]
           if (matches.length > 0) {
-            // Find a jpeg match first
             let bestMatch = matches.find((m) => /\.(jpe?g|png)$/i.test(m[1])) || matches[0]
             const filePath = bestMatch[1].trim()
             log.info(`[DslrManager] Found image path from stdout: ${filePath}`)
             if (fs.existsSync(filePath)) {
-              resolve({ success: true, path: filePath })
+              resolve({ success: true, path: addReturned(filePath) })
               return
             }
             log.warn(`[DslrManager] Path from stdout doesn't exist on disk: ${filePath}`)
@@ -1080,22 +1079,20 @@ export class DslrManager {
             log.warn('[DslrManager] Could not find "Saving file as ..." in stdout — falling back to dir scan')
           }
 
-          // Fallback: scan download dir for the newest image.
-          // Only consider files from the last 30 s to avoid picking up stale
-          // images from a previous session when the capture itself failed.
-          const RECENT_CUTOFF = Date.now() - 30000
+          // Fallback: scan for files newer than captureStartTime that haven't
+          // been returned by a previous (failed) capture attempt.
           try {
             const jpegs = fs.readdirSync(downloadDir)
               .filter((f) => /\.(jpe?g|png|cr2|cr3|arw|nef|dng)$/i.test(f))
-              .map((f) => ({ f, t: fs.statSync(path.join(downloadDir, f)).mtimeMs }))
-              .filter((f) => f.t >= RECENT_CUTOFF)
+              .map((f) => ({ f, p: path.join(downloadDir, f), t: fs.statSync(path.join(downloadDir, f)).mtimeMs }))
+              .filter((f) => f.t >= captureStartTime && !this._returnedFiles.has(f.p))
               .sort((a, b) => b.t - a.t)
 
-            log.info(`[DslrManager] Dir scan found ${jpegs.length} recent image(s) (cutoff=30s) in ${downloadDir}`)
+            log.info(`[DslrManager] Dir scan found ${jpegs.length} new image(s) since capture start in ${downloadDir}`)
             if (jpegs.length > 0) {
               const bestFile = jpegs.find(j => /\.(jpe?g|png)$/i.test(j.f)) || jpegs[0]
               log.ok(`[DslrManager] Using newest image: ${bestFile.f}`)
-              resolve({ success: true, path: path.join(downloadDir, bestFile.f) })
+              resolve({ success: true, path: addReturned(bestFile.p) })
               return
             }
           } catch (scanErr: any) {
@@ -1111,7 +1108,6 @@ export class DslrManager {
           resolve({ success: false, error: err.message })
         })
 
-        // 30-second overall timeout
         setTimeout(() => {
           if (this.capturing) {
             log.error('[DslrManager] Capture timed out after 30 s — killing gphoto2')
@@ -1187,6 +1183,217 @@ export class DslrManager {
 
   getCameraModel(): string {
     return this.cameraModel
+  }
+
+  // -------------------------------------------------------------------------
+  // Focus controls
+  // -------------------------------------------------------------------------
+
+  /** Set the camera focus mode: 'auto' (AF) or 'manual' (MF). */
+  async setFocusMode(mode: 'auto' | 'manual'): Promise<{ success: boolean; error?: string }> {
+    if (this.isWindows || !this.connected) {
+      return { success: false, error: 'Focus mode change not supported on this platform' }
+    }
+    log.info(`[DslrManager] setFocusMode(${mode})`)
+    const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+    const wasLiveview = this.liveviewActive
+
+    if (wasLiveview) {
+      await this.stopLiveview()
+      await new Promise(r => setTimeout(r, 500))
+    }
+
+    try {
+      require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null')
+    } catch (e) {}
+
+    // gphoto2 focus mode config: try common paths
+    const focusModeValue = mode === 'auto' ? '1' : '0'
+    const configPaths = [
+      `/main/settings/focusmode=${focusModeValue}`,
+      `/main/capturesettings/focusmode=${focusModeValue}`,
+      `/main/actions/focusmode=${focusModeValue}`,
+    ]
+    let success = false
+    for (const cfg of configPaths) {
+      const [key, val] = cfg.split('=')
+      const res = await this.execGphoto2(['--set-config', key, val, ...portArgs], 5000)
+      if (res.code === 0) {
+        success = true
+        break
+      }
+    }
+
+    if (wasLiveview && this.mainWindow && !this.mainWindow.isDestroyed()) {
+      await this.startLiveview((jpeg) => {
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
+        }
+      })
+    }
+
+    if (success) {
+      log.ok(`[DslrManager] Focus mode set to ${mode}`)
+      return { success: true }
+    }
+    log.warn(`[DslrManager] Could not set focus mode to ${mode} — camera may not support it`)
+    return { success: false, error: 'Focus mode change not supported by this camera' }
+  }
+
+  /** Trigger autofocus. Stops liveview, runs AF, then restarts liveview. */
+  async triggerAutofocus(): Promise<{ success: boolean; error?: string }> {
+    if (this.isWindows || !this.connected) {
+      return { success: false, error: 'Autofocus not supported on this platform' }
+    }
+    log.info('[DslrManager] triggerAutofocus()')
+    const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+    const wasLiveview = this.liveviewActive
+
+    if (wasLiveview) {
+      await this.stopLiveview()
+      await new Promise(r => setTimeout(r, 500))
+    }
+
+    try {
+      require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null')
+    } catch (e) {}
+
+    try {
+      const res = await this.execGphoto2(['--set-config', '/main/actions/autofocusdrive=1', ...portArgs], 10000)
+      if (res.code === 0) {
+        log.ok('[DslrManager] Autofocus triggered')
+        if (wasLiveview && this.mainWindow && !this.mainWindow.isDestroyed()) {
+          await this.startLiveview((jpeg) => {
+            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+              this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
+            }
+          })
+        }
+        return { success: true }
+      }
+      if (wasLiveview && this.mainWindow && !this.mainWindow.isDestroyed()) {
+        await this.startLiveview((jpeg) => {
+          if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+            this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
+          }
+        })
+      }
+      log.warn(`[DslrManager] Autofocus failed: ${res.stderr}`)
+      return { success: false, error: res.stderr || 'Autofocus command failed' }
+    } catch (err: any) {
+      if (wasLiveview && this.mainWindow && !this.mainWindow.isDestroyed()) {
+        await this.startLiveview((jpeg) => {
+          if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+            this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
+          }
+        })
+      }
+      return { success: false, error: err.message }
+    }
+  }
+
+  /** Step focus toward the camera (near). Stops/restarts liveview. */
+  async triggerFocusNear(): Promise<{ success: boolean; error?: string }> {
+    if (this.isWindows || !this.connected) {
+      return { success: false, error: 'Manual focus not supported on this platform' }
+    }
+    log.info('[DslrManager] triggerFocusNear()')
+    const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+    const wasLiveview = this.liveviewActive
+
+    if (wasLiveview) {
+      await this.stopLiveview()
+      await new Promise(r => setTimeout(r, 500))
+    }
+
+    try {
+      require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null')
+    } catch (e) {}
+
+    const commands = [
+      ['--set-config', '/main/actions/focusdrive=0', ...portArgs],
+      ['--set-config', '/main/actions/manualfocusdrive=-1', ...portArgs],
+      ['--set-config', '/main/actions/focusdrive=2', ...portArgs],
+    ]
+    let lastErr = ''
+    for (const args of commands) {
+      try {
+        const res = await this.execGphoto2(args, 3000)
+        if (res.code === 0) {
+          log.ok('[DslrManager] Focus step near succeeded')
+          if (wasLiveview && this.mainWindow && !this.mainWindow.isDestroyed()) {
+            await this.startLiveview((jpeg) => {
+              if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+                this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
+              }
+            })
+          }
+          return { success: true }
+        }
+        lastErr = res.stderr
+      } catch (err: any) { lastErr = err.message }
+    }
+
+    if (wasLiveview && this.mainWindow && !this.mainWindow.isDestroyed()) {
+      await this.startLiveview((jpeg) => {
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
+        }
+      })
+    }
+    return { success: false, error: lastErr || 'Focus near not supported by this camera' }
+  }
+
+  /** Step focus away from the camera (far). Stops/restarts liveview. */
+  async triggerFocusFar(): Promise<{ success: boolean; error?: string }> {
+    if (this.isWindows || !this.connected) {
+      return { success: false, error: 'Manual focus not supported on this platform' }
+    }
+    log.info('[DslrManager] triggerFocusFar()')
+    const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+    const wasLiveview = this.liveviewActive
+
+    if (wasLiveview) {
+      await this.stopLiveview()
+      await new Promise(r => setTimeout(r, 500))
+    }
+
+    try {
+      require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null')
+    } catch (e) {}
+
+    const commands = [
+      ['--set-config', '/main/actions/focusdrive=1', ...portArgs],
+      ['--set-config', '/main/actions/manualfocusdrive=1', ...portArgs],
+      ['--set-config', '/main/actions/focusdrive=3', ...portArgs],
+    ]
+    let lastErr = ''
+    for (const args of commands) {
+      try {
+        const res = await this.execGphoto2(args, 3000)
+        if (res.code === 0) {
+          log.ok('[DslrManager] Focus step far succeeded')
+          if (wasLiveview && this.mainWindow && !this.mainWindow.isDestroyed()) {
+            await this.startLiveview((jpeg) => {
+              if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+                this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
+              }
+            })
+          }
+          return { success: true }
+        }
+        lastErr = res.stderr
+      } catch (err: any) { lastErr = err.message }
+    }
+
+    if (wasLiveview && this.mainWindow && !this.mainWindow.isDestroyed()) {
+      await this.startLiveview((jpeg) => {
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
+        }
+      })
+    }
+    return { success: false, error: lastErr || 'Focus far not supported by this camera' }
   }
 
   /** @deprecated Use getStatus().connected instead */

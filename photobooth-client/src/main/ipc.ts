@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS = {
   dslrIso: 'auto',
   dslrShutterSpeed: 'auto',
   dslrAperture: 'auto',
+  dslrFocusMode: 'auto',
 }
 
 let _offlineQueue: OfflineQueue
@@ -297,6 +298,7 @@ export function initIpcHandlers(
     dslrIso?: string
     dslrShutterSpeed?: string
     dslrAperture?: string
+    dslrFocusMode?: string
   }) => {
     try {
       const existing = getSettingsSync()
@@ -316,6 +318,7 @@ export function initIpcHandlers(
           dslrIso: merged.dslrIso,
           dslrShutterSpeed: merged.dslrShutterSpeed,
           dslrAperture: merged.dslrAperture,
+          dslrFocusMode: merged.dslrFocusMode,
         }
         if (merged.otp) body.otp = merged.otp
         await fetch(`${syncUrl}/api/booth/settings`, {
@@ -332,6 +335,10 @@ export function initIpcHandlers(
           merged.dslrShutterSpeed || 'auto',
           merged.dslrAperture || 'auto'
         )
+        // Apply focus mode if changed
+        if (settings.dslrFocusMode && settings.dslrFocusMode !== existing.dslrFocusMode) {
+          dslrManager.setFocusMode(settings.dslrFocusMode as 'auto' | 'manual')
+        }
       }
       return { success: true }
     } catch (error: any) {
@@ -341,6 +348,30 @@ export function initIpcHandlers(
 
   ipcMain.handle('get-server-config', () => {
     return { serverUrl }
+  })
+
+  // ------------------------------------------------------------------
+  // DSLR Focus Controls
+  // ------------------------------------------------------------------
+
+  ipcMain.handle('dslr-set-focus-mode', async (_event, mode: 'auto' | 'manual'): Promise<{ success: boolean; error?: string }> => {
+    console.log(`[IPC] dslr-set-focus-mode called: ${mode}`)
+    return dslrManager.setFocusMode(mode)
+  })
+
+  ipcMain.handle('dslr-trigger-autofocus', async (): Promise<{ success: boolean; error?: string }> => {
+    console.log('[IPC] dslr-trigger-autofocus called')
+    return dslrManager.triggerAutofocus()
+  })
+
+  ipcMain.handle('dslr-trigger-focus-near', async (): Promise<{ success: boolean; error?: string }> => {
+    console.log('[IPC] dslr-trigger-focus-near called')
+    return dslrManager.triggerFocusNear()
+  })
+
+  ipcMain.handle('dslr-trigger-focus-far', async (): Promise<{ success: boolean; error?: string }> => {
+    console.log('[IPC] dslr-trigger-focus-far called')
+    return dslrManager.triggerFocusFar()
   })
 
   // ------------------------------------------------------------------

@@ -206,6 +206,13 @@
                 <span class="slider-val">{{ eventSettings.dslrAperture || 'auto' }}</span>
               </div>
             </div>
+            <div class="field-row">
+              <label>Focus Mode</label>
+              <div class="focus-toggle">
+                <button :class="['focus-btn', eventSettings.dslrFocusMode === 'auto' ? 'focus-active' : '']" @click="eventSettings.dslrFocusMode = 'auto'">AF</button>
+                <button :class="['focus-btn', eventSettings.dslrFocusMode === 'manual' ? 'focus-active' : '']" @click="eventSettings.dslrFocusMode = 'manual'">MF</button>
+              </div>
+            </div>
           </div>
 
           <button @click="saveEventSettings" class="btn-control btn-primary" :disabled="settingsSaving" style="margin-top: 1rem;">
@@ -248,7 +255,7 @@ const selectedFrame = ref('')
 const paused = ref(false)
 const otpCopied = ref(false)
 const showSettingsModal = ref(false)
-const eventSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto' })
+const eventSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto' })
 const settingsSaving = ref(false)
 const settingsMsg = ref('')
 const settingsMsgType = ref<'success' | 'error'>('success')
@@ -283,7 +290,8 @@ onMounted(async () => {
       postCapturePreview: event.value.post_capture_preview,
       dslrIso: event.value.dslr_iso || 'auto',
       dslrShutterSpeed: event.value.dslr_shutterspeed || 'auto',
-      dslrAperture: event.value.dslr_aperture || 'auto'
+      dslrAperture: event.value.dslr_aperture || 'auto',
+      dslrFocusMode: event.value.dslr_focus_mode || 'auto'
     }
   } catch (err) {
     console.error('Failed to fetch event', err)
@@ -345,6 +353,10 @@ async function saveEventSettings() {
       countdown: eventSettings.value.countdown,
       captureInterval: eventSettings.value.captureInterval,
       postCapturePreview: eventSettings.value.postCapturePreview,
+      dslrIso: eventSettings.value.dslrIso,
+      dslrShutterSpeed: eventSettings.value.dslrShutterSpeed,
+      dslrAperture: eventSettings.value.dslrAperture,
+      dslrFocusMode: eventSettings.value.dslrFocusMode,
     })
     settingsMsg.value = 'Settings saved'
     settingsMsgType.value = 'success'
@@ -606,6 +618,28 @@ async function saveEventSettings() {
   color: #fff;
   min-width: 50px;
   text-align: right;
+}
+
+.focus-toggle {
+  display: flex;
+  border: 1px solid #333;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.focus-btn {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  background: #111;
+  color: #888;
+}
+
+.focus-btn.focus-active {
+  background: #fff;
+  color: #000;
 }
 
 .msg-success {
