@@ -1026,8 +1026,8 @@ export class BoothApp {
    *  4. Return result
    */
   private async prepDslrCapture(): Promise<void> {
-    console.log('[BoothApp] prepDslrCapture() — stopping liveview renderer + camera liveview early')
-    await this.dslrPreview.stop()
+    console.log('[BoothApp] prepDslrCapture() — stopping liveview (keep last frame frozen) + camera liveview early')
+    await this.dslrPreview.stop(true)
     await window.hellomyphoto?.prepDslrCapture()
   }
 

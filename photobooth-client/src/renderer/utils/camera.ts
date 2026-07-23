@@ -135,12 +135,19 @@ export class DslrPreviewManager {
       return true
     }
 
+    // Reset frame counter for first-frame detection
+    this.frameCount = 0
+    this.lastFrameTime = 0
+
     const firstFrame = new Promise<void>((resolve, reject) => {
       this.resolveFirstFrame = resolve
       this.rejectFirstFrame = reject
     })
 
     console.log('[DslrPreviewManager] Registering dslr-frame IPC listener...')
+    // Activate BEFORE the IPC call so the very first frame (which may arrive
+    // synchronously or before JS yields) is accepted by the guard below.
+    this.active = true
     window.hellomyphoto?.onDslrFrame((base64Jpeg) => {
       if (!this.active) return
       this.element.src = `data:image/jpeg;base64,${base64Jpeg}`
@@ -162,6 +169,7 @@ export class DslrPreviewManager {
     console.log('[DslrPreviewManager] startDslrLiveview() response:', JSON.stringify(result))
 
     if (!result?.success) {
+      this.active = false
       this.lastError = result?.error
       console.error('[DslrPreviewManager] ❌ Failed to start liveview:', result?.error)
       this.resolveFirstFrame = null
@@ -169,7 +177,6 @@ export class DslrPreviewManager {
       return false
     }
 
-    this.active = true
     this.lastError = undefined
     console.log('[DslrPreviewManager] ✅ Liveview IPC started — waiting for first frame…')
 
@@ -199,14 +206,18 @@ export class DslrPreviewManager {
 
   /**
    * Stop the DSLR liveview stream.
-   * Clears the preview image and tells the main process to stop pumping frames.
+   * Tells the main process to stop pumping frames.
+   *
+   * @param keepFrame  When true, the last received frame stays frozen in the
+   *                   <img> element (useful during countdown). When false
+   *                   (default), the src is reset to a transparent GIF.
    *
    * Always sends the IPC stop command to the main process, even if the renderer
    * side is not active. This ensures the camera's viewfinder/mirror is properly
    * turned off after a capture session (the main process restarts liveview
    * internally after each capture via DslrManager.capture()).
    */
-  async stop(): Promise<void> {
+  async stop(keepFrame = false): Promise<void> {
     const wasActive = this.active
     if (!wasActive) {
       console.warn('[DslrPreviewManager] stop() called but was not active — sending IPC stop anyway (liveview may still be active on camera)')
@@ -222,7 +233,9 @@ export class DslrPreviewManager {
       this.resolveFirstFrame()
       this.resolveFirstFrame = null
     }
-    this.element.src = TRANSPARENT_GIF
+    if (!keepFrame) {
+      this.element.src = TRANSPARENT_GIF
+    }
     await window.hellomyphoto?.stopDslrLiveview()
     console.log('[DslrPreviewManager] Liveview stopped')
   }
