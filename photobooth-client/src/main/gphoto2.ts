@@ -400,14 +400,22 @@ class Gphoto2LiveviewStream {
       })
       
       let procStderr = ''
+      let isRetrying = false
       this.currentProc.stderr?.on('data', (d: Buffer) => {
         procStderr += d.toString()
-        if (procStderr.includes('Could not claim') && !resolved) {
+        if (procStderr.includes('Could not claim') && !resolved && !isRetrying) {
+          isRetrying = true
           log.warn(`[gphoto2 stream] USB claimed by PTPCamera (kill #${++this.ptpKillCount}) — pkilling and retrying...`)
+          this.currentProc.kill()
           this.killPtpNow(() => {
-            // Re-spawn the movie capture
-            this.currentProc.kill()
-            this.start(firstFrameTimeoutMs)
+            // Forward the result of the next start attempt to the original promise
+            this.start(firstFrameTimeoutMs).then((result) => {
+              if (!resolved) {
+                resolved = true
+                clearTimeout(timeout)
+                resolve(result)
+              }
+            })
           })
         }
       })
@@ -416,12 +424,13 @@ class Gphoto2LiveviewStream {
         if (this.frameCount === 0 && code !== 0 && !procStderr.includes('Could not claim')) {
           log.error(`[gphoto2 stream] MJPEG stream exited code=${code}. stderr: ${procStderr.trim().slice(0, 200)}`)
         }
-        if (!resolved) {
+        // Only resolve as false if we are NOT in the middle of a killPtpNow retry
+        if (!resolved && !isRetrying) {
           resolved = true
           clearTimeout(timeout)
           resolve(false)
         }
-        if (this.active) {
+        if (this.active && !isRetrying) {
           this.active = false
         }
       })
@@ -498,21 +507,30 @@ class Gphoto2LiveviewStream {
       const proc = this.currentProc
       this.currentProc = null
       return new Promise<void>((resolve) => {
+        // The safety timeout is cleared inside finish() so it doesn't fire after
+        // the process already exited (which was printing spurious "Timeout" logs).
+        let safetyTimer: NodeJS.Timeout | null = null
         const finish = () => {
+          if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null }
           log.info('[gphoto2 stream] MJPEG process exited — USB interface released')
-          resolve()
+          // Brief settling pause: after SIGKILL the camera's PTP stack needs a
+          // moment to recognise the abrupt disconnect and clean up internal state.
+          // Without this, the very next gphoto2 command (viewfinder=0) opens a
+          // new PTP session while the camera is still mid-cleanup, causing
+          // unpredictable failures.
+          setTimeout(resolve, 300)
         }
         proc.once('close', finish)
         proc.once('error', finish)
         // SIGKILL: no graceful shutdown — we need the USB interface back NOW.
         proc.kill('SIGKILL')
         // Safety timeout: if 'close' never fires within 3 s, unblock anyway.
-        setTimeout(() => {
+        safetyTimer = setTimeout(() => {
           proc.removeListener('close', finish)
           proc.removeListener('error', finish)
           log.warn('[gphoto2 stream] Timeout waiting for MJPEG process exit — continuing')
           resolve()
-        }, 3000)
+        }, 3300)
       })
     }
     return Promise.resolve()
@@ -543,6 +561,22 @@ export class DslrManager {
   // macOS backend
   private gphoto2Stream: Gphoto2LiveviewStream | null = null
 
+  // Operation Mutex to prevent USB collisions between exposure, liveview, and capture
+  private _mutex = Promise.resolve()
+
+  private async enqueue<T>(fn: () => Promise<T> | T): Promise<T> {
+    const next = this._mutex.then(async () => {
+      try {
+        return await fn()
+      } catch (err) {
+        log.error(`[DslrManager] Operation threw error: ${err}`)
+        throw err
+      }
+    })
+    this._mutex = next.catch(() => {}) as Promise<void>
+    return next
+  }
+
   // Disconnect poll
   private disconnectPollTimer: NodeJS.Timeout | null = null
 
@@ -570,16 +604,26 @@ export class DslrManager {
   // Detection & Selection
   // -------------------------------------------------------------------------
 
-  async detect(): Promise<{ connected: boolean; model: string; cameras: { model: string, port: string }[] }> {
-    log.info(`[DslrManager] detect() called (platform=${process.platform})`)
-    if (this.isWindows) {
-      return this.detectWindows()
-    }
-    const res = await this.detectGphoto2()
-    if (res.connected) {
-      this.fetchConfigChoices()
-    }
-    return res
+  /**
+   * Detect connected cameras and refresh port + model.
+   *
+   * @param skipConfigFetch - If true, skips the fetchConfigChoices() call.
+   *   Set true when calling from time-sensitive contexts (disconnect poll,
+   *   stopLiveview re-detect) to avoid spawning 3 gphoto2 processes that
+   *   hold the USB interface concurrently with capture commands.
+   */
+  async detect(skipConfigFetch = false): Promise<{ connected: boolean; model: string; cameras: { model: string, port: string }[] }> {
+    return this.enqueue(async () => {
+      log.info(`[DslrManager] detect() called (platform=${process.platform})`)
+      if (this.isWindows) {
+        return this.detectWindows()
+      }
+      const res = await this.detectGphoto2()
+      if (res.connected && !skipConfigFetch) {
+        this.fetchConfigChoices()
+      }
+      return res
+    })
   }
 
   private async fetchConfigChoices() {
@@ -621,40 +665,54 @@ export class DslrManager {
   }
 
   async applyExposure(iso: string, shutterspeed: string, aperture: string) {
-    if (this.isWindows || !this.connected) return
-    log.info(`[DslrManager] Applying exposure settings to camera: iso=${iso}, shutter=${shutterspeed}, aperture=${aperture}`)
-    const configArgs = []
-    if (iso && iso.toLowerCase() !== 'auto') configArgs.push('--set-config', `iso=${iso}`)
-    if (shutterspeed && shutterspeed.toLowerCase() !== 'auto') configArgs.push('--set-config', `shutterspeed=${shutterspeed}`)
-    if (aperture && aperture.toLowerCase() !== 'auto') configArgs.push('--set-config', `aperture=${aperture}`)
-    
-    if (configArgs.length === 0) return
+    return this.enqueue(async () => {
+      if (this.isWindows || !this.connected) return
+      log.info(`[DslrManager] Applying exposure settings to camera: iso=${iso}, shutter=${shutterspeed}, aperture=${aperture}`)
+      const configArgs = []
+      if (iso && iso.toLowerCase() !== 'auto') configArgs.push('--set-config', `iso=${iso}`)
+      if (shutterspeed && shutterspeed.toLowerCase() !== 'auto') configArgs.push('--set-config', `shutterspeed=${shutterspeed}`)
+      if (aperture && aperture.toLowerCase() !== 'auto') configArgs.push('--set-config', `aperture=${aperture}`)
+      
+      if (configArgs.length === 0) return
 
-    const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
-    const wasLiveview = this.liveviewActive
-    if (wasLiveview) {
-      log.info('[DslrManager] Stopping liveview temporarily to apply exposure settings')
-      this.stopLiveview()
-      await new Promise(r => setTimeout(r, 1000))
-    }
+      const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+      const wasLiveview = this.liveviewActive
+      if (wasLiveview) {
+        log.info('[DslrManager] Stopping liveview temporarily to apply exposure settings')
+        await this.stopLiveviewInternal()
+        await new Promise(r => setTimeout(r, 1000))
+      }
 
-    try {
-      require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null')
-    } catch (e) {}
-
-    const res = await this.execGphoto2([...configArgs, ...portArgs], 15000)
-    if (res.code !== 0) {
-      log.warn(`[DslrManager] Failed to apply exposure settings: ${res.stderr.trim()}`)
-    }
-
-    if (wasLiveview && this.mainWindow && !this.mainWindow.isDestroyed()) {
-      log.info('[DslrManager] Resuming liveview after applying exposure')
-      this.startLiveview((jpeg) => {
-        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-          this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
+      try {
+        // Full eviction like startLiveview uses, because pkill alone isn't enough on macOS
+        if (!this.isWindows) {
+           await killPtpDaemon()
         }
-      })
-    }
+      } catch (e) {}
+
+      // refresh port if killPtpDaemon re-enumerated the USB
+      if (!this.isWindows) {
+        await this.detectGphoto2()
+      }
+      
+      const currentPortArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+
+      const res = await this.execGphoto2([...configArgs, ...currentPortArgs], 15000)
+      if (res.code !== 0) {
+        log.warn(`[DslrManager] Failed to apply exposure settings: ${res.stderr.trim()}`)
+      } else {
+        log.ok('[DslrManager] Exposure settings applied successfully')
+      }
+
+      if (wasLiveview && this.mainWindow && !this.mainWindow.isDestroyed()) {
+        log.info('[DslrManager] Resuming liveview after applying exposure')
+        await this.startLiveviewInternal((jpeg) => {
+          if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+            this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
+          }
+        })
+      }
+    })
   }
 
   private async detectWindows(): Promise<{ connected: boolean; model: string; cameras: { model: string, port: string }[] }> {
@@ -754,6 +812,10 @@ export class DslrManager {
    * (i.e. the camera is genuinely accessible), false otherwise.
    */
   async startLiveview(onFrame: (jpeg: Buffer) => void): Promise<boolean> {
+    return this.enqueue(() => this.startLiveviewInternal(onFrame))
+  }
+
+  private async startLiveviewInternal(onFrame: (jpeg: Buffer) => void): Promise<boolean> {
     log.info(`[DslrManager] startLiveview() called (liveviewActive=${this.liveviewActive}, connected=${this.connected}, platform=${process.platform})`)
     if (this.liveviewActive) {
       log.warn('[DslrManager] startLiveview() ignored — already active')
@@ -832,20 +894,39 @@ export class DslrManager {
 
   /** Stop the live preview stream. */
   async stopLiveview(): Promise<void> {
+    return this.enqueue(() => this.stopLiveviewInternal())
+  }
+
+  private async stopLiveviewInternal(): Promise<void> {
     const wasActive = this.liveviewActive
     log.info(`[DslrManager] stopLiveview() called (liveviewActive=${wasActive})`)
 
     this.liveviewActive = false
+    if (wasActive) {
+      this.stopDisconnectPoll()
+    }
 
     if (this.isWindows) {
       this.dcc?.stopLiveview()
     } else {
       // CRITICAL: await the stream stop so the USB interface is fully released
       // before we issue the next gphoto2 command (viewfinder=0 or capture).
-      // stop() now uses SIGKILL and waits for the process to exit.
+      // stop() uses SIGKILL and waits for the process to exit + 300 ms settle.
       if (this.gphoto2Stream) {
         await this.gphoto2Stream.stop()
         this.gphoto2Stream = null
+
+        // SIGKILLing the stream leaves the USB interface stalled in the macOS kernel.
+        // We MUST reset the USB port and re-detect to get a fresh port address before
+        // issuing any further commands like viewfinder=0 or capture.
+        log.info('[DslrManager] Resetting USB port after SIGKILLing stream...')
+        await new Promise<void>((resolve) => {
+          const resetProc = spawn('gphoto2', ['--reset'])
+          resetProc.on('close', () => setTimeout(resolve, 200))
+          resetProc.on('error', () => resolve())
+        })
+        log.info('[DslrManager] Re-detecting cameras to fetch new USB ports after stream kill...')
+        await this.detectGphoto2()
       }
 
       // Deactivate liveview on the camera side (drop the mirror).
@@ -853,25 +934,26 @@ export class DslrManager {
       // already false, the camera may still have the mirror up.
       if (this.cameraModel.toLowerCase().includes('canon')) {
         log.info('[DslrManager] Dropping Canon mirror (viewfinder=0) to deactivate liveview...')
-        const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
-        for (let i = 0; i < 3; i++) {
-          try {
-            require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null; pkill -9 -f imagecaptured 2>/dev/null')
-          } catch (e) {}
+        let portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+        let success = false
+        for (let i = 0; i < 3 && !success; i++) {
           const res = await this.execGphoto2(['--set-config', '/main/actions/viewfinder=0', ...portArgs], 5000)
           if (res.code === 0) {
             log.ok('[DslrManager] Canon mirror dropped successfully')
-            break
+            success = true
+          } else if (i === 0 && portArgs.length > 0 && (res.stderr.includes('not found') || res.stderr.includes('Could not claim'))) {
+            // Port may have changed after SIGKILL: retry without a specific port
+            // (gphoto2 will auto-detect the camera) before doing a full re-detect.
+            log.warn(`[DslrManager] Canon mirror drop failed on port ${this.selectedPort} — retrying without port`)
+            portArgs = []
+          } else {
+            log.warn(`[DslrManager] Canon mirror drop failed (attempt ${i + 1}/3): ${res.stderr.trim()}`)
+            if (i < 2) await new Promise(r => setTimeout(r, 1000))
           }
-          log.warn(`[DslrManager] Canon mirror drop failed (attempt ${i + 1}/3): ${res.stderr.trim()}`)
-          if (i < 2) await new Promise(r => setTimeout(r, 1000))
         }
       }
     }
 
-    if (wasActive) {
-      this.stopDisconnectPoll()
-    }
     this.pushStatus()
     log.ok('[DslrManager] stopLiveview() complete')
   }
@@ -895,35 +977,33 @@ export class DslrManager {
    * it will skip the liveview-stop + PTP-wait steps and just fire the shutter.
    */
   async prepCapture(): Promise<void> {
-    log.info(`[DslrManager] prepCapture() called (connected=${this.connected}, liveviewActive=${this.liveviewActive})`)
-    // Always set the flag — the renderer already called dslrPreview.stop() (which
-    // sends stop-dslr-liveview) before invoking this IPC, so camera liveview may
-    // already be off. capture() needs _prepDone=true to know it should resume
-    // liveview after the shot even though liveviewActive is now false.
-    this._prepDone = true
-    if (this.liveviewActive) {
-      // stopLiveview() handles viewfinder=0 (mirror drop) for Canon cameras.
-      await this.stopLiveview()
-    }
-    // Trigger autofocus now that the mirror is down (phase-detect AF).
-    // We do this unconditionally — liveviewActive is already false by the time
-    // prepCapture IPC is called (the renderer calls stop-dslr-liveview first),
-    // so the old `if (this.liveviewActive)` guard was always skipping AF.
-    if (!this.isWindows && this.connected) {
-      log.info('[DslrManager] prepCapture() — triggering autofocus (phase-detect, mirror down)...')
-      try {
-        // Kill any lingering PTP processes that might block the AF command
-        require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null; pkill -9 -f imagecaptured 2>/dev/null')
-      } catch (e) {}
-      const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
-      const afRes = await this.execGphoto2(['--set-config', '/main/actions/autofocusdrive=1', ...portArgs], 6000)
-      if (afRes.code === 0) {
-        log.ok('[DslrManager] prepCapture() — autofocus triggered successfully')
-      } else {
-        log.warn(`[DslrManager] prepCapture() — AF trigger returned code=${afRes.code} (non-fatal): ${afRes.stderr.trim().slice(0, 100)}`)
+    return this.enqueue(async () => {
+      log.info(`[DslrManager] prepCapture() called (connected=${this.connected}, liveviewActive=${this.liveviewActive})`)
+      // Always set the flag — the renderer already called dslrPreview.stop() (which
+      // sends stop-dslr-liveview) before invoking this IPC, so camera liveview may
+      // already be off. capture() needs _prepDone=true to know it should resume
+      // liveview after the shot even though liveviewActive is now false.
+      this._prepDone = true
+      if (this.liveviewActive) {
+        // stopLiveview() handles viewfinder=0 (mirror drop) for Canon cameras.
+        await this.stopLiveviewInternal()
       }
-    }
-    log.info('[DslrManager] prepCapture() complete')
+      // Trigger autofocus now that the mirror is down (phase-detect AF).
+      // We do this unconditionally — liveviewActive is already false by the time
+      // prepCapture IPC is called (the renderer calls stop-dslr-liveview first),
+      // so the old `if (this.liveviewActive)` guard was always skipping AF.
+      if (!this.isWindows && this.connected) {
+        log.info('[DslrManager] prepCapture() — triggering autofocus (phase-detect, mirror down)...')
+        const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+        const afRes = await this.execGphoto2(['--set-config', '/main/actions/autofocusdrive=1', ...portArgs], 6000)
+        if (afRes.code === 0) {
+          log.ok('[DslrManager] prepCapture() — autofocus triggered successfully')
+        } else {
+          log.warn(`[DslrManager] prepCapture() — AF trigger returned code=${afRes.code} (non-fatal): ${afRes.stderr.trim().slice(0, 100)}`)
+        }
+      }
+      log.info('[DslrManager] prepCapture() complete')
+    })
   }
 
   // -------------------------------------------------------------------------
@@ -940,64 +1020,52 @@ export class DslrManager {
    *  4. Resume liveview
    */
   async capture(options?: { targetPath?: string; iso?: string; shutterSpeed?: string; aperture?: string; liveviewStopped?: boolean }): Promise<CaptureResult> {
-    log.info(`[DslrManager] capture() called (connected=${this.connected}, capturing=${this.capturing}, liveviewActive=${this.liveviewActive})`)
-    if (!this.connected) {
-      log.error('[DslrManager] capture() aborted — camera not connected')
-      return { success: false, error: 'No DSLR connected' }
-    }
-    if (this.capturing) {
-      log.warn('[DslrManager] capture() aborted — already capturing')
-      return { success: false, error: 'Already capturing' }
-    }
+    return this.enqueue(async () => {
+      log.info(`[DslrManager] capture() called (connected=${this.connected}, capturing=${this.capturing}, liveviewActive=${this.liveviewActive})`)
+      if (!this.connected) {
+        log.error('[DslrManager] capture() aborted — camera not connected')
+        return { success: false, error: 'No DSLR connected' }
+      }
+      if (this.capturing) {
+        log.warn('[DslrManager] capture() aborted — already capturing')
+        return { success: false, error: 'Already capturing' }
+      }
 
-    const wasLiveviewActive = this.liveviewActive
-    const wasPrepped = this._prepDone
-    this._prepDone = false
+      const wasLiveviewActive = this.liveviewActive
+      const wasPrepped = this._prepDone
+      this._prepDone = false
 
-    // If prepCapture() already ran during the countdown, camera liveview was
-    // already stopped and PTP session released — skip the stop+wait.
-    if (wasLiveviewActive && !wasPrepped) {
-      log.info('[DslrManager] Stopping liveview before capture...')
-      await this.stopLiveview()
-      log.info('[DslrManager] Waiting 300 ms for PTP session to release...')
-      await new Promise((r) => setTimeout(r, 300))
-    }
+      // If prepCapture() already ran during the countdown, camera liveview was
+      // already stopped and PTP session released — skip the stop+wait.
+      if (wasLiveviewActive && !wasPrepped) {
+        log.info('[DslrManager] Stopping liveview before capture...')
+        await this.stopLiveviewInternal()
+        log.info('[DslrManager] Waiting 300 ms for PTP session to release...')
+        await new Promise((r) => setTimeout(r, 300))
+      }
 
-    this.capturing = true
-    let result: CaptureResult
+      this.capturing = true
+      let result: CaptureResult
 
-    if (this.isWindows) {
-      log.info('[DslrManager] Triggering capture via DigiCamControl...')
-      result = await this.captureWindows(options?.targetPath)
-    } else {
-      log.info('[DslrManager] Triggering capture via gphoto2...')
-      result = await this.captureGphoto2(options)
-    }
+      if (this.isWindows) {
+        log.info('[DslrManager] Triggering capture via DigiCamControl...')
+        result = await this.captureWindows(options?.targetPath)
+      } else {
+        log.info('[DslrManager] Triggering capture via gphoto2...')
+        result = await this.captureGphoto2(options)
+      }
 
-    this.capturing = false
-    if (result.success) {
-      log.ok(`[DslrManager] Capture success! File: ${result.path}`)
-    } else {
-      log.error(`[DslrManager] Capture failed: ${result.error}`)
-    }
+      this.capturing = false
+      if (result.success) {
+        log.ok(`[DslrManager] Capture success! File: ${result.path}`)
+      } else {
+        log.error(`[DslrManager] Capture failed: ${result.error}`)
+      }
 
-    // Do NOT restart liveview internally here.
-    //
-    // Previously this method called startLiveview() after capture, but that
-    // created a race condition: the renderer's BoothApp independently calls
-    // start-dslr-liveview (via dslrPreview.start()) between shots. Having two
-    // concurrent callers manage liveview caused USB state inconsistencies that
-    // made the second capture hang for ~21 seconds.
-    //
-    // The renderer is the single source of truth for liveview lifecycle:
-    //   - Between shots: BoothApp checks dslrPreview.isActive() and calls start()
-    //   - After all shots: BoothApp calls dslrPreview.stop()
-    // The camera's mirror is already down from the viewfinder=0 command that runs
-    // inside captureGphoto2() before --capture-image-and-download, so no extra
-    // cleanup is needed here.
-    log.info('[DslrManager] capture() complete — liveview restart delegated to renderer')
+      log.info('[DslrManager] capture() complete — liveview restart delegated to renderer')
 
-    return result
+      return result
+    })
   }
 
   /** Run a gphoto2 command and collect stdout/stderr/exit code. */
@@ -1037,12 +1105,6 @@ export class DslrManager {
       // Record timestamp before capture so the fallback scan only accepts
       // files created during THIS capture attempt, not previous ones.
       const captureStartTime = Date.now()
-
-      if (!this.isWindows) {
-        try {
-          require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null; pkill -9 -f imagecaptured 2>/dev/null')
-        } catch (e) {}
-      }
 
       const doCapture = async () => {
         const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
@@ -1208,7 +1270,12 @@ export class DslrManager {
     log.info('[DslrManager] Starting disconnect poll every 5 s')
     this.disconnectPollTimer = setInterval(async () => {
       const wasConnected = this.connected
-      await this.detect()
+      // skipConfigFetch=true: the poll must not spawn 3 gphoto2 --get-config
+      // processes every 5 s. Those hold the USB interface and race with capture
+      // prep (viewfinder=0, autofocusdrive=1, --capture-image-and-download).
+      // The disconnect poll only needs --auto-detect (which does NOT claim the
+      // USB interface), so config choices are never re-fetched here.
+      await this.detect(true)
       if (wasConnected && !this.connected) {
         log.error(`[DslrManager] Camera disconnected! Sending dslr-disconnected event (was: "${this.cameraModel}")`)
         this.stopLiveview()

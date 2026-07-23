@@ -898,12 +898,12 @@ export class BoothApp {
       this.stateDisplay.textContent = `Shot ${i + 1} of ${photoCount}`
 
       let prepDone = false
-      let prepFailed = false
+      let prepPromise: Promise<void> | null = null
       const onLastTick = () => {
         if (this.cameraMode === 'dslr' && !prepDone) {
           prepDone = true
-          this.prepDslrCapture().catch((err) => {
-            prepFailed = true
+          prepPromise = this.prepDslrCapture()
+          prepPromise.catch((err) => {
             console.error('[BoothApp] prepDslrCapture failed:', err)
           })
         }
@@ -914,6 +914,17 @@ export class BoothApp {
       let result: { success: boolean; path?: string; error?: string }
 
       if (this.cameraMode === 'dslr') {
+        // Wait for prep to FULLY complete before firing the shutter.
+        // prepDslrCapture() runs fire-and-forget during the countdown (onLastTick
+        // at tick "2"), but it may take longer than 2 s (USB re-enumeration +
+        // viewfinder=0 + AF). Without this await, capture() fires while
+        // stopLiveview() is still running, causing concurrent gphoto2 processes
+        // to fight over the USB interface and both fail with "Could not claim".
+        if (prepPromise !== null) {
+          console.log('[BoothApp] Waiting for DSLR prep to complete before shutter...')
+          await (prepPromise as Promise<void>).catch(() => {})  // errors already logged in onLastTick
+          prepPromise = null
+        }
         result = await this.captureDslrShot(prepDone)
       } else {
         result = await this.camera.captureStill()
