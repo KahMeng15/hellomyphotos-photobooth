@@ -23,7 +23,9 @@ export class CountdownUI {
 
       this.playBeep(audioCtx, i === 1 ? 880 : 660)
 
-      if (i === 1 && onLastTick) {
+      // Trigger DSLR prep at "2" so the mirror has time to drop + AF to run
+      // before the shutter fires at the end of the "1" second.
+      if (i === 2 && onLastTick) {
         onLastTick()
       }
 

@@ -933,11 +933,10 @@ export class BoothApp {
           await this.showPostCapture(result.path, this.settingsData.postCapturePreview)
         }
 
-        // Resume DSLR liveview after each shot (done inside captureDslrShot but
-        // resume after post-capture display so the preview is ready for next shot)
+        // Resume DSLR liveview between shots.
+        // DslrManager.capture() no longer restarts liveview internally —
+        // the renderer is the single owner of the liveview lifecycle.
         if (this.cameraMode === 'dslr' && i < photoCount - 1) {
-          // Liveview is resumed by gphoto2.ts capture() after the shot,
-          // but we still need to restart the renderer's frame listener
           if (!this.dslrPreview.isActive()) {
             await this.dslrPreview.start()
           }
@@ -949,6 +948,23 @@ export class BoothApp {
       } else {
         const errMsg = result?.error || 'Unknown error'
         console.error(`[BoothApp] Capture failed: ${errMsg}`)
+
+        // Reset camera state on failure:
+        // - For DSLR: ensure mirror is down (gphoto2.ts resetCameraAfterFailure already
+        //   fires asynchronously, but we also explicitly stop liveview here to make
+        //   sure the renderer state is consistent)
+        if (this.cameraMode === 'dslr') {
+          // Stop any lingering liveview stream (no-op if already stopped)
+          this.dslrPreview.stop().catch(() => {})
+          // Restart liveview after a short pause so the user can see the camera
+          // preview again while deciding to retry
+          setTimeout(async () => {
+            if (this.isLive) {
+              await this.dslrPreview.start()
+            }
+          }, 1500)
+        }
+
         this.stateDisplay.innerHTML = `<span style="color: #ff4444; font-size: 1.5rem;">Capture failed</span><br/><span style="font-size: 1rem; color: #fff;">${errMsg}</span><br/><br/><span style="font-size: 1rem;">Tap to retry</span>`
         this.isCapturing = false
         this.captureBtn.style.visibility = 'visible'

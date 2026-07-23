@@ -476,7 +476,18 @@ class Gphoto2LiveviewStream {
 
   private currentProc: any = null
 
-  stop(): void {
+  /**
+   * Stop the MJPEG stream.
+   *
+   * Uses SIGKILL (not SIGTERM) to ensure the gphoto2 process dies immediately.
+   * SIGTERM leaves gphoto2 trying to gracefully close the PTP session, which can
+   * take 20+ seconds on Canon cameras. While gphoto2 is in that dying state, the
+   * USB interface is still held, causing the next capture command to hang.
+   *
+   * Returns a Promise that resolves once the process has fully exited so callers
+   * can be sure the USB interface is free before issuing the next gphoto2 command.
+   */
+  stop(): Promise<void> {
     log.info(`[gphoto2 stream] Stopping (${this.frameCount} frames, ${this.missCount} misses, ${this.ptpKillCount} PTP kills)`)
     this.active = false
     if (this.frameTimer) {
@@ -484,9 +495,27 @@ class Gphoto2LiveviewStream {
       this.frameTimer = null
     }
     if (this.currentProc) {
-      this.currentProc.kill()
+      const proc = this.currentProc
       this.currentProc = null
+      return new Promise<void>((resolve) => {
+        const finish = () => {
+          log.info('[gphoto2 stream] MJPEG process exited — USB interface released')
+          resolve()
+        }
+        proc.once('close', finish)
+        proc.once('error', finish)
+        // SIGKILL: no graceful shutdown — we need the USB interface back NOW.
+        proc.kill('SIGKILL')
+        // Safety timeout: if 'close' never fires within 3 s, unblock anyway.
+        setTimeout(() => {
+          proc.removeListener('close', finish)
+          proc.removeListener('error', finish)
+          log.warn('[gphoto2 stream] Timeout waiting for MJPEG process exit — continuing')
+          resolve()
+        }, 3000)
+      })
     }
+    return Promise.resolve()
   }
 
   isActive(): boolean {
@@ -811,13 +840,17 @@ export class DslrManager {
     if (this.isWindows) {
       this.dcc?.stopLiveview()
     } else {
-      this.gphoto2Stream?.stop()
-      this.gphoto2Stream = null
-      
+      // CRITICAL: await the stream stop so the USB interface is fully released
+      // before we issue the next gphoto2 command (viewfinder=0 or capture).
+      // stop() now uses SIGKILL and waits for the process to exit.
+      if (this.gphoto2Stream) {
+        await this.gphoto2Stream.stop()
+        this.gphoto2Stream = null
+      }
+
       // Deactivate liveview on the camera side (drop the mirror).
       // Always attempt this for Canon cameras — even if liveviewActive was
-      // already false, the camera may still have the mirror up from a prior
-      // DslrManager.capture() call that restarted liveview internally.
+      // already false, the camera may still have the mirror up.
       if (this.cameraModel.toLowerCase().includes('canon')) {
         log.info('[DslrManager] Dropping Canon mirror (viewfinder=0) to deactivate liveview...')
         const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
@@ -869,17 +902,25 @@ export class DslrManager {
     // liveview after the shot even though liveviewActive is now false.
     this._prepDone = true
     if (this.liveviewActive) {
+      // stopLiveview() handles viewfinder=0 (mirror drop) for Canon cameras.
       await this.stopLiveview()
-      log.info('[DslrManager] prepCapture() — waiting 300ms for PTP session to release...')
-      await new Promise((r) => setTimeout(r, 300))
-      // Best-effort autofocus trigger while mirror is down (phase-detect AF is fast)
-      if (!this.isWindows) {
-        try {
-          const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
-          await this.execGphoto2(['--set-config', '/main/actions/autofocusdrive=1', ...portArgs], 5000)
-        } catch (e) {
-          // AF trigger is best-effort; capture will still work without it
-        }
+    }
+    // Trigger autofocus now that the mirror is down (phase-detect AF).
+    // We do this unconditionally — liveviewActive is already false by the time
+    // prepCapture IPC is called (the renderer calls stop-dslr-liveview first),
+    // so the old `if (this.liveviewActive)` guard was always skipping AF.
+    if (!this.isWindows && this.connected) {
+      log.info('[DslrManager] prepCapture() — triggering autofocus (phase-detect, mirror down)...')
+      try {
+        // Kill any lingering PTP processes that might block the AF command
+        require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null; pkill -9 -f imagecaptured 2>/dev/null')
+      } catch (e) {}
+      const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+      const afRes = await this.execGphoto2(['--set-config', '/main/actions/autofocusdrive=1', ...portArgs], 6000)
+      if (afRes.code === 0) {
+        log.ok('[DslrManager] prepCapture() — autofocus triggered successfully')
+      } else {
+        log.warn(`[DslrManager] prepCapture() — AF trigger returned code=${afRes.code} (non-fatal): ${afRes.stderr.trim().slice(0, 100)}`)
       }
     }
     log.info('[DslrManager] prepCapture() complete')
@@ -940,45 +981,21 @@ export class DslrManager {
       log.error(`[DslrManager] Capture failed: ${result.error}`)
     }
 
-    // Resume liveview after capture. If prepCapture() ran, liveview was
-    // active before prep even though this.liveviewActive is now false.
-    const shouldResume = wasLiveviewActive || wasPrepped
-    if (shouldResume && this.mainWindow && !this.mainWindow.isDestroyed()) {
-      log.info('[DslrManager] Resuming liveview after capture...')
-      this.startLiveview((jpeg) => {
-        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-          this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
-        }
-      })
-    }
-
-    // Canon post-capture: ensure liveview is disabled on the camera.
+    // Do NOT restart liveview internally here.
     //
-    // Even though --capture-image-and-download is preceded by --set-config
-    // viewfinder=0 in the args, some Canon cameras re-enter liveview after the
-    // PTP session ends (the camera reverts to its pre-session state). Running a
-    // separate viewfinder=0 command after the capture process has fully exited
-    // forces the mirror down and disables the sensor live feed, saving battery.
+    // Previously this method called startLiveview() after capture, but that
+    // created a race condition: the renderer's BoothApp independently calls
+    // start-dslr-liveview (via dslrPreview.start()) between shots. Having two
+    // concurrent callers manage liveview caused USB state inconsistencies that
+    // made the second capture hang for ~21 seconds.
     //
-    // We only do this when liveview is NOT being restarted (shouldResume
-    // was false), which is the normal case when called from captureDslrShot()
-    // (since dslrPreview.stop() already ran before the capture IPC).
-    if (!shouldResume && result.success && this.cameraModel.toLowerCase().includes('canon') && !this.isWindows) {
-      log.info('[DslrManager] Post-capture: ensuring Canon mirror is down (viewfinder=0)...')
-      const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
-      for (let i = 0; i < 3; i++) {
-        try {
-          require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null; pkill -9 -f imagecaptured 2>/dev/null')
-        } catch (e) {}
-        const res = await this.execGphoto2(['--set-config', '/main/actions/viewfinder=0', ...portArgs], 5000)
-        if (res.code === 0) {
-          log.ok('[DslrManager] Canon mirror dropped successfully')
-          break
-        }
-        log.warn(`[DslrManager] Canon mirror drop failed (attempt ${i + 1}/3): ${res.stderr.trim()}`)
-        if (i < 2) await new Promise(r => setTimeout(r, 1000))
-      }
-    }
+    // The renderer is the single source of truth for liveview lifecycle:
+    //   - Between shots: BoothApp checks dslrPreview.isActive() and calls start()
+    //   - After all shots: BoothApp calls dslrPreview.stop()
+    // The camera's mirror is already down from the viewfinder=0 command that runs
+    // inside captureGphoto2() before --capture-image-and-download, so no extra
+    // cleanup is needed here.
+    log.info('[DslrManager] capture() complete — liveview restart delegated to renderer')
 
     return result
   }
@@ -1028,19 +1045,31 @@ export class DslrManager {
       }
 
       const doCapture = async () => {
-        const args = []
+        const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
 
+        // For Canon cameras: explicitly drop the mirror (viewfinder=0) in a
+        // SEPARATE gphoto2 call BEFORE capture-image-and-download.
+        // Mixing --set-config with --capture-image-and-download in one invocation
+        // is unreliable — some firmware versions ignore the config or reset the
+        // capture pipeline, causing intermittent failures.
         if (this.cameraModel.toLowerCase().includes('canon')) {
-          args.push('--set-config', '/main/actions/viewfinder=0')
+          log.info('[DslrManager] Ensuring mirror is down (viewfinder=0) before capture...')
+          const dropRes = await this.execGphoto2(['--set-config', '/main/actions/viewfinder=0', ...portArgs], 5000)
+          if (dropRes.code !== 0) {
+            log.warn(`[DslrManager] viewfinder=0 returned code=${dropRes.code} — continuing anyway`)
+          }
+          // Give the camera a moment to physically drop the mirror before sending
+          // the shutter command so the timing is correct.
+          await new Promise((r) => setTimeout(r, 300))
         }
 
-        args.push(
+        const args = [
           '--capture-image-and-download',
           '--keep',
           `--filename=${path.join(downloadDir, filenameTemplate)}`,
           '--force-overwrite',
-        )
-        if (this.selectedPort) args.push(`--port=${this.selectedPort}`)
+          ...portArgs,
+        ]
 
         log.info(`[DslrManager] gphoto2 capture args: ${args.join(' ')}`)
         log.info(`[DslrManager] Download dir: ${downloadDir}`)
@@ -1099,12 +1128,16 @@ export class DslrManager {
             log.error(`[DslrManager] Dir scan error: ${scanErr.message}`)
           }
 
-          log.error(`[DslrManager] Capture failed. stderr: ${stderr.trim()}`)
-          resolve({ success: false, error: stderr || `gphoto2 exited with code ${code}` })
+          const errMsg = stderr.trim() || `gphoto2 exited with code ${code}`
+          log.error(`[DslrManager] Capture failed. stderr: ${errMsg}`)
+          // On failure, attempt to put the mirror back down and reset the camera.
+          this.resetCameraAfterFailure()
+          resolve({ success: false, error: errMsg })
         })
 
         proc.on('error', (err) => {
           log.error(`[DslrManager] gphoto2 spawn error during capture: ${err.message}`)
+          this.resetCameraAfterFailure()
           resolve({ success: false, error: err.message })
         })
 
@@ -1112,6 +1145,7 @@ export class DslrManager {
           if (this.capturing) {
             log.error('[DslrManager] Capture timed out after 30 s — killing gphoto2')
             proc.kill()
+            this.resetCameraAfterFailure()
             resolve({ success: false, error: 'Capture timeout (30 s)' })
           }
         }, 30000)
@@ -1124,6 +1158,42 @@ export class DslrManager {
     if (!this.dcc) this.dcc = new DigiCamControlAdapter()
     const filePath = targetPath || path.join(tempDir(), `booth_${Date.now()}.jpg`)
     return this.dcc.capture(filePath)
+  }
+
+  /**
+   * Best-effort camera reset after a failed capture:
+   *  1. Kill any stale PTPCamera / gphoto2 processes
+   *  2. Drop the mirror (viewfinder=0) so the camera doesn't stay in a
+   *     half-open liveview / exposure state with the mirror locked up
+   *  3. Clear internal capturing flag so a retry is possible
+   */
+  private resetCameraAfterFailure(): void {
+    log.warn('[DslrManager] resetCameraAfterFailure() — attempting to drop mirror and reset state')
+    this.capturing = false
+
+    if (this.isWindows || !this.connected) return
+
+    try {
+      require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null; pkill -9 -f imagecaptured 2>/dev/null; pkill -9 -f gphoto2 2>/dev/null')
+    } catch (e) {}
+
+    if (this.cameraModel.toLowerCase().includes('canon')) {
+      const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+      // Fire-and-forget — drop mirror asynchronously so the capture() caller gets
+      // the error result immediately without waiting for the reset.
+      setTimeout(async () => {
+        for (let i = 0; i < 3; i++) {
+          const res = await this.execGphoto2(['--set-config', '/main/actions/viewfinder=0', ...portArgs], 5000)
+          if (res.code === 0) {
+            log.ok('[DslrManager] resetCameraAfterFailure() — mirror dropped successfully')
+            return
+          }
+          log.warn(`[DslrManager] resetCameraAfterFailure() — mirror drop attempt ${i + 1}/3 failed: ${res.stderr.trim()}`)
+          if (i < 2) await new Promise((r) => setTimeout(r, 1000))
+        }
+        log.error('[DslrManager] resetCameraAfterFailure() — could not drop mirror after 3 attempts')
+      }, 100)
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -1207,17 +1277,22 @@ export class DslrManager {
       require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null')
     } catch (e) {}
 
-    // gphoto2 focus mode config: try common paths
-    const focusModeValue = mode === 'auto' ? '1' : '0'
+    // gphoto2 focus mode config: try common paths.
+    // IMPORTANT: --set-config expects a SINGLE "key=value" argument, not two separate tokens.
+    // Canon EOS cameras typically use focusmode2 for the physical AF/MF switch.
+    // '0'=One Shot AF, '1'=AI Servo AF, '4'=MF — but the exact enum varies by model.
+    // We try a range of known config paths and values.
+    const afValue = mode === 'auto' ? '0' : '3'    // 0=One Shot (AF), 3=MF on most Canon
     const configPaths = [
-      `/main/settings/focusmode=${focusModeValue}`,
-      `/main/capturesettings/focusmode=${focusModeValue}`,
-      `/main/actions/focusmode=${focusModeValue}`,
+      `/main/capturesettings/focusmode2=${afValue}`,  // Canon EOS: physical AF/MF selector
+      `/main/capturesettings/focusmode=${afValue}`,
+      `/main/settings/focusmode=${afValue}`,
+      `/main/actions/focusmode=${afValue}`,
     ]
     let success = false
     for (const cfg of configPaths) {
-      const [key, val] = cfg.split('=')
-      const res = await this.execGphoto2(['--set-config', key, val, ...portArgs], 5000)
+      // Pass key=value as a single argument — this is how gphoto2 --set-config works.
+      const res = await this.execGphoto2(['--set-config', cfg, ...portArgs], 5000)
       if (res.code === 0) {
         success = true
         break
