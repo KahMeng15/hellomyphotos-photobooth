@@ -114,17 +114,14 @@ export function killPtpDaemon(): Promise<void> {
     proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
 
     proc.on('close', () => {
-      log.ok('[macOS] PTPCamera / Image Capture daemons evicted + disabled via launchctl')
+      log.ok('[macOS] PTPCamera / Image Capture daemons evicted + disabled')
       if (stderr.trim()) {
         log.warn('[macOS] killPtpDaemon stderr (expected for non-running services):', stderr.trim())
       }
-
-      const resetProc = spawn('gphoto2', ['--reset'])
-      resetProc.on('close', () => {
-        log.ok('[macOS] USB port reset via gphoto2 --reset')
-        setTimeout(resolve, 200)
-      })
-      resetProc.on('error', () => resolve())
+      // NOTE: gphoto2 --reset is intentionally NOT called here. On Sony cameras
+      // the USB reset breaks the PTP session and causes all subsequent gphoto2
+      // commands to hang ("PTP Timeout"). pkill alone is sufficient.
+      setTimeout(resolve, 500)
     })
     proc.on('error', () => {
       log.warn('[macOS] killPtpDaemon: bash spawn error — skipping')
@@ -323,8 +320,10 @@ class Gphoto2LiveviewStream {
   private frameTimer: NodeJS.Timeout | null = null
   private frameCount = 0
   private missCount = 0
-  // Track PTPCamera kills during startup to surface helpful log messages
   private ptpKillCount = 0
+  private usingPolling = false
+  private currentProc: any = null
+  private pollingRetryTimer: NodeJS.Timeout | null = null
 
   constructor(onFrame: (jpeg: Buffer) => void, port: string | null = null) {
     this.onFrame = onFrame
@@ -333,25 +332,52 @@ class Gphoto2LiveviewStream {
 
   /**
    * Start pumping frames.
-   * @param firstFrameTimeoutMs How long to wait for the first real frame
-   *   before declaring the camera inaccessible. 20 s is recommended to
-   *   give the PTPCamera racing loop enough time to win.
+   *
+   * Two-phase approach:
+   *   1. Try --capture-movie --stdout (fast MJPEG streaming — Canon/Nikon)
+   *   2. If no frame after 5 s, fall back to polling --capture-preview (Sony, etc.)
+   *
+   * @param firstFrameTimeoutMs Total timeout for the first frame.
    */
-  start(firstFrameTimeoutMs = 20000): Promise<boolean> {
+  async start(firstFrameTimeoutMs = 20000): Promise<boolean> {
     if (this.active) {
       log.warn('[gphoto2 stream] start() called but already active')
-      return Promise.resolve(true)
+      return true
     }
-    log.info('[gphoto2 stream] Starting MJPEG stream mode')
+    log.info('[gphoto2 stream] Starting liveview (phase 1: MJPEG stream)')
     this.active = true
     this.frameCount = 0
     this.missCount = 0
     this.ptpKillCount = 0
+    this.usingPolling = false
 
+    const deadline = Date.now() + firstFrameTimeoutMs
+
+    // Phase 1: --capture-movie --stdout (wait up to 5 s for first frame)
+    const mjpegOk = await this.tryMjpegStream(deadline)
+    if (mjpegOk) return true
+    if (!this.active) return false
+
+    // Phase 2: Fall back to polling --capture-preview at ~3 fps
+    log.info('[gphoto2 stream] MJPEG produced no frames — falling back to --capture-preview polling')
+    this.usingPolling = true
+    return this.tryPreviewPolling(deadline)
+  }
+
+  /**
+   * Phase 1: Spawn gphoto2 --capture-movie --stdout and parse MJPEG frames
+   * from stdout. Works well for Canon and Nikon cameras that output a
+   * continuous MJPEG stream via USB.
+   */
+  private tryMjpegStream(deadline: number): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
       let resolved = false
       let buffer = Buffer.alloc(0)
-      
+      let procStderr = ''
+      let isRetrying = false
+
+      const remainingMs = Math.max(1, Math.min(deadline - Date.now(), 5000))
+
       const args = ['--capture-movie', '--stdout']
       if (this.port) args.push(`--port=${this.port}`)
 
@@ -360,93 +386,230 @@ class Gphoto2LiveviewStream {
       const timeout = setTimeout(() => {
         if (!resolved) {
           resolved = true
-          log.error(`[gphoto2 stream] No MJPEG frame in ${firstFrameTimeoutMs}ms.`)
+          log.warn(`[gphoto2 stream] No MJPEG frame in ${remainingMs}ms — proceeding to phase 2`)
           resolve(false)
-          this.stop()
+          this.killCurrentProc()
         }
-      }, firstFrameTimeoutMs)
+      }, remainingMs)
 
       this.currentProc.stdout.on('data', (chunk: Buffer) => {
         buffer = Buffer.concat([buffer, chunk])
-        
-        // Find JPEG start (FF D8) and end (FF D9)
+
         let startIdx = buffer.indexOf(Buffer.from([0xff, 0xd8]))
         while (startIdx !== -1) {
           const endIdx = buffer.indexOf(Buffer.from([0xff, 0xd9]), startIdx + 2)
           if (endIdx !== -1) {
-            // We have a full frame!
             const frame = buffer.slice(startIdx, endIdx + 2)
             buffer = buffer.slice(endIdx + 2)
-            
+
             this.frameCount++
             if (this.frameCount % 150 === 0) {
-              log.frame(`[gphoto2 stream] ${this.frameCount} frames delivered via MJPEG`)
+              log.frame(`[gphoto2 stream] ${this.frameCount} frames via MJPEG`)
             }
             this.onFrame(frame)
-            
+
             if (!resolved) {
-               resolved = true
-               clearTimeout(timeout)
-               log.ok(`[gphoto2 stream] ✅ First MJPEG frame confirmed — liveview working`)
-               resolve(true)
+              resolved = true
+              clearTimeout(timeout)
+              log.ok('[gphoto2 stream] First MJPEG frame confirmed')
+              resolve(true)
             }
-            
-            // Look for next frame
+
             startIdx = buffer.indexOf(Buffer.from([0xff, 0xd8]))
           } else {
-            break // Wait for more data to get the end of this frame
+            break
           }
         }
       })
-      
-      let procStderr = ''
-      let isRetrying = false
+
       this.currentProc.stderr?.on('data', (d: Buffer) => {
         procStderr += d.toString()
         if (procStderr.includes('Could not claim') && !resolved && !isRetrying) {
           isRetrying = true
           log.warn(`[gphoto2 stream] USB claimed by PTPCamera (kill #${++this.ptpKillCount}) — pkilling and retrying...`)
-          this.currentProc.kill()
+          clearTimeout(timeout)
+          this.killCurrentProc()
           this.killPtpNow(() => {
-            // Forward the result of the next start attempt to the original promise
-            this.start(firstFrameTimeoutMs).then((result) => {
+            if (this.active) {
+              this.tryMjpegStream(deadline).then((result) => {
+                if (!resolved) {
+                  resolved = true
+                  resolve(result)
+                }
+              })
+            } else {
               if (!resolved) {
                 resolved = true
-                clearTimeout(timeout)
-                resolve(result)
+                resolve(false)
               }
-            })
+            }
           })
         }
       })
 
-      this.currentProc.on('close', (code: number) => {
-        if (this.frameCount === 0 && code !== 0 && !procStderr.includes('Could not claim')) {
-          log.error(`[gphoto2 stream] MJPEG stream exited code=${code}. stderr: ${procStderr.trim().slice(0, 200)}`)
+      this.currentProc.on('close', (code: number | null) => {
+        if (this.frameCount === 0 && !procStderr.includes('Could not claim')) {
+          log.warn(`[gphoto2 stream] MJPEG stream exited code=${code}.`)
         }
-        // Only resolve as false if we are NOT in the middle of a killPtpNow retry
         if (!resolved && !isRetrying) {
           resolved = true
           clearTimeout(timeout)
           resolve(false)
-        }
-        if (this.active && !isRetrying) {
-          this.active = false
         }
       })
     })
   }
 
   /**
-   * pkill -9 all PTPCamera/ptpcamerad processes, reset the USB port (without
-   * a specific port argument to avoid "Port not found"), then re-detect the
-   * camera so `this.port` stays valid after the USB re-enumeration.
+   * Phase 2: Poll --capture-preview in a loop at ~3 fps.
    *
-   * pkill alone is NOT sufficient to clear the USB endpoint stalled state
-   * that PTPCamera leaves behind (Error -110 'I/O in progress'). A USB reset
-   * via `gphoto2 --reset` is required. But `--reset --port=X` would make
-   * port X invalid after the re-enumeration — so we reset without --port,
-   * then run --auto-detect to find the fresh USB path.
+   * Each invocation captures a single preview frame to a temp file.
+   * This is slower than MJPEG streaming (~1-3 fps vs 15-30 fps) but
+   * works with Sony Alpha cameras that don't output MJPEG via USB
+   * in photo / PC Remote mode.
+   */
+  private tryPreviewPolling(deadline: number): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      let resolved = false
+      let pollCount = 0
+
+      if (this.frameTimer) {
+        clearTimeout(this.frameTimer)
+        this.frameTimer = null
+      }
+
+      let isPollingActive = true
+
+      const scheduleNextPoll = (delayMs: number) => {
+        if (!this.active || resolved) {
+          isPollingActive = false
+          if (!resolved) { resolved = true; resolve(false) }
+          return
+        }
+        this.frameTimer = setTimeout(doPoll, delayMs)
+      }
+
+      const doPoll = async () => {
+        if (!isPollingActive || !this.active || resolved) {
+          if (!resolved) { resolved = true; resolve(false) }
+          return
+        }
+
+        if (Date.now() >= deadline) {
+          log.error('[gphoto2 stream] Preview polling timed out — no frames received')
+          isPollingActive = false
+          if (!resolved) { resolved = true; resolve(false) }
+          return
+        }
+
+        pollCount++
+
+        try {
+          const args = ['--capture-preview', '--stdout']
+          if (this.port) args.push(`--port=${this.port}`)
+
+          const result = await this.execGphoto2Buffer(args, 8000)
+
+          // Check for valid JPEG
+          if (result.code === 0 && result.buffer.length > 500 &&
+              result.buffer[0] === 0xFF && result.buffer[1] === 0xD8) {
+            this.frameCount++
+            if (this.frameCount % 30 === 0) {
+              log.frame(`[gphoto2 stream] Polling: ${this.frameCount} frames delivered`)
+            }
+            this.onFrame(result.buffer)
+
+            if (!resolved) {
+              resolved = true
+              log.ok(`[gphoto2 stream] First preview frame confirmed — liveview working (polling mode)`)
+              resolve(true)
+              isPollingActive = false
+              return
+            }
+          } else if (result.stderr.includes('Could not claim')) {
+            this.missCount++
+            log.warn(`[gphoto2 stream] USB claimed during poll #${pollCount} — killing PTPCamera`)
+            await this.killPtpNowAsync()
+            scheduleNextPoll(100)
+            return
+          } else {
+            this.missCount++
+            if (this.missCount <= 3 || this.missCount % 10 === 0) {
+              const preview = result.buffer.length > 20 ? result.buffer.slice(0, 20).toString('hex') + '...' : 'empty'
+              log.warn(`[gphoto2 stream] Poll #${pollCount}: code=${result.code}, data=${result.buffer.length}b, hex="${preview}"`)
+              if (result.stderr.trim()) log.warn(`  stderr: ${result.stderr.trim().slice(0, 150)}`)
+            }
+          }
+        } catch (err: any) {
+          this.missCount++
+          if (this.missCount % 10 === 0) {
+            log.warn(`[gphoto2 stream] Poll miss #${this.missCount}: ${err.message}`)
+          }
+        }
+
+        scheduleNextPoll(300)
+      }
+
+      // Kick off first poll immediately
+      this.frameTimer = setTimeout(doPoll, 0)
+    })
+  }
+
+  /** Run gphoto2 with args, collect text output. */
+  private execGphoto2(args: string[], timeoutMs: number): Promise<{ code: number | null; stdout: string; stderr: string }> {
+    return new Promise((resolve) => {
+      const proc = spawn('gphoto2', args)
+      let stdout = ''
+      let stderr = ''
+      proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
+      proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+      const timer = setTimeout(() => {
+        proc.kill('SIGKILL')
+        resolve({ code: null, stdout, stderr })
+      }, timeoutMs)
+      proc.on('close', (code) => {
+        clearTimeout(timer)
+        resolve({ code, stdout, stderr })
+      })
+      proc.on('error', () => {
+        clearTimeout(timer)
+        resolve({ code: null, stdout, stderr })
+      })
+    })
+  }
+
+  /** Run gphoto2 with args, collect raw stdout buffer (for binary data like JPEG). */
+  private execGphoto2Buffer(args: string[], timeoutMs: number): Promise<{ code: number | null; buffer: Buffer; stderr: string }> {
+    return new Promise((resolve) => {
+      const proc = spawn('gphoto2', args)
+      const chunks: Buffer[] = []
+      let stderr = ''
+      proc.stdout?.on('data', (d: Buffer) => { chunks.push(d) })
+      proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+      const timer = setTimeout(() => {
+        proc.kill('SIGKILL')
+        resolve({ code: null, buffer: Buffer.concat(chunks), stderr })
+      }, timeoutMs)
+      proc.on('close', (code) => {
+        clearTimeout(timer)
+        resolve({ code, buffer: Buffer.concat(chunks), stderr })
+      })
+      proc.on('error', () => {
+        clearTimeout(timer)
+        resolve({ code: null, buffer: Buffer.concat(chunks), stderr })
+      })
+    })
+  }
+
+  /** Wrapped killPtpNow that returns a Promise. */
+  private killPtpNowAsync(): Promise<void> {
+    return new Promise((resolve) => {
+      this.killPtpNow(resolve)
+    })
+  }
+
+  /**
+   * pkill -9 all PTPCamera/ptpcamerad processes, reset USB, re-detect camera.
    */
   private killPtpNow(onDone: () => void): void {
     const detect = () => {
@@ -461,79 +624,85 @@ class Gphoto2LiveviewStream {
         } else {
           this.port = null
         }
-        setTimeout(() => {
-          onDone()
-        }, 500)
+        setTimeout(onDone, 500)
       })
-      det.on('error', () => {
-        setTimeout(() => {
-          onDone()
-        }, 500)
-      })
+      det.on('error', () => setTimeout(onDone, 500))
     }
     const proc = spawn('bash', [
       '-c',
       'pkill -9 -f PTPCamera 2>/dev/null; ' +
       'pkill -9 -f ptpcamerad 2>/dev/null; ' +
       'pkill -9 -f imagecaptured 2>/dev/null; ' +
-      'gphoto2 --reset 2>/dev/null; ' +
+      // --reset intentionally omitted — breaks Sony PTP sessions
       'exit 0',
     ])
     proc.on('close', detect)
     proc.on('error', () => { this.port = null; onDone() })
   }
 
-  private currentProc: any = null
+  /** Kill the current MJPEG process without the full stop() ceremony. */
+  private killCurrentProc(): void {
+    if (this.currentProc) {
+      try {
+        this.currentProc.kill('SIGKILL')
+      } catch {}
+      this.currentProc = null
+    }
+  }
 
   /**
-   * Stop the MJPEG stream.
+   * Stop the stream.
    *
-   * Uses SIGKILL (not SIGTERM) to ensure the gphoto2 process dies immediately.
-   * SIGTERM leaves gphoto2 trying to gracefully close the PTP session, which can
-   * take 20+ seconds on Canon cameras. While gphoto2 is in that dying state, the
-   * USB interface is still held, causing the next capture command to hang.
-   *
-   * Returns a Promise that resolves once the process has fully exited so callers
-   * can be sure the USB interface is free before issuing the next gphoto2 command.
+   * In MJPEG mode: sends SIGINT then escalates to SIGKILL if needed.
+   * In polling mode: stops the poll timer.
    */
   stop(): Promise<void> {
-    log.info(`[gphoto2 stream] Stopping (${this.frameCount} frames, ${this.missCount} misses, ${this.ptpKillCount} PTP kills)`)
+    log.info(`[gphoto2 stream] Stopping (${this.frameCount} frames, ${this.missCount} misses, ${this.ptpKillCount} PTP kills, polling=${this.usingPolling})`)
     this.active = false
+
+    // Clear timers
     if (this.frameTimer) {
       clearTimeout(this.frameTimer)
       this.frameTimer = null
     }
-    if (this.currentProc) {
-      const proc = this.currentProc
-      this.currentProc = null
-      return new Promise<void>((resolve) => {
-        // The safety timeout is cleared inside finish() so it doesn't fire after
-        // the process already exited (which was printing spurious "Timeout" logs).
-        let safetyTimer: NodeJS.Timeout | null = null
-        const finish = () => {
-          if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null }
-          log.info('[gphoto2 stream] MJPEG process exited — USB interface released')
-          // Brief settling pause: after SIGKILL the camera's PTP stack needs a
-          // moment to recognise the abrupt disconnect and clean up internal state.
-          // Without this, the very next gphoto2 command (viewfinder=0) opens a
-          // new PTP session while the camera is still mid-cleanup, causing
-          // unpredictable failures.
-          setTimeout(resolve, 300)
-        }
-        proc.once('close', finish)
-        proc.once('error', finish)
-        // SIGKILL: no graceful shutdown — we need the USB interface back NOW.
+    if (this.pollingRetryTimer) {
+      clearTimeout(this.pollingRetryTimer)
+      this.pollingRetryTimer = null
+    }
+
+    if (this.usingPolling || !this.currentProc) {
+      // Polling mode or no active process — just resolve
+      log.info('[gphoto2 stream] Stopped (polling or no active process)')
+      return Promise.resolve()
+    }
+
+    // MJPEG mode: kill the gphoto2 process
+    const proc = this.currentProc
+    this.currentProc = null
+    return new Promise<void>((resolve) => {
+      let safetyTimer: NodeJS.Timeout | null = null
+      const finish = () => {
+        if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null }
+        log.info('[gphoto2 stream] MJPEG process exited — USB interface released')
+        setTimeout(resolve, 300)
+      }
+      proc.once('close', finish)
+      proc.once('error', finish)
+
+      proc.kill('SIGINT')
+
+      safetyTimer = setTimeout(() => {
+        log.warn('[gphoto2 stream] SIGINT timeout — escalating to SIGKILL')
         proc.kill('SIGKILL')
-        // Safety timeout: if 'close' never fires within 3 s, unblock anyway.
+
         safetyTimer = setTimeout(() => {
           proc.removeListener('close', finish)
           proc.removeListener('error', finish)
           log.warn('[gphoto2 stream] Timeout waiting for MJPEG process exit — continuing')
           resolve()
-        }, 3300)
-      })
-    }
-    return Promise.resolve()
+        }, 1500)
+      }, 1500)
+    })
   }
 
   isActive(): boolean {
@@ -915,18 +1084,6 @@ export class DslrManager {
       if (this.gphoto2Stream) {
         await this.gphoto2Stream.stop()
         this.gphoto2Stream = null
-
-        // SIGKILLing the stream leaves the USB interface stalled in the macOS kernel.
-        // We MUST reset the USB port and re-detect to get a fresh port address before
-        // issuing any further commands like viewfinder=0 or capture.
-        log.info('[DslrManager] Resetting USB port after SIGKILLing stream...')
-        await new Promise<void>((resolve) => {
-          const resetProc = spawn('gphoto2', ['--reset'])
-          resetProc.on('close', () => setTimeout(resolve, 200))
-          resetProc.on('error', () => resolve())
-        })
-        log.info('[DslrManager] Re-detecting cameras to fetch new USB ports after stream kill...')
-        await this.detectGphoto2()
       }
 
       // Deactivate liveview on the camera side (drop the mirror).
@@ -1109,6 +1266,19 @@ export class DslrManager {
       const doCapture = async () => {
         const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
 
+        // For Sony Alpha cameras: set image quality to Fine (JPEG) before capture.
+        // The camera defaults to RAW, which produces .ARW files that are harder
+        // to handle downstream. Best-effort — not fatal if it fails.
+        if (this.cameraModel.toLowerCase().includes('sony') || this.cameraModel.toLowerCase().includes('alpha')) {
+          const qualRes = await this.execGphoto2(['--set-config', '/main/capturesettings/imagequality=Fine', ...portArgs], 5000)
+          if (qualRes.code === 0) {
+            log.ok('[DslrManager] Set image quality to Fine (JPEG)')
+          } else {
+            log.warn(`[DslrManager] Failed to set image quality (non-fatal): ${qualRes.stderr.trim().slice(0, 80)}`)
+          }
+          await new Promise((r) => setTimeout(r, 200))
+        }
+
         // For Canon cameras: explicitly drop the mirror (viewfinder=0) in a
         // SEPARATE gphoto2 call BEFORE capture-image-and-download.
         // Mixing --set-config with --capture-image-and-download in one invocation
@@ -1120,8 +1290,6 @@ export class DslrManager {
           if (dropRes.code !== 0) {
             log.warn(`[DslrManager] viewfinder=0 returned code=${dropRes.code} — continuing anyway`)
           }
-          // Give the camera a moment to physically drop the mirror before sending
-          // the shutter command so the timing is correct.
           await new Promise((r) => setTimeout(r, 300))
         }
 
@@ -1151,7 +1319,17 @@ export class DslrManager {
           log.warn(`[DslrManager] gphoto2 stderr: ${chunk.trim()}`)
         })
 
+        const captureTimeout = setTimeout(() => {
+          if (this.capturing) {
+            log.error('[DslrManager] Capture timed out after 30 s — killing gphoto2')
+            proc.kill()
+            this.resetCameraAfterFailure()
+            resolve({ success: false, error: 'Capture timeout (30 s)' })
+          }
+        }, 30000)
+
         proc.on('close', (code: number | null) => {
+          clearTimeout(captureTimeout)
           log.info(`[DslrManager] gphoto2 capture exited code=${code}`)
 
           const addReturned = (fp: string) => { this._returnedFiles.add(fp); return fp }
@@ -1198,19 +1376,11 @@ export class DslrManager {
         })
 
         proc.on('error', (err) => {
+          clearTimeout(captureTimeout)
           log.error(`[DslrManager] gphoto2 spawn error during capture: ${err.message}`)
           this.resetCameraAfterFailure()
           resolve({ success: false, error: err.message })
         })
-
-        setTimeout(() => {
-          if (this.capturing) {
-            log.error('[DslrManager] Capture timed out after 30 s — killing gphoto2')
-            proc.kill()
-            this.resetCameraAfterFailure()
-            resolve({ success: false, error: 'Capture timeout (30 s)' })
-          }
-        }, 30000)
       }
       doCapture()
     })
