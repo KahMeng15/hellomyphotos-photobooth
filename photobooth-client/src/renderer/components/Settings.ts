@@ -80,6 +80,9 @@ export class Settings {
   private dslrSelectContainer!: HTMLDivElement
   private dslrSelect!: HTMLSelectElement
   private webcamDeviceRow!: HTMLDivElement
+  private dslrScanBtn!: HTMLButtonElement
+  private dslrKillPtpBtn!: HTMLButtonElement
+  private dslrExposureSection!: HTMLDivElement
 
   constructor(container: HTMLElement, onChange: (settings: BoothSettings) => void) {
     this.onChange = onChange
@@ -102,55 +105,84 @@ export class Settings {
 
     this.overlay = document.createElement('div')
     this.overlay.style.cssText = `
-      position: absolute; inset: 0; background: rgba(0,0,0,0.85);
-      display: none; align-items: center; justify-content: center;
+      position: absolute; inset: 0; background: #0f0f0f;
+      display: none; flex-direction: column;
       z-index: 30; pointer-events: all;
     `
 
     const panel = document.createElement('div')
     panel.style.cssText = `
-      background: #1a1a1a; border-radius: 16px; padding: 2rem;
-      min-width: 420px; max-width: 500px; max-height: 90vh; overflow-y: auto;
+      background: #0f0f0f; padding: 2rem;
+      width: 100%; box-sizing: border-box;
+      flex: 1; overflow-y: auto;
     `
 
+    const header = document.createElement('div')
+    header.style.cssText = 'display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;'
+
+    const backBtn = document.createElement('button')
+    backBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>`
+    backBtn.style.cssText = `
+      background: none; border: none; color: #888; cursor: pointer;
+      padding: 0.25rem; display: flex; align-items: center; border-radius: 6px;
+    `
+    backBtn.addEventListener('click', () => {
+      if (this.dirty) {
+        if (!confirm('You have unsaved changes. Discard them?')) return
+      }
+      this.hide()
+    })
+    header.appendChild(backBtn)
+
     const title = document.createElement('h2')
-    title.textContent = 'Booth Settings'
-    title.style.cssText = 'font-size: 1.25rem; font-weight: 700; margin: 0 0 1.5rem;'
-    panel.appendChild(title)
+    title.textContent = 'Settings'
+    title.style.cssText = 'font-size: 1.25rem; font-weight: 700; margin: 0; flex: 1;'
+    header.appendChild(title)
 
+    const saveBtn = document.createElement('button')
+    saveBtn.textContent = 'Save'
+    saveBtn.style.cssText = `
+      padding: 0.5rem 1.25rem;
+      background: #fff; color: #000; border: none; border-radius: 8px;
+      font-size: 0.875rem; font-weight: 600; cursor: pointer;
+    `
+    saveBtn.addEventListener('click', () => {
+      this.save()
+      this.dirty = false
+      this.hide()
+    })
+    header.appendChild(saveBtn)
+    panel.appendChild(header)
+
+    const grid = document.createElement('div')
+    grid.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; align-items: start;'
+
+    // Column 1 — Server URL + Event OTP
+    const col1 = document.createElement('div')
+    col1.style.cssText = 'display: flex; flex-direction: column; gap: 1.5rem;'
     const serverSection = this.createServerSection()
-    panel.appendChild(serverSection)
-
+    col1.appendChild(serverSection)
     const otpSection = this.createOtpSection()
-    panel.appendChild(otpSection)
+    otpSection.style.borderBottom = 'none'
+    col1.appendChild(otpSection)
 
+    // Column 2 — Camera Source, Devices, DSLR Exposure, Focus
+    const col2 = document.createElement('div')
+    col2.style.cssText = 'display: flex; flex-direction: column; gap: 1.5rem;'
     const cameraSourceSection = this.createCameraSourceSection()
-    panel.appendChild(cameraSourceSection)
-
+    cameraSourceSection.style.borderBottom = 'none'
+    col2.appendChild(cameraSourceSection)
     const devicesSection = this.createDevicesSection()
-    panel.appendChild(devicesSection)
+    devicesSection.style.borderBottom = 'none'
+    col2.appendChild(devicesSection)
 
-    const captureTitle = document.createElement('h3')
-    captureTitle.textContent = 'Capture'
-    captureTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0 0 1rem; text-transform: uppercase; letter-spacing: 0.05em;'
-    panel.appendChild(captureTitle)
-
-    const fields = [
-      this.createField('Photos per session', 1, 4, this.settings.photoCount, (v) => { this.settings.photoCount = v; this.markDirty() }, false),
-      this.createField('Countdown (seconds)', 3, 10, this.settings.countdown, (v) => { this.settings.countdown = v; this.markDirty() }, true),
-      this.createField('Interval (seconds)', 0, 5, this.settings.captureInterval, (v) => { this.settings.captureInterval = v; this.markDirty() }, false),
-      this.createField('Preview (seconds)', 1, 5, this.settings.postCapturePreview, (v) => { this.settings.postCapturePreview = v; this.markDirty() }, true),
-    ]
-    const settingsBox = document.createElement('div')
-    settingsBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden; margin-bottom: 1rem;'
-    for (const f of fields) settingsBox.appendChild(f)
-    fields[fields.length - 1].style.borderBottom = 'none'
-    panel.appendChild(settingsBox)
+    this.dslrExposureSection = document.createElement('div')
+    this.dslrExposureSection.style.cssText = 'display: flex; flex-direction: column; gap: 1rem;'
 
     const dslrTitle = document.createElement('h3')
     dslrTitle.textContent = 'DSLR Exposure'
-    dslrTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 1rem 0 1rem; text-transform: uppercase; letter-spacing: 0.05em;'
-    panel.appendChild(dslrTitle)
+    dslrTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;'
+    this.dslrExposureSection.appendChild(dslrTitle)
 
     const isoChoices = ['auto', '100', '200', '400', '800', '1600', '3200', '6400']
     const shutterChoices = ['auto', '1/30', '1/40', '1/50', '1/60', '1/80', '1/100', '1/125', '1/160', '1/200', '1/250', '1/320', '1/400', '1/500', '1/640', '1/800']
@@ -197,19 +229,18 @@ export class Settings {
       createChoiceSlider('Aperture', this.settings.dslrAperture || 'auto', apertureChoices, (v) => { this.settings.dslrAperture = v; this.markDirty() }, false),
     ]
     const dslrBox = document.createElement('div')
-    dslrBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden; margin-bottom: 1rem;'
+    dslrBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden;'
     for (const f of dslrFields) dslrBox.appendChild(f)
     dslrFields[dslrFields.length - 1].style.borderBottom = 'none'
-    panel.appendChild(dslrBox)
+    this.dslrExposureSection.appendChild(dslrBox)
 
-    // --- Focus Mode ---
     const focusTitle = document.createElement('h3')
     focusTitle.textContent = 'Focus'
-    focusTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 1rem 0 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;'
-    panel.appendChild(focusTitle)
+    focusTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;'
+    this.dslrExposureSection.appendChild(focusTitle)
 
     const focusBox = document.createElement('div')
-    focusBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden; margin-bottom: 1rem;'
+    focusBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden;'
 
     const focusRow = document.createElement('div')
     focusRow.style.cssText = 'display: flex; padding: 0.75rem 1rem; background: #191919; align-items: center; justify-content: space-between;'
@@ -241,49 +272,35 @@ export class Settings {
     focusToggle.appendChild(mfBtn)
     focusRow.appendChild(focusToggle)
     focusBox.appendChild(focusRow)
-    panel.appendChild(focusBox)
+    this.dslrExposureSection.appendChild(focusBox)
+    col2.appendChild(this.dslrExposureSection)
 
-    const btnRow = document.createElement('div')
-    btnRow.style.cssText = 'display: flex; gap: 0.5rem; margin-top: 1.5rem;'
+    // Column 3 — Capture
+    const col3 = document.createElement('div')
+    col3.style.cssText = 'display: flex; flex-direction: column; gap: 1.5rem;'
+    const captureTitle = document.createElement('h3')
+    captureTitle.textContent = 'Capture'
+    captureTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;'
+    col3.appendChild(captureTitle)
 
-    const saveBtn = document.createElement('button')
-    saveBtn.textContent = 'Save'
-    saveBtn.style.cssText = `
-      flex: 1; padding: 0.75rem;
-      background: #fff; color: #000; border: none; border-radius: 8px;
-      font-size: 0.9375rem; font-weight: 600; cursor: pointer;
-    `
-    saveBtn.addEventListener('click', () => {
-      this.save()
-      this.dirty = false
-      this.hide()
-    })
-    btnRow.appendChild(saveBtn)
+    const fields = [
+      this.createField('Photos per session', 1, 4, this.settings.photoCount, (v) => { this.settings.photoCount = v; this.markDirty() }, false),
+      this.createField('Countdown (seconds)', 3, 10, this.settings.countdown, (v) => { this.settings.countdown = v; this.markDirty() }, true),
+      this.createField('Interval (seconds)', 0, 5, this.settings.captureInterval, (v) => { this.settings.captureInterval = v; this.markDirty() }, false),
+      this.createField('Preview (seconds)', 1, 5, this.settings.postCapturePreview, (v) => { this.settings.postCapturePreview = v; this.markDirty() }, true),
+    ]
+    const settingsBox = document.createElement('div')
+    settingsBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden;'
+    for (const f of fields) settingsBox.appendChild(f)
+    fields[fields.length - 1].style.borderBottom = 'none'
+    col3.appendChild(settingsBox)
 
-    const cancelBtn = document.createElement('button')
-    cancelBtn.textContent = 'Cancel'
-    cancelBtn.style.cssText = `
-      flex: 1; padding: 0.75rem;
-      background: transparent; color: #888; border: 1px solid #333; border-radius: 8px;
-      font-size: 0.9375rem; cursor: pointer;
-    `
-    cancelBtn.addEventListener('click', () => {
-      if (this.dirty) {
-        if (!confirm('You have unsaved changes. Discard them?')) return
-      }
-      this.hide()
-    })
-    btnRow.appendChild(cancelBtn)
-    panel.appendChild(btnRow)
+    grid.appendChild(col1)
+    grid.appendChild(col2)
+    grid.appendChild(col3)
+    panel.appendChild(grid)
 
-    this.overlay.addEventListener('click', (e) => {
-      if (e.target === this.overlay && this.visible) {
-        if (this.dirty) {
-          if (!confirm('You have unsaved changes. Discard them?')) return
-        }
-        this.hide()
-      }
-    })
+
 
     this.overlay.appendChild(panel)
     container.appendChild(this.overlay)
@@ -463,11 +480,11 @@ export class Settings {
     `
 
     this.webcamModeBtn = document.createElement('button')
-    this.webcamModeBtn.textContent = '📷  Webcam'
+    this.webcamModeBtn.textContent = 'Webcam'
     this.webcamModeBtn.id = 'cam-mode-webcam'
 
     this.dslrModeBtn = document.createElement('button')
-    this.dslrModeBtn.textContent = '📸  DSLR / Mirrorless'
+    this.dslrModeBtn.textContent = 'DSLR / Mirrorless'
     this.dslrModeBtn.id = 'cam-mode-dslr'
 
     const segBtnBase = `
@@ -504,16 +521,16 @@ export class Settings {
     section.appendChild(this.dslrSelectContainer)
 
     // Scan button
-    const scanBtn = document.createElement('button')
-    scanBtn.textContent = 'Scan for Camera'
-    scanBtn.id = 'dslr-scan-btn'
-    scanBtn.style.cssText = `
+    this.dslrScanBtn = document.createElement('button')
+    this.dslrScanBtn.textContent = 'Scan for Camera'
+    this.dslrScanBtn.id = 'dslr-scan-btn'
+    this.dslrScanBtn.style.cssText = `
       padding: 0.375rem 0.875rem; border: 1px solid #444; border-radius: 6px;
       background: #222; color: #ccc; font-size: 0.75rem; cursor: pointer;
     `
-    scanBtn.addEventListener('click', async () => {
-      scanBtn.disabled = true
-      scanBtn.textContent = 'Scanning…'
+    this.dslrScanBtn.addEventListener('click', async () => {
+      this.dslrScanBtn.disabled = true
+      this.dslrScanBtn.textContent = 'Scanning…'
       try {
         const result = await window.hellomyphoto?.detectDslr()
         this.dslrSelectContainer.style.display = 'none'
@@ -528,7 +545,6 @@ export class Settings {
               const opt = document.createElement('option')
               opt.value = c.port
               opt.textContent = `${c.model} (${c.port})`
-              // Attempt to match the saved or currently connected one
               if (c.model === result.model) opt.selected = true
               this.dslrSelect.appendChild(opt)
             })
@@ -542,23 +558,23 @@ export class Settings {
         this.dslrStatusEl.style.color = '#f44336'
         this.dslrStatusEl.textContent = '● Detection failed'
       }
-      scanBtn.disabled = false
-      scanBtn.textContent = 'Scan for Camera'
+      this.dslrScanBtn.disabled = false
+      this.dslrScanBtn.textContent = 'Scan for Camera'
     })
-    section.appendChild(scanBtn)
+    section.appendChild(this.dslrScanBtn)
 
     // Kill PTPCamera button (macOS: PTPCamera daemon steals USB from gphoto2)
-    const killPtpBtn = document.createElement('button')
-    killPtpBtn.textContent = 'Kill Camera Daemon'
-    killPtpBtn.id = 'dslr-kill-ptp-btn'
-    killPtpBtn.style.cssText = `
+    this.dslrKillPtpBtn = document.createElement('button')
+    this.dslrKillPtpBtn.textContent = 'Kill Camera Daemon'
+    this.dslrKillPtpBtn.id = 'dslr-kill-ptp-btn'
+    this.dslrKillPtpBtn.style.cssText = `
       padding: 0.375rem 0.875rem; border: 1px solid #c0392b; border-radius: 6px;
       background: #2a0f0d; color: #e74c3c; font-size: 0.75rem; cursor: pointer;
       margin-left: 0.5rem;
     `
-    killPtpBtn.addEventListener('click', async () => {
-      killPtpBtn.disabled = true
-      killPtpBtn.textContent = 'Killing…'
+    this.dslrKillPtpBtn.addEventListener('click', async () => {
+      this.dslrKillPtpBtn.disabled = true
+      this.dslrKillPtpBtn.textContent = 'Killing…'
       try {
         const result = await window.hellomyphoto?.killPtpDaemon()
         if (result?.success) {
@@ -581,10 +597,10 @@ export class Settings {
         this.dslrStatusEl.style.color = '#f44336'
         this.dslrStatusEl.textContent = '● Failed to kill daemon'
       }
-      killPtpBtn.disabled = false
-      killPtpBtn.textContent = 'Kill Camera Daemon'
+      this.dslrKillPtpBtn.disabled = false
+      this.dslrKillPtpBtn.textContent = 'Kill Camera Daemon'
     })
-    section.appendChild(killPtpBtn)
+    section.appendChild(this.dslrKillPtpBtn)
 
     // Wire up button events
     this.webcamModeBtn.addEventListener('click', () => {
@@ -609,15 +625,38 @@ export class Settings {
   private refreshCameraSourceUI() {
     const isDslr = this.settings.cameraMode === 'dslr'
 
-    // Active button styling
     const active = 'background: #fff; color: #000;'
     const inactive = 'background: #111; color: #888;'
     this.webcamModeBtn.style.cssText = `flex: 1; padding: 0.625rem; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; transition: background 150ms; ${isDslr ? inactive : active}`
     this.dslrModeBtn.style.cssText = `flex: 1; padding: 0.625rem; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; transition: background 150ms; ${isDslr ? active : inactive}`
 
-    // Show/hide the webcam device row in Devices section
-    if (this.webcamDeviceRow) {
-      this.webcamDeviceRow.style.display = isDslr ? 'none' : ''
+    if (this.webcamDeviceRow && this.cameraSelect) {
+      if (isDslr) {
+        this.webcamDeviceRow.style.display = ''
+        this.cameraSelect.disabled = true
+        this.cameraSelect.style.opacity = '0.45'
+        this.cameraSelect.innerHTML = '<option value="">N/A</option>'
+      } else {
+        this.cameraSelect.disabled = false
+        this.cameraSelect.style.opacity = '1'
+        this.populateDevices()
+      }
+    }
+
+    if (this.dslrScanBtn) {
+      this.dslrScanBtn.disabled = !isDslr
+      this.dslrScanBtn.style.opacity = isDslr ? '1' : '0.35'
+      this.dslrScanBtn.style.cursor = isDslr ? 'pointer' : 'default'
+    }
+    if (this.dslrKillPtpBtn) {
+      this.dslrKillPtpBtn.disabled = !isDslr
+      this.dslrKillPtpBtn.style.opacity = isDslr ? '1' : '0.35'
+      this.dslrKillPtpBtn.style.cursor = isDslr ? 'pointer' : 'default'
+    }
+
+    if (this.dslrExposureSection) {
+      this.dslrExposureSection.style.opacity = isDslr ? '1' : '0.35'
+      this.dslrExposureSection.style.pointerEvents = isDslr ? 'auto' : 'none'
     }
   }
 
