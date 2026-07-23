@@ -26,10 +26,12 @@ export class BoothApp {
   private overlay: HTMLDivElement
   private statusBar: HTMLDivElement
   private captureBtn: HTMLButtonElement
-  private stopBtn: HTMLButtonElement
-  private dslrSettingsBtn!: HTMLButtonElement
-  private dslrSettingsModal!: HTMLDivElement
-  private isDslrSettingsOpen = false
+  private settingsBtn!: HTMLButtonElement
+  private exitBtn!: HTMLButtonElement
+  private pauseBtn!: HTMLButtonElement
+  private statusActions!: HTMLDivElement
+  private isPauseActive = false
+  private pauseResume: (() => void) | null = null
   private stateDisplay!: HTMLDivElement
   private landingEl!: HTMLDivElement
   private flashOverlay!: HTMLDivElement
@@ -39,6 +41,10 @@ export class BoothApp {
 
   // DSLR disconnect error overlay
   private dslrErrorOverlay!: HTMLDivElement
+
+  private captureProgress!: HTMLDivElement
+  private captureProgressText!: HTMLDivElement
+  private captureProgressBars!: HTMLDivElement
 
   private isCapturing = false
   private isLive = false
@@ -110,6 +116,11 @@ export class BoothApp {
       minHeight: '0', width: '100%', background: '#000', paddingTop: '2rem',
     })
     this.previewWindow.appendChild(this.previewBox)
+    this.previewWindow.addEventListener('click', (e) => {
+      if (this.isLive && !this.isCapturing && e.target !== this.captureBtn && !this.statusActions.contains(e.target as Node)) {
+        this.startCapture()
+      }
+    })
 
     this.overlay = document.createElement('div')
     Object.assign(this.overlay.style, {
@@ -123,18 +134,6 @@ export class BoothApp {
       fontSize: '8rem', fontWeight: '900', color: 'rgba(255,255,255,0.15)',
       textAlign: 'center', pointerEvents: 'none', userSelect: 'none',
     })
-
-    this.stopBtn = document.createElement('button')
-    this.stopBtn.textContent = 'Exit'
-    Object.assign(this.stopBtn.style, {
-      position: 'absolute', top: '1rem', right: '1rem', zIndex: '50',
-      padding: '0.5rem 1.25rem', fontSize: '0.9375rem', fontWeight: '600',
-      background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)',
-      borderRadius: '8px', cursor: 'pointer', display: 'none',
-    })
-    this.stopBtn.addEventListener('mouseenter', () => { this.stopBtn.style.background = 'rgba(255,255,255,0.25)' })
-    this.stopBtn.addEventListener('mouseleave', () => { this.stopBtn.style.background = 'rgba(255,255,255,0.15)' })
-    this.stopBtn.addEventListener('click', () => this.goHome())
 
     this.statusBar = document.createElement('div')
     Object.assign(this.statusBar.style, {
@@ -152,23 +151,39 @@ export class BoothApp {
     })
     this.captureBtn.addEventListener('click', () => this.startCapture())
 
-    this.dslrSettingsBtn = document.createElement('button')
-    this.dslrSettingsBtn.innerHTML = `
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"></circle>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-      </svg>
-    `
-    Object.assign(this.dslrSettingsBtn.style, {
-      padding: '1rem',
-      background: 'rgba(255, 255, 255, 0.1)', color: '#fff', border: 'none', borderRadius: '50%',
-      cursor: 'pointer', pointerEvents: 'all', display: 'none',
-      alignItems: 'center', justifyContent: 'center',
-      position: 'absolute', right: '2rem'
+    // Right-side action buttons container
+    this.statusActions = document.createElement('div')
+    Object.assign(this.statusActions.style, {
+      display: 'flex', gap: '0.5rem', alignItems: 'center',
+      position: 'absolute', right: '2rem',
     })
-    this.dslrSettingsBtn.addEventListener('click', () => this.toggleDslrSettingsModal())
 
-    this.createDslrSettingsModal()
+    const iconBtnStyle = {
+      padding: '0.625rem',
+      background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', borderRadius: '50%',
+      cursor: 'pointer', display: 'flex',
+      alignItems: 'center', justifyContent: 'center',
+    }
+
+    this.settingsBtn = document.createElement('button')
+    this.settingsBtn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`
+    Object.assign(this.settingsBtn.style, iconBtnStyle)
+    this.settingsBtn.addEventListener('click', () => this.settings.toggle())
+
+    this.pauseBtn = document.createElement('button')
+    this.pauseBtn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>`
+    Object.assign(this.pauseBtn.style, iconBtnStyle)
+    this.pauseBtn.addEventListener('click', () => this.togglePause())
+
+    this.exitBtn = document.createElement('button')
+    this.exitBtn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`
+    Object.assign(this.exitBtn.style, iconBtnStyle)
+    this.exitBtn.addEventListener('click', () => this.goHome())
+
+    this.statusActions.appendChild(this.settingsBtn)
+    this.statusActions.appendChild(this.pauseBtn)
+    this.statusActions.appendChild(this.exitBtn)
+    this.statusBar.appendChild(this.statusActions)
 
     // ------------------------------------------------------------------
     // Landing screen
@@ -264,16 +279,17 @@ export class BoothApp {
     // DSLR disconnect error overlay
     // ------------------------------------------------------------------
     this.dslrErrorOverlay = this.buildDslrErrorOverlay()
+    this.createCaptureProgress()
 
     this.container.append(
       this.landingEl,
       this.previewWindow,
       this.overlay,
       this.stateDisplay,
-      this.stopBtn,
       this.statusBar,
       this.flashOverlay,
       this.dslrErrorOverlay,
+      this.captureProgress,
     )
 
     this.camera = new CameraManager()
@@ -316,7 +332,14 @@ export class BoothApp {
     })
 
     box.innerHTML = `
-      <div style="font-size:3rem;margin-bottom:1rem;">📷</div>
+      <div style="margin-bottom:1rem;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f44336" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="2" y1="2" x2="22" y2="22"/>
+          <path d="M7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16"/>
+          <path d="M9.5 4h5L17 7h3a2 2 0 0 1 2 2v7.5"/>
+          <path d="M14.12 15.12A3 3 0 1 1 9.88 10.88"/>
+        </svg>
+      </div>
       <h2 style="font-size:1.25rem;font-weight:700;margin:0 0 0.5rem;">Camera Disconnected</h2>
       <p id="dslr-error-msg" style="font-size:0.875rem;color:#888;margin:0 0 1.5rem;line-height:1.5;">
         The camera was unplugged. Please reconnect it via USB and press Retry.
@@ -336,6 +359,54 @@ export class BoothApp {
     })
 
     return overlay
+  }
+
+  private createCaptureProgress() {
+    this.captureProgress = document.createElement('div')
+    Object.assign(this.captureProgress.style, {
+      position: 'absolute', bottom: '2rem', left: '2rem', zIndex: '40',
+      display: 'none', flexDirection: 'column', gap: '0.5rem',
+      fontFamily: 'system-ui, sans-serif',
+    })
+
+    this.captureProgressText = document.createElement('div')
+    Object.assign(this.captureProgressText.style, {
+      fontSize: '0.875rem', fontWeight: '600', color: '#fff',
+    })
+    this.captureProgress.appendChild(this.captureProgressText)
+
+    this.captureProgressBars = document.createElement('div')
+    Object.assign(this.captureProgressBars.style, {
+      display: 'flex', gap: '0.25rem',
+    })
+    this.captureProgress.appendChild(this.captureProgressBars)
+  }
+
+  private showCaptureProgress(total: number, completed: number) {
+    this.captureProgressText.textContent = `Shot ${completed + 1} of ${total}`
+    this.captureProgressBars.innerHTML = ''
+    for (let i = 0; i < total; i++) {
+      const bar = document.createElement('div')
+      Object.assign(bar.style, {
+        width: '2rem', height: '4px', borderRadius: '2px',
+        background: i < completed ? '#fff' : 'rgba(255,255,255,0.2)',
+        transition: 'background 200ms',
+      })
+      this.captureProgressBars.appendChild(bar)
+    }
+    this.captureProgress.style.display = 'flex'
+  }
+
+  private updateCaptureProgress(completed: number) {
+    const bars = this.captureProgressBars.children
+    for (let i = 0; i < bars.length; i++) {
+      const bar = bars[i] as HTMLDivElement
+      bar.style.background = i < completed ? '#fff' : 'rgba(255,255,255,0.2)'
+    }
+  }
+
+  private hideCaptureProgress() {
+    this.captureProgress.style.display = 'none'
   }
 
   private showDslrError(message?: string) {
@@ -376,152 +447,7 @@ export class BoothApp {
     }
   }
 
-  private createDslrSettingsModal() {
-    this.dslrSettingsModal = document.createElement('div')
-    Object.assign(this.dslrSettingsModal.style, {
-      position: 'absolute', bottom: '100px', right: '40px',
-      background: 'rgba(20,20,20,0.85)', backdropFilter: 'blur(10px)', border: '1px solid #333',
-      borderRadius: '12px', padding: '1.5rem', width: '320px', display: 'none', zIndex: '100',
-      flexDirection: 'column', gap: '1rem', color: '#fff', fontFamily: 'system-ui, sans-serif'
-    })
 
-    const title = document.createElement('div')
-    title.textContent = 'Camera Exposure'
-    title.style.cssText = 'font-weight: 600; font-size: 1.1rem; margin-bottom: 0.5rem;'
-    this.dslrSettingsModal.appendChild(title)
-
-    const isoChoices = ['auto', '100', '200', '400', '800', '1600', '3200', '6400']
-    const shutterChoices = ['auto', '1/30', '1/40', '1/50', '1/60', '1/80', '1/100', '1/125', '1/160', '1/200', '1/250', '1/320', '1/400', '1/500', '1/640', '1/800']
-    const apertureChoices = ['auto', '2.8', '4', '4.5', '5', '5.6', '6.3', '7.1', '8', '9', '10', '11']
-
-    const createSliderRow = (labelStr: string, choices: string[], key: 'dslrIso' | 'dslrShutterSpeed' | 'dslrAperture') => {
-      const row = document.createElement('div')
-      row.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
-      const header = document.createElement('div')
-      header.style.cssText = 'display: flex; justify-content: space-between; font-size: 0.9rem;'
-      const lbl = document.createElement('span')
-      lbl.textContent = labelStr; lbl.style.color = '#aaa'
-      const valDisp = document.createElement('span')
-      valDisp.textContent = this.settingsData[key] || 'auto'
-      header.appendChild(lbl); header.appendChild(valDisp)
-      
-      const input = document.createElement('input')
-      input.type = 'range'; input.min = '0'; input.max = String(choices.length - 1)
-      const currentIdx = choices.indexOf(this.settingsData[key] || 'auto')
-      input.value = String(currentIdx >= 0 ? currentIdx : 0)
-      
-      input.addEventListener('input', () => {
-        const v = choices[parseInt(input.value)]
-        valDisp.textContent = v
-        this.settingsData[key] = v
-      })
-      input.addEventListener('change', () => {
-        window.hellomyphoto?.saveSettings(this.settingsData)
-      })
-
-      row.appendChild(header)
-      row.appendChild(input)
-      return row
-    }
-
-    this.dslrSettingsModal.appendChild(createSliderRow('Shutter', shutterChoices, 'dslrShutterSpeed'))
-    this.dslrSettingsModal.appendChild(createSliderRow('ISO', isoChoices, 'dslrIso'))
-    this.dslrSettingsModal.appendChild(createSliderRow('Aperture', apertureChoices, 'dslrAperture'))
-
-    // --- Focus Mode ---
-    const focusSection = document.createElement('div')
-    focusSection.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
-
-    const focusHeader = document.createElement('div')
-    focusHeader.textContent = 'Focus'
-    focusHeader.style.cssText = 'font-weight: 600; font-size: 0.9rem; color: #aaa;'
-    focusSection.appendChild(focusHeader)
-
-    const focusToggleRow = document.createElement('div')
-    focusToggleRow.style.cssText = 'display: flex; border: 1px solid #333; border-radius: 6px; overflow: hidden;'
-
-    const currentFocusMode = this.settingsData.dslrFocusMode || 'auto'
-    const afBtn = document.createElement('button')
-    afBtn.textContent = 'AF'
-    afBtn.style.cssText = `flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; ${currentFocusMode === 'auto' ? 'background: #fff; color: #000;' : 'background: #222; color: #888;'}`
-    const mfBtn = document.createElement('button')
-    mfBtn.textContent = 'MF'
-    mfBtn.style.cssText = `flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; ${currentFocusMode === 'manual' ? 'background: #fff; color: #000;' : 'background: #222; color: #888;'}`
-
-    const actionRow = document.createElement('div')
-    actionRow.style.cssText = 'display: flex; gap: 0.5rem;'
-
-    const applyFocusModeStyle = (mode: string) => {
-      afBtn.style.cssText = `flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; ${mode === 'auto' ? 'background: #fff; color: #000;' : 'background: #222; color: #888;'}`
-      mfBtn.style.cssText = `flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; ${mode === 'manual' ? 'background: #fff; color: #000;' : 'background: #222; color: #888;'}`
-      actionRow.innerHTML = ''
-      if (mode === 'auto') {
-        const afTrigger = document.createElement('button')
-        afTrigger.textContent = 'Trigger AF'
-        afTrigger.style.cssText = 'flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; background: #2196F3; color: #fff;'
-        afTrigger.addEventListener('click', () => {
-          window.hellomyphoto?.dslrTriggerAutofocus()
-        })
-        actionRow.appendChild(afTrigger)
-      } else {
-        const nearBtn = document.createElement('button')
-        nearBtn.textContent = 'Near'
-        nearBtn.style.cssText = 'flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: 1px solid #555; border-radius: 6px; cursor: pointer; background: #333; color: #fff;'
-        nearBtn.addEventListener('mousedown', () => window.hellomyphoto?.dslrTriggerFocusNear())
-        const farBtn = document.createElement('button')
-        farBtn.textContent = 'Far'
-        farBtn.style.cssText = 'flex: 1; padding: 0.5rem; font-size: 0.8125rem; font-weight: 600; border: 1px solid #555; border-radius: 6px; cursor: pointer; background: #333; color: #fff;'
-        farBtn.addEventListener('mousedown', () => window.hellomyphoto?.dslrTriggerFocusFar())
-        actionRow.appendChild(nearBtn)
-        actionRow.appendChild(farBtn)
-      }
-    }
-
-    afBtn.addEventListener('click', () => {
-      this.settingsData.dslrFocusMode = 'auto'
-      applyFocusModeStyle('auto')
-      window.hellomyphoto?.dslrSetFocusMode('auto')
-      window.hellomyphoto?.saveSettings(this.settingsData)
-    })
-    mfBtn.addEventListener('click', () => {
-      this.settingsData.dslrFocusMode = 'manual'
-      applyFocusModeStyle('manual')
-      window.hellomyphoto?.dslrSetFocusMode('manual')
-      window.hellomyphoto?.saveSettings(this.settingsData)
-    })
-
-    focusToggleRow.appendChild(afBtn)
-    focusToggleRow.appendChild(mfBtn)
-    focusSection.appendChild(focusToggleRow)
-    applyFocusModeStyle(currentFocusMode)
-    focusSection.appendChild(actionRow)
-
-    this.dslrSettingsModal.appendChild(focusSection)
-
-    // Update modal when global settings are updated remotely
-    window.hellomyphoto?.getSettings().then((s) => {
-      if (s) {
-        this.settingsData = { ...this.settingsData, ...s }
-        // We re-render lazily on open, so just close it if it's open to refresh next time
-      }
-    })
-
-    document.body.appendChild(this.dslrSettingsModal)
-  }
-
-  private toggleDslrSettingsModal() {
-    this.isDslrSettingsOpen = !this.isDslrSettingsOpen
-    if (this.isDslrSettingsOpen) {
-      // Rebuild the modal to get fresh values
-      this.dslrSettingsModal.remove()
-      this.createDslrSettingsModal()
-      this.dslrSettingsModal.style.display = 'flex'
-      this.dslrSettingsBtn.style.background = 'rgba(255, 255, 255, 0.3)'
-    } else {
-      this.dslrSettingsModal.style.display = 'none'
-      this.dslrSettingsBtn.style.background = 'rgba(255, 255, 255, 0.1)'
-    }
-  }
 
   // -------------------------------------------------------------------------
   // Keyboard shortcuts
@@ -750,20 +676,16 @@ export class BoothApp {
     this.isLive = true
     this._state = 'live'
     this.emitBoothState()
-    this.stopBtn.style.display = 'block'
     this.captureBtn.style.display = 'block'
     this.captureBtn.style.visibility = 'visible'
     this.statusBar.appendChild(this.captureBtn)
-    
-    if (this.cameraMode === 'dslr') {
-      this.dslrSettingsBtn.style.display = 'flex'
-      this.statusBar.appendChild(this.dslrSettingsBtn)
-    } else {
-      this.dslrSettingsBtn.style.display = 'none'
-    }
-    
-    this.stateDisplay.textContent = 'Touch to Start'
-    setTimeout(() => { this.stateDisplay.style.opacity = '0' }, 3000)
+    this.statusActions.style.display = 'flex'
+    this.pauseBtn.style.display = 'none'
+
+    this.stateDisplay.textContent = 'Tap start'
+    this.stateDisplay.style.opacity = '1'
+    this.showCaptureProgress(this.settingsData.photoCount, 0)
+    this.captureProgressText.textContent = `Shot 1 of ${this.settingsData.photoCount}`
   }
 
   private async startDslrPreview() {
@@ -800,7 +722,7 @@ export class BoothApp {
       background: #000; color: #fff; font-family: sans-serif; z-index: 20;
     `
     overlay.innerHTML = `
-      <div style="font-size: 3rem; animation: spin 1.5s linear infinite;">&#128247;</div>
+      <div style="width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; box-sizing: border-box;"></div>
       <div style="margin-top: 1rem; font-size: 1rem; opacity: 0.7;">Connecting camera…</div>
       <div style="margin-top: 0.5rem; font-size: 0.75rem; opacity: 0.4;">Releasing USB interface</div>
       <style>@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }</style>
@@ -858,16 +780,19 @@ export class BoothApp {
       await this.dslrPreview.stop()
     }
     this.camera.stop()
+    this.hideCaptureProgress()
 
     this.isLive = false
     this.isCapturing = false
     this._state = 'idle'
     this.emitBoothState()
     
-    if (this.isDslrSettingsOpen) {
-      this.toggleDslrSettingsModal()
+    this.isPauseActive = false
+    if (this.pauseResume) {
+      this.pauseResume()
+      this.pauseResume = null
     }
-    this.stopBtn.style.display = 'none'
+    this.statusActions.style.display = 'none'
     this.captureBtn.style.display = 'none'
     this.stateDisplay.textContent = ''
     this.stateDisplay.style.opacity = '1'
@@ -876,6 +801,29 @@ export class BoothApp {
     this.confirmModal.style.display = 'none'
     this.hideDslrError()
     this.updateStartBtn()
+  }
+
+  private togglePause() {
+    if (this.isPauseActive) {
+      this.isPauseActive = false
+      this.pauseBtn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>`
+      this.pauseBtn.style.background = 'rgba(255,255,255,0.1)'
+      if (this.pauseResume) {
+        this.pauseResume()
+        this.pauseResume = null
+      }
+    } else {
+      this.isPauseActive = true
+      this.pauseBtn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`
+      this.pauseBtn.style.background = 'rgba(255,255,255,0.25)'
+    }
+  }
+
+  private async waitIfPaused(): Promise<void> {
+    if (!this.isPauseActive) return
+    return new Promise((resolve) => {
+      this.pauseResume = resolve
+    })
   }
 
   // -------------------------------------------------------------------------
@@ -888,6 +836,7 @@ export class BoothApp {
     this._state = 'capturing'
     this.emitBoothState()
     this.captureBtn.style.visibility = 'hidden'
+    this.pauseBtn.style.display = 'flex'
     this.stateDisplay.textContent = ''
 
     const photoCount = this.settingsData.photoCount
@@ -895,7 +844,7 @@ export class BoothApp {
     const audioCtx = new AudioContext()
 
     for (let i = 0; i < photoCount; i++) {
-      this.stateDisplay.textContent = `Shot ${i + 1} of ${photoCount}`
+      this.captureProgressText.textContent = `Shot ${i + 1} of ${photoCount}`
 
       let prepDone = false
       let prepPromise: Promise<void> | null = null
@@ -914,7 +863,7 @@ export class BoothApp {
         }
       }
 
-      await this.countdown.play(this.settingsData.countdown, audioCtx, onLastTick)
+      await this.countdown.play(this.settingsData.countdown, audioCtx, onLastTick, () => this.waitIfPaused())
       const tCountdownEnd = Date.now()
       console.log(`[BoothApp] ⏱ COUNTDOWN = 0 at t+${tCountdownEnd - tCountdownStart} ms`)
 
@@ -954,6 +903,9 @@ export class BoothApp {
         if (this.settingsData.postCapturePreview > 0) {
           await this.showPostCapture(result.path, this.settingsData.postCapturePreview)
         }
+        await this.waitIfPaused()
+
+        this.updateCaptureProgress(i + 1)
 
         // Resume DSLR liveview between shots.
         // DslrManager.capture() no longer restarts liveview internally —
@@ -966,6 +918,7 @@ export class BoothApp {
 
         if (i < photoCount - 1 && this.settingsData.captureInterval > 0) {
           await this.delay(this.settingsData.captureInterval * 1000)
+          await this.waitIfPaused()
         }
       } else {
         const errMsg = result?.error || 'Unknown error'
@@ -987,6 +940,8 @@ export class BoothApp {
           }, 1500)
         }
 
+        this.hideCaptureProgress()
+        this.pauseBtn.style.display = 'none'
         this.stateDisplay.innerHTML = `<span style="color: #ff4444; font-size: 1.5rem;">Capture failed</span><br/><span style="font-size: 1rem; color: #fff;">${errMsg}</span><br/><br/><span style="font-size: 1rem;">Tap to retry</span>`
         this.isCapturing = false
         this.captureBtn.style.visibility = 'visible'
@@ -1030,12 +985,16 @@ export class BoothApp {
         await this.dslrPreview.stop()
       }
 
+      this.hideCaptureProgress()
+      this.pauseBtn.style.display = 'none'
       this._state = 'preview'
       this.emitBoothState()
       this.photoPreview.show(paths)
       this.camera.stop()
       this.webcamPreview.srcObject = null
     } else {
+      this.hideCaptureProgress()
+      this.pauseBtn.style.display = 'none'
       this.isCapturing = false
       this._state = 'live'
       this.emitBoothState()
@@ -1101,7 +1060,7 @@ export class BoothApp {
         flexDirection: 'column', gap: '1rem',
       })
       this.processingOverlay.innerHTML = `
-        <div style="font-size:2rem;">📷</div>
+        <div style="width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; box-sizing: border-box;"></div>
         <p style="color:#fff;font-size:1rem;font-weight:600;margin:0;">Processing…</p>
       `
       this.container.appendChild(this.processingOverlay)

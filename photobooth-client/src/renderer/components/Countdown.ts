@@ -15,8 +15,9 @@ export class CountdownUI {
     this.overlay.appendChild(this.countdownEl)
   }
 
-  async play(seconds: number, audioCtx: AudioContext, onLastTick?: () => void): Promise<void> {
+  async play(seconds: number, audioCtx: AudioContext, onLastTick?: () => void, pauseCheck?: () => Promise<void>): Promise<void> {
     for (let i = seconds; i > 0; i--) {
+      if (pauseCheck) await pauseCheck()
       this.countdownEl.textContent = String(i)
       this.countdownEl.style.opacity = '1'
       this.countdownEl.style.transform = 'scale(1.2)'
@@ -25,17 +26,13 @@ export class CountdownUI {
 
       // Fire DSLR prep at "1" — this stops liveview and begins camera readiness
       // steps so that when the countdown hits 0 the shutter fires immediately.
-      // Moved from i===2: the extra second of waiting was adding dead time because
-      // the renderer awaits prepPromise before calling the shutter IPC, so any
-      // work done during i===2 still blocks at i===0. Starting at i===1 overlaps
-      // prep with the last visible countdown second instead.
       if (i === 1 && onLastTick) {
         onLastTick()
       }
 
-      await this.delay(500)
+      await this.delay(500, pauseCheck)
       this.countdownEl.style.transform = 'scale(1)'
-      await this.delay(500)
+      await this.delay(500, pauseCheck)
     }
 
     this.countdownEl.textContent = ''
@@ -57,7 +54,8 @@ export class CountdownUI {
     } catch {}
   }
 
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
+  private async delay(ms: number, pauseCheck?: () => Promise<void>): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms))
+    if (pauseCheck) await pauseCheck()
   }
 }
