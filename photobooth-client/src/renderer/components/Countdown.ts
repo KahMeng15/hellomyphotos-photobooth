@@ -1,23 +1,9 @@
 export class CountdownUI {
   private overlay: HTMLElement
   private countdownEl: HTMLDivElement
-  private spinnerEl: HTMLDivElement
-  private overlayOrigBg: string
-  private overlayOrigBackdrop: string
 
   constructor(overlay: HTMLElement) {
     this.overlay = overlay
-    this.overlayOrigBg = (overlay.style as any).background || ''
-    this.overlayOrigBackdrop = (overlay.style as any).backdropFilter || ''
-
-    this.spinnerEl = document.createElement('div')
-    this.spinnerEl.style.cssText = `
-      width: 28px; height: 28px;
-      border: 3px solid rgba(255,255,255,0.2); border-top-color: #fff;
-      border-radius: 50%; animation: spin 0.8s linear infinite;
-      box-sizing: border-box; display: none;
-    `
-    this.overlay.appendChild(this.spinnerEl)
 
     this.countdownEl = document.createElement('div')
     this.countdownEl.style.cssText = `
@@ -30,15 +16,6 @@ export class CountdownUI {
   }
 
   async play(seconds: number, audioCtx: AudioContext, onLastTick?: () => void, pauseCheck?: () => Promise<void>): Promise<void> {
-    Object.assign(this.overlay.style, {
-      background: 'rgba(0,0,0,0.35)',
-      backdropFilter: 'blur(8px)',
-      WebkitBackdropFilter: 'blur(8px)',
-      flexDirection: 'column' as any,
-      gap: '1rem',
-    })
-    this.spinnerEl.style.display = 'block'
-
     for (let i = seconds; i > 0; i--) {
       if (pauseCheck) await pauseCheck()
       this.countdownEl.textContent = String(i)
@@ -60,13 +37,6 @@ export class CountdownUI {
 
     this.countdownEl.textContent = ''
     this.countdownEl.style.opacity = '0'
-    this.spinnerEl.style.display = 'none'
-    Object.assign(this.overlay.style, {
-      background: this.overlayOrigBg,
-      backdropFilter: this.overlayOrigBackdrop,
-      flexDirection: '' as any,
-      gap: '',
-    })
   }
 
   private playBeep(audioCtx: AudioContext, frequency: number) {
