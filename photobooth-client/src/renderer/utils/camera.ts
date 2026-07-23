@@ -92,6 +92,8 @@ export class CameraManager {
  *   await preview.stop()
  *   previewBox.removeChild(preview.element)
  */
+const TRANSPARENT_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+
 export class DslrPreviewManager {
   /** The <img> element to insert into the preview container. */
   readonly element: HTMLImageElement
@@ -101,6 +103,11 @@ export class DslrPreviewManager {
   private lastFrameTime = 0
   /** Last error message from startDslrLiveview IPC, if any. */
   lastError: string | undefined = undefined
+  private resolveFirstFrame: (() => void) | null = null
+  private rejectFirstFrame: ((reason?: unknown) => void) | null = null
+  private firstFrameTimeout: ReturnType<typeof setTimeout> | null = null
+  /** Max ms to wait for the first liveview frame before treating it as a failure. */
+  private static readonly FIRST_FRAME_TIMEOUT = 10_000
 
   constructor() {
     this.element = document.createElement('img')
@@ -109,15 +116,18 @@ export class DslrPreviewManager {
       height: '100%',
       display: 'block',
       objectFit: 'contain',
-      background: '#000',
     })
-    this.element.alt = 'DSLR live preview'
+    this.element.alt = ''
+    // Use a transparent GIF so there is never a broken-image state
+    this.element.src = TRANSPARENT_GIF
   }
 
   /**
    * Start the DSLR liveview stream.
    * Registers the IPC frame listener and tells the main process to begin.
-   * @returns true if the camera was successfully detected and streaming started.
+   * Does NOT return until the first liveview frame arrives or a timeout fires,
+   * so the caller can keep a "Connecting…" overlay up until actual pixels arrive.
+   * @returns true if the camera was successfully detected and at least one frame was received.
    */
   async start(): Promise<boolean> {
     if (this.active) {
@@ -125,15 +135,22 @@ export class DslrPreviewManager {
       return true
     }
 
+    const firstFrame = new Promise<void>((resolve, reject) => {
+      this.resolveFirstFrame = resolve
+      this.rejectFirstFrame = reject
+    })
+
     console.log('[DslrPreviewManager] Registering dslr-frame IPC listener...')
-    // Register frame listener before calling start so no frames are dropped
     window.hellomyphoto?.onDslrFrame((base64Jpeg) => {
       if (!this.active) return
       this.element.src = `data:image/jpeg;base64,${base64Jpeg}`
+      const wasFirst = this.frameCount === 0
       this.frameCount++
       this.lastFrameTime = Date.now()
-      if (this.frameCount === 1) {
+      if (wasFirst) {
         console.log(`[DslrPreviewManager] ✅ First frame rendered in <img> element (base64 length=${base64Jpeg.length})`)
+        this.resolveFirstFrame?.()
+        this.resolveFirstFrame = null
       }
       if (this.frameCount % 150 === 0) {
         console.log(`[DslrPreviewManager] Liveview running — ${this.frameCount} frames rendered`)
@@ -144,16 +161,40 @@ export class DslrPreviewManager {
     const result = await window.hellomyphoto?.startDslrLiveview()
     console.log('[DslrPreviewManager] startDslrLiveview() response:', JSON.stringify(result))
 
-    if (result?.success) {
-      this.active = true
-      this.lastError = undefined
-      console.log('[DslrPreviewManager] ✅ Liveview started successfully')
-      return true
+    if (!result?.success) {
+      this.lastError = result?.error
+      console.error('[DslrPreviewManager] ❌ Failed to start liveview:', result?.error)
+      this.resolveFirstFrame = null
+      this.rejectFirstFrame = null
+      return false
     }
 
-    this.lastError = result?.error
-    console.error('[DslrPreviewManager] ❌ Failed to start liveview:', result?.error)
-    return false
+    this.active = true
+    this.lastError = undefined
+    console.log('[DslrPreviewManager] ✅ Liveview IPC started — waiting for first frame…')
+
+    // Wait for the first frame or a timeout (whichever comes first)
+    this.firstFrameTimeout = setTimeout(() => {
+      console.error('[DslrPreviewManager] ⏱ First-frame timeout — no frame within 10 s')
+      this.rejectFirstFrame?.('timeout')
+      this.rejectFirstFrame = null
+    }, DslrPreviewManager.FIRST_FRAME_TIMEOUT)
+
+    try {
+      await firstFrame
+    } catch {
+      this.active = false
+      this.lastError = 'Liveview IPC started but no frames received within 10 seconds. Check USB connection.'
+      console.error('[DslrPreviewManager] ❌ First frame never arrived')
+      return false
+    } finally {
+      if (this.firstFrameTimeout !== null) {
+        clearTimeout(this.firstFrameTimeout)
+        this.firstFrameTimeout = null
+      }
+    }
+
+    return true
   }
 
   /**
@@ -173,7 +214,15 @@ export class DslrPreviewManager {
       console.log(`[DslrPreviewManager] Stopping liveview (${this.frameCount} frames rendered)`)
     }
     this.active = false
-    this.element.src = ''
+    if (this.firstFrameTimeout !== null) {
+      clearTimeout(this.firstFrameTimeout)
+      this.firstFrameTimeout = null
+    }
+    if (this.resolveFirstFrame) {
+      this.resolveFirstFrame()
+      this.resolveFirstFrame = null
+    }
+    this.element.src = TRANSPARENT_GIF
     await window.hellomyphoto?.stopDslrLiveview()
     console.log('[DslrPreviewManager] Liveview stopped')
   }

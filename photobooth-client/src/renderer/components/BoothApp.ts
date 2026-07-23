@@ -105,7 +105,7 @@ export class BoothApp {
     this.previewBox = document.createElement('div')
     Object.assign(this.previewBox.style, {
       maxWidth: '100%', maxHeight: '100%', width: '100%', height: '100%',
-      position: 'relative', overflow: 'hidden',
+      position: 'relative', overflow: 'hidden', background: '#222',
     })
     this.previewBox.appendChild(this.webcamPreview)
     this.previewBox.appendChild(this.postCaptureEl)
@@ -127,6 +127,8 @@ export class BoothApp {
       position: 'absolute', inset: '0', pointerEvents: 'none',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     })
+    this.previewWindow.style.position = 'relative'
+    this.previewWindow.appendChild(this.overlay)
 
     this.stateDisplay = document.createElement('div')
     Object.assign(this.stateDisplay.style, {
@@ -281,11 +283,15 @@ export class BoothApp {
     this.dslrErrorOverlay = this.buildDslrErrorOverlay()
     this.createCaptureProgress()
 
+    const style = document.createElement('style')
+    style.textContent = `@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`
+    document.head.appendChild(style)
+
+    this.previewWindow.appendChild(this.stateDisplay)
+
     this.container.append(
       this.landingEl,
       this.previewWindow,
-      this.overlay,
-      this.stateDisplay,
       this.statusBar,
       this.flashOverlay,
       this.dslrErrorOverlay,
@@ -436,8 +442,9 @@ export class BoothApp {
 
     if (result?.connected) {
       this.hideDslrError()
-      // Re-start liveview
+      const retryOverlay = this.showConnectingOverlay()
       const started = await this.dslrPreview.start()
+      retryOverlay.remove()
       if (!started) {
         this.showDslrError('Camera detected but liveview failed to start. Try unplugging and reconnecting.')
       }
@@ -679,6 +686,7 @@ export class BoothApp {
     this.captureBtn.style.display = 'block'
     this.captureBtn.style.visibility = 'visible'
     this.statusBar.appendChild(this.captureBtn)
+    this.previewBox.style.background = '#000'
     this.statusActions.style.display = 'flex'
     this.pauseBtn.style.display = 'none'
 
@@ -690,10 +698,9 @@ export class BoothApp {
 
   private async startDslrPreview() {
     console.log('[BoothApp] startDslrPreview() — swapping to DSLR <img> element')
-    this.setPreviewSource('dslr')
-
-    // Show a connecting state so the user doesn't see a blank screen
+    // Show overlay BEFORE adding DSLR img to DOM so alt text is never visible
     const connectingOverlay = this.showConnectingOverlay()
+    this.setPreviewSource('dslr')
 
     console.log('[BoothApp] startDslrPreview() — calling dslrPreview.start()...')
     const started = await this.dslrPreview.start()
@@ -719,13 +726,12 @@ export class BoothApp {
     overlay.style.cssText = `
       position: absolute; inset: 0;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      background: #000; color: #fff; font-family: sans-serif; z-index: 20;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      color: #fff; font-family: sans-serif; z-index: 20;
     `
     overlay.innerHTML = `
-      <div style="width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; box-sizing: border-box;"></div>
-      <div style="margin-top: 1rem; font-size: 1rem; opacity: 0.7;">Connecting camera…</div>
-      <div style="margin-top: 0.5rem; font-size: 0.75rem; opacity: 0.4;">Releasing USB interface</div>
-      <style>@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }</style>
+      <div style="width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; box-sizing: border-box;"></div>
+      <div style="margin-top: 1rem; font-size: 1rem; opacity: 0.8;">Connecting camera…</div>
     `
     // Insert into previewBox (needs position: relative)
     this.previewBox.style.position = 'relative'
@@ -735,6 +741,8 @@ export class BoothApp {
 
   private async startWebcamPreview() {
     console.log(`[BoothApp] startWebcamPreview() — deviceId="${this.settingsData.cameraDeviceId || 'default'}"`)
+    // Show overlay before making the video element visible
+    const connectingOverlay = this.showConnectingOverlay()
     this.setPreviewSource('webcam')
     const stream = await this.camera.startWebcam(this.settingsData.cameraDeviceId)
     if (stream) {
@@ -749,6 +757,7 @@ export class BoothApp {
     } else {
       console.error('[BoothApp] startWebcamPreview() — getUserMedia returned null stream')
     }
+    connectingOverlay.remove()
   }
 
   /** Called when camera mode changes while live — restart in new mode. */
@@ -797,6 +806,7 @@ export class BoothApp {
     this.stateDisplay.textContent = ''
     this.stateDisplay.style.opacity = '1'
     this.webcamPreview.srcObject = null
+    this.previewBox.style.background = '#222'
     this.landingEl.style.display = 'flex'
     this.confirmModal.style.display = 'none'
     this.hideDslrError()
@@ -864,6 +874,7 @@ export class BoothApp {
       }
 
       await this.countdown.play(this.settingsData.countdown, audioCtx, onLastTick, () => this.waitIfPaused())
+      if (!this.isCapturing) { audioCtx.close(); return }
       const tCountdownEnd = Date.now()
       console.log(`[BoothApp] ⏱ COUNTDOWN = 0 at t+${tCountdownEnd - tCountdownStart} ms`)
 
@@ -904,21 +915,25 @@ export class BoothApp {
           await this.showPostCapture(result.path, this.settingsData.postCapturePreview)
         }
         await this.waitIfPaused()
+        if (!this.isCapturing) { audioCtx.close(); return }
 
         this.updateCaptureProgress(i + 1)
 
         // Resume DSLR liveview between shots.
-        // DslrManager.capture() no longer restarts liveview internally —
-        // the renderer is the single owner of the liveview lifecycle.
+        // Show a connecting overlay so the broken-image / placeholder is never
+        // visible while waiting for the first frame after a capture cycle.
         if (this.cameraMode === 'dslr' && i < photoCount - 1) {
           if (!this.dslrPreview.isActive()) {
+            const resumeOverlay = this.showConnectingOverlay()
             await this.dslrPreview.start()
+            resumeOverlay.remove()
           }
         }
 
         if (i < photoCount - 1 && this.settingsData.captureInterval > 0) {
           await this.delay(this.settingsData.captureInterval * 1000)
           await this.waitIfPaused()
+          if (!this.isCapturing) { audioCtx.close(); return }
         }
       } else {
         const errMsg = result?.error || 'Unknown error'
@@ -1055,15 +1070,18 @@ export class BoothApp {
       this.processingOverlay = document.createElement('div')
       Object.assign(this.processingOverlay.style, {
         position: 'absolute', inset: '0', zIndex: '55',
-        background: 'rgba(0,0,0,0.85)', display: 'flex',
-        alignItems: 'center', justifyContent: 'center',
-        flexDirection: 'column', gap: '1rem',
+        background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column',
       })
       this.processingOverlay.innerHTML = `
-        <div style="width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; box-sizing: border-box;"></div>
-        <p style="color:#fff;font-size:1rem;font-weight:600;margin:0;">Processing…</p>
+        <div style="width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; box-sizing: border-box;"></div>
+        <div style="margin-top: 1rem; font-size: 1rem; opacity: 0.8;">Processing…</div>
       `
-      this.container.appendChild(this.processingOverlay)
+    }
+    // Ensure it's parented to previewBox (handles stale refs from hot-reloads)
+    if (this.processingOverlay.parentElement !== this.previewBox) {
+      this.previewBox.appendChild(this.processingOverlay)
     }
     this.processingOverlay.style.display = 'flex'
   }
