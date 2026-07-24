@@ -788,6 +788,8 @@ export class BoothApp {
     if (this.cameraMode === 'dslr') {
       await this.dslrPreview.stop()
     }
+    this.postCaptureEl.style.display = 'none'
+    this.postCaptureEl.src = ''
     this.camera.stop()
     this.hideCaptureProgress()
 
@@ -926,6 +928,9 @@ export class BoothApp {
           if (!this.dslrPreview.isActive()) {
             const resumeOverlay = this.showConnectingOverlay()
             await this.dslrPreview.start()
+            // Hide the frozen taken photo now that live preview is back
+            this.postCaptureEl.style.display = 'none'
+            this.postCaptureEl.src = ''
             resumeOverlay.remove()
           }
         }
@@ -1140,14 +1145,15 @@ export class BoothApp {
     this.postCaptureEl.style.display = 'block'
 
     if (this.cameraMode === 'dslr') {
-      // In DSLR mode the live preview is already paused — just show the still
       await this.delay(duration * 1000)
-    } else {
-      this.webcamPreview.style.opacity = '0'
-      await this.delay(duration * 1000)
-      this.webcamPreview.style.opacity = '1'
+      // Keep the taken photo frozen until the live preview stream resumes
+      // (the between-shots code hides postCaptureEl when the first frame arrives)
+      return
     }
 
+    this.webcamPreview.style.opacity = '0'
+    await this.delay(duration * 1000)
+    this.webcamPreview.style.opacity = '1'
     this.postCaptureEl.style.display = 'none'
     this.postCaptureEl.src = ''
   }
