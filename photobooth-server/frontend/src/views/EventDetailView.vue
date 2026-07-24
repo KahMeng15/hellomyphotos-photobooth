@@ -132,6 +132,7 @@
       v-if="photosStore.selectedSession && !photosStore.selectedPhoto"
       :session="photosStore.selectedSession"
       :event-id="event.id"
+      :event="event"
       @close="photosStore.clearSelection()"
     />
 
@@ -156,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { usePhotosStore } from '../stores/photos'
@@ -173,6 +174,32 @@ const router = useRouter()
 const authStore = useAuthStore()
 const photosStore = usePhotosStore()
 const { ws, connect, disconnect, sendMessage, subscribe, unsubscribe } = useWebSocket()
+
+
+watch(() => route.query.session, (sessionId) => {
+  if (sessionId) {
+    const session = photoSessions.value.find((s: any) => s.sessionId === sessionId)
+    if (session && photosStore.selectedSession?.sessionId !== sessionId) {
+      photosStore.selectSession(session)
+    }
+  } else {
+    if (photosStore.selectedSession) {
+      photosStore.clearSelection()
+    }
+  }
+})
+
+watch(() => photosStore.selectedSession, (session) => {
+  const query = { ...route.query }
+  if (session) {
+    query.session = session.sessionId
+  } else {
+    delete query.session
+  }
+  if (route.query.session !== query.session) {
+    router.replace({ query })
+  }
+})
 
 const event = ref<any>(null)
 const photoSessions = ref<any[]>([])
@@ -290,6 +317,11 @@ async function loadSessions() {
     photoSessions.value = data.sessions.filter((s: any) => s.archived)
   } else {
     photoSessions.value = data.sessions
+  }
+  
+  if (route.query.session) {
+    const session = photoSessions.value.find((s: any) => s.sessionId === route.query.session)
+    if (session && !photosStore.selectedSession) photosStore.selectSession(session)
   }
 }
 

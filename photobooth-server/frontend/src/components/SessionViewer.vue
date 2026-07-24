@@ -87,6 +87,7 @@ import type { PhotoSession } from '../stores/photos'
 const props = defineProps<{
   session: PhotoSession
   eventId?: string
+  event?: any
 }>()
 
 const emit = defineEmits<{ close: [] }>()

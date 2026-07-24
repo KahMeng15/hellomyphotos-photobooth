@@ -173,6 +173,10 @@
         </div>
         <div class="modal-body">
           <div class="settings-box">
+            <div class="field-row" style="margin-bottom:1rem; border-bottom: 1px solid #2a2a2a; padding-bottom: 1rem;">
+              <label style="display:block;margin-bottom:0.5rem;">Event Name</label>
+              <input type="text" v-model="eventSettings.name" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;" />
+            </div>
             <div class="field-row" style="display:flex; justify-content:space-between; align-items:center;">
               <div>
                 <label style="display:block;margin-bottom:0.25rem;">Obfuscate Links</label>
@@ -301,7 +305,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { usePhotosStore } from '../stores/photos'
 import axios from 'axios'
 
@@ -322,15 +326,28 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; retry: [] }>()
 
 const router = useRouter()
+const route = useRoute()
 const photosStore = usePhotosStore()
 
 const event = ref<any>(null)
 const selectedFrame = ref('')
 const paused = ref(false)
 const otpCopied = ref(false)
-const showSettingsModal = ref(false)
-const showEventSettingsModal = ref(false)
-const eventSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', obfuscateLinks: false, expiryType: 'none', expiryValue: '1_year', organizer: '', contactInfo: '' })
+const showSettingsModal = computed({
+  get: () => route.query.modal === 'booth',
+  set: (val) => {
+    const q = { ...route.query }; if(val) q.modal='booth'; else delete q.modal;
+    router.replace({ query: q })
+  }
+})
+const showEventSettingsModal = computed({
+  get: () => route.query.modal === 'event',
+  set: (val) => {
+    const q = { ...route.query }; if(val) q.modal='event'; else delete q.modal;
+    router.replace({ query: q })
+  }
+})
+const eventSettings = ref({ name: '', photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', obfuscateLinks: false, expiryType: 'none', expiryValue: '1_year', organizer: '', contactInfo: '' })
 const settingsSaving = ref(false)
 const settingsMsg = ref('')
 const settingsMsgType = ref<'success' | 'error'>('success')
@@ -359,6 +376,7 @@ onMounted(async () => {
     const { data } = await axios.get(`/api/admin/events/${props.eventId}`)
     event.value = data.event
     eventSettings.value = {
+      name: event.value.name || '',
       photoCount: event.value.photo_count,
       countdown: event.value.countdown,
       captureInterval: event.value.capture_interval,
@@ -429,6 +447,7 @@ async function saveEventSettings() {
   settingsMsg.value = ''
   try {
     await axios.patch(`/api/admin/events/${props.eventId}`, {
+      name: eventSettings.value.name,
       photoCount: eventSettings.value.photoCount,
       countdown: eventSettings.value.countdown,
       captureInterval: eventSettings.value.captureInterval,
@@ -443,6 +462,7 @@ async function saveEventSettings() {
       organizer: eventSettings.value.organizer,
       contactInfo: eventSettings.value.contactInfo,
     })
+    event.value.name = eventSettings.value.name
     settingsMsg.value = 'Settings saved'
     settingsMsgType.value = 'success'
   } catch {
