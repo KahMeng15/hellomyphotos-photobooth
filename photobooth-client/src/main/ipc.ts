@@ -67,6 +67,10 @@ export function initIpcHandlers(
         return { success: false, error: msg }
       }
 
+      if (dslrManager.getStatus().model) {
+        await syncCameraSettingsFromServer(dslrManager.getStatus().model)
+      }
+
       console.log('[IPC] Camera detected — starting liveview stream (will kill PTPCamera on macOS, then wait for first frame)...')
       let framesSent = 0
       const liveviewOk = await dslrManager.startLiveview((jpeg) => {
@@ -103,6 +107,32 @@ export function initIpcHandlers(
     return { success: true }
   })
 
+  async function syncCameraSettingsFromServer(model: string) {
+    try {
+      const res = await fetch(`${_serverUrl}/api/booth/camera-settings?model=${encodeURIComponent(model)}`)
+      const data = await res.json()
+      if (data.success && data.settings) {
+        const s = getSettingsSync()
+        let changed = false
+        if (data.settings.dslrIso && s.dslrIso !== data.settings.dslrIso) { s.dslrIso = data.settings.dslrIso; changed = true; }
+        if (data.settings.dslrShutterSpeed && s.dslrShutterSpeed !== data.settings.dslrShutterSpeed) { s.dslrShutterSpeed = data.settings.dslrShutterSpeed; changed = true; }
+        if (data.settings.dslrAperture && s.dslrAperture !== data.settings.dslrAperture) { s.dslrAperture = data.settings.dslrAperture; changed = true; }
+        if (data.settings.dslrFocusMode && s.dslrFocusMode !== data.settings.dslrFocusMode) { s.dslrFocusMode = data.settings.dslrFocusMode; changed = true; }
+        
+        if (changed) {
+          fs.writeFileSync(SETTINGS_FILE, JSON.stringify(s, null, 2))
+          dslrManager.applyExposure(s.dslrIso, s.dslrShutterSpeed, s.dslrAperture)
+          dslrManager.setFocusMode(s.dslrFocusMode as any)
+          if (!mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('booth-command', { type: 'settings-update', settings: s })
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[IPC] Failed to restore camera settings', err)
+    }
+  }
+
   // ------------------------------------------------------------------
   // Detect DSLR (on-demand from renderer / settings panel)
   // ------------------------------------------------------------------
@@ -111,6 +141,11 @@ export function initIpcHandlers(
     const { connected } = await dslrManager.detect()
     const status = dslrManager.getStatus()
     console.log(`[IPC] detect-dslr result: connected=${connected}, model="${status.model}"`)
+
+    if (connected && status.model) {
+      await syncCameraSettingsFromServer(status.model)
+    }
+
     // Push updated status to renderer
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send('dslr-status', status)
@@ -326,6 +361,21 @@ export function initIpcHandlers(
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         })
+
+        const status = dslrManager.getStatus()
+        if (status.connected && status.model) {
+          await fetch(`${syncUrl}/api/booth/camera-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: status.model,
+              dslrIso: merged.dslrIso,
+              dslrShutterSpeed: merged.dslrShutterSpeed,
+              dslrAperture: merged.dslrAperture,
+              dslrFocusMode: merged.dslrFocusMode,
+            }),
+          })
+        }
       } catch {}
       
       // Apply new DSLR exposure settings to the live view if connected

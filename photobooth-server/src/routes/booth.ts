@@ -8,7 +8,7 @@ import { logger } from '../utils/logger'
 import { boothAuthMiddleware } from '../middleware/authMiddleware'
 import { io, operatorSubscriptions } from '../server'
 import { processSinglePhoto, generateThumbnail, compileVerticalStrip } from '../pipeline'
-import { ensurePhotoSession, getEventByOtp, updateEventSettingsById } from '../db'
+import { ensurePhotoSession, getEventByOtp, updateEventSettingsById, getCameraSettings, updateCameraSettings } from '../db'
 
 const router = Router()
 
@@ -205,6 +205,24 @@ router.get('/validate-otp', (req: Request, res: Response) => {
       description: event.description,
     },
   })
+})
+
+router.get('/camera-settings', async (req: Request, res: Response) => {
+  const model = req.query.model as string
+  if (!model) return res.status(400).json({ error: 'Model required' })
+  const settings = getCameraSettings(model)
+  if (settings) {
+    res.json({ success: true, settings })
+  } else {
+    res.json({ success: false })
+  }
+})
+
+router.post('/camera-settings', async (req: Request, res: Response) => {
+  const { model, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode } = req.body
+  if (!model) return res.status(400).json({ error: 'Model required' })
+  updateCameraSettings(model, { dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode })
+  res.json({ success: true })
 })
 
 router.get('/settings', async (req: Request, res: Response) => {

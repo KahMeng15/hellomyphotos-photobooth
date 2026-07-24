@@ -83,6 +83,9 @@ export class Settings {
   private dslrScanBtn!: HTMLButtonElement
   private dslrKillPtpBtn!: HTMLButtonElement
   private dslrExposureSection!: HTMLDivElement
+  private panel!: HTMLDivElement
+  private grid!: HTMLDivElement
+  private col2!: HTMLDivElement
 
   constructor(container: HTMLElement, onChange: (settings: BoothSettings) => void) {
     this.onChange = onChange
@@ -105,17 +108,16 @@ export class Settings {
 
     this.overlay = document.createElement('div')
     this.overlay.style.cssText = `
-      position: absolute; right: 20px; bottom: 20px; background: #0f0f0f;
-      display: none; flex-direction: column; border-radius: 12px;
-      z-index: 30; pointer-events: all; width: 350px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333;
+      position: absolute; inset: 0; background: #0f0f0f;
+      display: none; flex-direction: column;
+      z-index: 30; pointer-events: all;
     `
 
-    const panel = document.createElement('div')
-    panel.style.cssText = `
-      padding: 1.5rem;
+    this.panel = document.createElement('div')
+    this.panel.style.cssText = `
+      background: #0f0f0f; padding: 2rem;
       width: 100%; box-sizing: border-box;
-      overflow-y: auto; max-height: 80vh;
+      flex: 1; overflow-y: auto;
     `
 
     const header = document.createElement('div')
@@ -153,10 +155,10 @@ export class Settings {
       this.hide()
     })
     header.appendChild(saveBtn)
-    panel.appendChild(header)
+    this.panel.appendChild(header)
 
-    const grid = document.createElement('div')
-    grid.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; align-items: start;'
+    this.grid = document.createElement('div')
+    this.grid.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; align-items: start;'
 
     // Column 1 — Server URL + Event OTP
     const col1 = document.createElement('div')
@@ -168,14 +170,14 @@ export class Settings {
     col1.appendChild(otpSection)
 
     // Column 2 — Camera Source, Devices, DSLR Exposure, Focus
-    const col2 = document.createElement('div')
-    col2.style.cssText = 'display: flex; flex-direction: column; gap: 1.5rem;'
+    this.col2 = document.createElement('div')
+    this.col2.style.cssText = 'display: flex; flex-direction: column; gap: 1.5rem;'
     const cameraSourceSection = this.createCameraSourceSection()
     cameraSourceSection.style.borderBottom = 'none'
-    col2.appendChild(cameraSourceSection)
+    this.col2.appendChild(cameraSourceSection)
     const devicesSection = this.createDevicesSection()
     devicesSection.style.borderBottom = 'none'
-    col2.appendChild(devicesSection)
+    this.col2.appendChild(devicesSection)
 
     this.dslrExposureSection = document.createElement('div')
     this.dslrExposureSection.style.cssText = 'display: flex; flex-direction: column; gap: 1rem;'
@@ -209,7 +211,7 @@ export class Settings {
       input.style.cssText = 'flex: 1;'
 
       const valDisplay = document.createElement('span')
-      valDisplay.style.cssText = 'font-size: 0.875rem; font-weight: 600; color: #fff; min-width: 60px; text-align: right;'
+      valDisplay.style.cssText = 'font-size: 0.875rem; font-weight: 600; color: #fff; min-width: 80px; text-align: right;'
       valDisplay.textContent = choices[parseInt(input.value)]
 
       input.addEventListener('input', () => {
@@ -274,7 +276,7 @@ export class Settings {
     focusRow.appendChild(focusToggle)
     focusBox.appendChild(focusRow)
     this.dslrExposureSection.appendChild(focusBox)
-    col2.appendChild(this.dslrExposureSection)
+    this.col2.appendChild(this.dslrExposureSection)
 
     // Column 3 — Capture
     const col3 = document.createElement('div')
@@ -296,9 +298,12 @@ export class Settings {
     fields[fields.length - 1].style.borderBottom = 'none'
     col3.appendChild(settingsBox)
 
-    panel.appendChild(this.dslrExposureSection)
+    this.grid.appendChild(col1)
+    this.grid.appendChild(this.col2)
+    this.grid.appendChild(col3)
+    this.panel.appendChild(this.grid)
 
-    this.overlay.appendChild(panel)
+    this.overlay.appendChild(this.panel)
     container.appendChild(this.overlay)
   }
 
@@ -916,9 +921,42 @@ export class Settings {
     this.refreshConnectionStatus()
   }
 
-  toggle() {
+  toggle(mode: 'full' | 'exposure' = 'full') {
     this.visible = !this.visible
+    
+    if (this.visible) {
+      if (mode === 'exposure') {
+        this.overlay.style.cssText = `
+          position: absolute; right: 20px; bottom: 20px; background: #0f0f0f;
+          flex-direction: column; border-radius: 12px;
+          z-index: 30; pointer-events: all; width: 420px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333;
+        `
+        this.panel.style.cssText = `
+          padding: 1.5rem;
+          width: 100%; box-sizing: border-box;
+          overflow-y: auto; max-height: 80vh;
+        `
+        this.grid.style.display = 'none'
+        this.panel.appendChild(this.dslrExposureSection)
+      } else {
+        this.overlay.style.cssText = `
+          position: absolute; inset: 0; background: #0f0f0f;
+          flex-direction: column;
+          z-index: 30; pointer-events: all;
+        `
+        this.panel.style.cssText = `
+          background: #0f0f0f; padding: 2rem;
+          width: 100%; box-sizing: border-box;
+          flex: 1; overflow-y: auto;
+        `
+        this.grid.style.display = 'grid'
+        this.col2.appendChild(this.dslrExposureSection)
+      }
+    }
+
     this.overlay.style.display = this.visible ? 'flex' : 'none'
+    
     if (this.visible) {
       this.dirty = false
       window.hellomyphoto?.getSettings().then((s) => {

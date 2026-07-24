@@ -54,6 +54,17 @@ db.exec(`
   )
 `)
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS camera_settings (
+    model TEXT PRIMARY KEY,
+    dslr_iso TEXT NOT NULL DEFAULT 'auto',
+    dslr_shutterspeed TEXT NOT NULL DEFAULT 'auto',
+    dslr_aperture TEXT NOT NULL DEFAULT 'auto',
+    dslr_focus_mode TEXT NOT NULL DEFAULT 'auto',
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`)
+
 // Add new columns if missing (for existing DBs)
 try { db.exec(`ALTER TABLE events ADD COLUMN photo_count INTEGER NOT NULL DEFAULT 4`) } catch {}
 try { db.exec(`ALTER TABLE events ADD COLUMN countdown INTEGER NOT NULL DEFAULT 5`) } catch {}
@@ -277,6 +288,34 @@ export function getGlobalSettings() {
 export function updateGlobalSettings(settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; dslrIso: string; dslrShutterSpeed: string; dslrAperture: string; dslrFocusMode?: string }) {
   upsertDefaultsStmt.run(settings.photoCount, settings.countdown, settings.captureInterval, settings.postCapturePreview, settings.dslrIso, settings.dslrShutterSpeed, settings.dslrAperture, settings.dslrFocusMode ?? 'auto')
   logger.info('Global defaults updated', settings)
+}
+
+const getCameraSettingsStmt = db.prepare('SELECT * FROM camera_settings WHERE model = ?')
+const upsertCameraSettingsStmt = db.prepare(`
+  INSERT INTO camera_settings (model, dslr_iso, dslr_shutterspeed, dslr_aperture, dslr_focus_mode, updated_at)
+  VALUES (?, ?, ?, ?, ?, datetime('now'))
+  ON CONFLICT(model) DO UPDATE SET
+    dslr_iso = excluded.dslr_iso,
+    dslr_shutterspeed = excluded.dslr_shutterspeed,
+    dslr_aperture = excluded.dslr_aperture,
+    dslr_focus_mode = excluded.dslr_focus_mode,
+    updated_at = excluded.updated_at
+`)
+
+export function getCameraSettings(model: string) {
+  const row = getCameraSettingsStmt.get(model) as { dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string; dslr_focus_mode: string } | undefined
+  if (!row) return null
+  return {
+    dslrIso: row.dslr_iso,
+    dslrShutterSpeed: row.dslr_shutterspeed,
+    dslrAperture: row.dslr_aperture,
+    dslrFocusMode: row.dslr_focus_mode
+  }
+}
+
+export function updateCameraSettings(model: string, settings: { dslrIso: string; dslrShutterSpeed: string; dslrAperture: string; dslrFocusMode?: string }) {
+  upsertCameraSettingsStmt.run(model, settings.dslrIso, settings.dslrShutterSpeed, settings.dslrAperture, settings.dslrFocusMode ?? 'auto')
+  logger.info(`Camera settings updated for model ${model}`, settings)
 }
 
 export function closeDb() {
