@@ -847,9 +847,9 @@ export class DslrManager {
     })
   }
 
-  private async fetchConfigChoices() {
+  public async fetchConfigChoices() {
     if (this.isWindows) return
-    const keys = ['iso', 'shutterspeed', 'aperture']
+    const keys = ['iso', 'shutterspeed', 'aperture', 'whitebalance']
     for (const key of keys) {
       try {
         const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
@@ -873,12 +873,12 @@ export class DslrManager {
     }
   }
 
-  async getHardwareSettings(): Promise<{ iso: string, shutterspeed: string, aperture: string }> {
+  async getHardwareSettings(): Promise<{ iso: string, shutterspeed: string, aperture: string, whitebalance: string }> {
     return this.enqueue(async () => {
-      const hw = { iso: 'auto', shutterspeed: 'auto', aperture: 'auto' }
+      const hw = { iso: 'auto', shutterspeed: 'auto', aperture: 'auto', whitebalance: 'auto' }
       if (this.isWindows || !this.connected) return hw
       
-      const keys = ['iso', 'shutterspeed', 'aperture']
+      const keys = ['iso', 'shutterspeed', 'aperture', 'whitebalance']
       for (const key of keys) {
         try {
           const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
@@ -932,7 +932,7 @@ export class DslrManager {
   /** Apply auto exposure for configs that have a valid "Auto" choice. */
   private async _applyConfigAuto(): Promise<void> {
     const configArgs: string[] = []
-    for (const key of ['iso', 'shutterspeed', 'aperture'] as const) {
+    for (const key of ['iso', 'shutterspeed', 'aperture', 'whitebalance'] as const) {
       const choices = this.configChoices[key]
       if (choices && choices.length > 0) {
         const autoVal = choices.find(c => c.toLowerCase() === 'auto')
@@ -949,16 +949,32 @@ export class DslrManager {
     }
   }
 
-  async applyExposure(iso: string, shutterspeed: string, aperture: string) {
+  async applyExposure(iso: string, shutterspeed: string, aperture: string, whitebalance?: string, whiteBalanceKelvin?: number) {
     return this.enqueue(async () => {
       if (this.isWindows || !this.connected) return
-      log.info(`[DslrManager] Applying exposure settings to camera: iso=${iso}, shutter=${shutterspeed}, aperture=${aperture}`)
 
-      const needsAuto = (!iso || iso === 'auto') || (!shutterspeed || shutterspeed === 'auto') || (!aperture || aperture === 'auto')
+      const wbValue = whitebalance === 'Custom' ? 'Color Temperature' : whitebalance
+      log.info(`[DslrManager] Applying exposure settings to camera: iso=${iso}, shutter=${shutterspeed}, aperture=${aperture}, whitebalance=${wbValue || 'unchanged'}${whiteBalanceKelvin !== undefined ? `, kelvin=${whiteBalanceKelvin}` : ''}`)
+
+      const needsAuto = (!iso || iso === 'auto') || (!shutterspeed || shutterspeed === 'auto') || (!aperture || aperture === 'auto') || (wbValue !== undefined && wbValue === 'auto')
       const configArgs: string[] = []
       if (iso && iso.toLowerCase() !== 'auto') configArgs.push('--set-config', `iso=${iso}`)
       if (shutterspeed && shutterspeed.toLowerCase() !== 'auto') configArgs.push('--set-config', `shutterspeed=${shutterspeed}`)
       if (aperture && aperture.toLowerCase() !== 'auto') configArgs.push('--set-config', `aperture=${aperture}`)
+      if (wbValue && wbValue.toLowerCase() !== 'auto') {
+        let actualWbValue = wbValue
+        const choices = this.configChoices['whitebalance']
+        if (choices && choices.length > 0) {
+          const matched = choices.find(c => c.toLowerCase() === wbValue.toLowerCase())
+          if (matched) {
+            actualWbValue = matched
+          }
+        }
+        configArgs.push('--set-config', `whitebalance=${actualWbValue}`)
+      }
+      if (wbValue && wbValue === 'Color Temperature' && whiteBalanceKelvin !== undefined) {
+        configArgs.push('--set-config', `/main/imgsettings/colortemperature=${whiteBalanceKelvin}`)
+      }
 
       if (!needsAuto && configArgs.length === 0) return
 

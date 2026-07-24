@@ -219,9 +219,9 @@ router.get('/camera-settings', async (req: Request, res: Response) => {
 })
 
 router.post('/camera-settings', async (req: Request, res: Response) => {
-  const { model, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode } = req.body
+  const { model, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, dslrWhiteBalanceKelvin } = req.body
   if (!model) return res.status(400).json({ error: 'Model required' })
-  updateCameraSettings(model, { dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode })
+  updateCameraSettings(model, { dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, dslrWhiteBalanceKelvin })
   res.json({ success: true })
 })
 
@@ -243,11 +243,13 @@ router.get('/settings', async (req: Request, res: Response) => {
     dslrShutterSpeed: event.dslr_shutterspeed,
     dslrAperture: event.dslr_aperture,
     dslrFocusMode: event.dslr_focus_mode,
+    dslrWhiteBalance: event.dslr_whitebalance,
+    dslrWhiteBalanceKelvin: event.dslr_whitebalance_kelvin,
   })
 })
 
 router.post('/settings', async (req: Request, res: Response) => {
-  const { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, otp } = req.body
+  const { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, dslrWhiteBalanceKelvin, otp } = req.body
   if (!otp) {
     return res.status(400).json({ error: 'OTP required' })
   }
@@ -266,6 +268,8 @@ router.post('/settings', async (req: Request, res: Response) => {
   settings.dslrShutterSpeed = dslrShutterSpeed ?? event.dslr_shutterspeed
   settings.dslrAperture = dslrAperture ?? event.dslr_aperture
   settings.dslrFocusMode = dslrFocusMode ?? event.dslr_focus_mode
+  settings.dslrWhiteBalance = dslrWhiteBalance ?? event.dslr_whitebalance
+  settings.dslrWhiteBalanceKelvin = dslrWhiteBalanceKelvin ?? event.dslr_whitebalance_kelvin
   
   updateEventSettingsById(event.id, settings)
   logger.info('Booth settings synced to event', { eventId: event.id, ...settings })

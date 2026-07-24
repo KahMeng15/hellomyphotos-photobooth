@@ -63,12 +63,14 @@ export class BoothApp {
     dslrIso?: string
     dslrShutterSpeed?: string
     dslrAperture?: string
+    dslrWhiteBalance?: string
+    dslrWhiteBalanceKelvin?: number
     dslrFocusMode?: string
     liveviewMode?: 'mjpeg' | 'polling'
     autoPreview?: boolean
     liveviewRetryAttempts?: number
     shutterOffsetDelay?: number
-  } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', liveviewMode: 'mjpeg', autoPreview: false, liveviewRetryAttempts: 1, shutterOffsetDelay: 0 }
+  } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', liveviewMode: 'mjpeg', autoPreview: false, liveviewRetryAttempts: 1, shutterOffsetDelay: 0, dslrWhiteBalance: 'auto', dslrWhiteBalanceKelvin: 5200 }
   private serverOnline = true
   private selectedFrame: string | null = null
   private serverUrl = 'http://localhost:3000'

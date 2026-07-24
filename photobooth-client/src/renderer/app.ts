@@ -14,7 +14,7 @@ declare global {
       // ----------------------------------------------------------------
       startDslrLiveview: () => Promise<{ success: boolean; error?: string }>
       stopDslrLiveview: () => Promise<{ success: boolean }>
-      detectDslr: () => Promise<{ connected: boolean; model: string; cameras?: any[] }>
+      detectDslr: () => Promise<{ connected: boolean; model: string; cameras?: any[]; whiteBalanceChoices?: string[] }>
       setDslrCameraPort: (port: string) => Promise<{ success: boolean }>
 
       // ----------------------------------------------------------------
@@ -47,7 +47,7 @@ declare global {
       // ----------------------------------------------------------------
       // Hardware / settings
       // ----------------------------------------------------------------
-      getHardwareStatus: () => Promise<{ connected: boolean; model: string; liveviewActive: boolean }>
+      getHardwareStatus: () => Promise<{ connected: boolean; model: string; liveviewActive: boolean; configChoices?: Record<string, string[]> }>
       getSettings: () => Promise<{
         photoCount: number
         countdown: number
@@ -59,6 +59,8 @@ declare global {
         otp?: string
         cameraMode?: 'webcam' | 'dslr'
         dslrFocusMode?: string
+        dslrWhiteBalance?: string
+        dslrWhiteBalanceKelvin?: number
       }>
       saveSettings: (settings: {
         photoCount: number
@@ -71,6 +73,8 @@ declare global {
         otp?: string
         cameraMode?: 'webcam' | 'dslr'
         dslrFocusMode?: string
+        dslrWhiteBalance?: string
+        dslrWhiteBalanceKelvin?: number
         autoPreview?: boolean
         liveviewRetryAttempts?: number
         shutterOffsetDelay?: number

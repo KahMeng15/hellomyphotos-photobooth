@@ -41,6 +41,7 @@ const DEFAULT_SETTINGS = {
   autoPreview: false,
   liveviewRetryAttempts: 1,
   shutterOffsetDelay: 0,
+  dslrWhiteBalanceKelvin: 5200,
 }
 
 let _offlineQueue: OfflineQueue
@@ -167,10 +168,12 @@ export function initIpcHandlers(
       const newIso = reconcile(data.settings?.dslrIso, hw.iso, s.dslrIso)
       const newShutter = reconcile(data.settings?.dslrShutterSpeed, hw.shutterspeed, s.dslrShutterSpeed)
       const newAperture = reconcile(data.settings?.dslrAperture, hw.aperture, s.dslrAperture)
+      const newWB = reconcile(data.settings?.dslrWhiteBalance, hw.whitebalance, s.dslrWhiteBalance)
       
       if (newIso !== s.dslrIso) { s.dslrIso = newIso; changed = true; }
       if (newShutter !== s.dslrShutterSpeed) { s.dslrShutterSpeed = newShutter; changed = true; }
       if (newAperture !== s.dslrAperture) { s.dslrAperture = newAperture; changed = true; }
+      if (newWB !== s.dslrWhiteBalance) { s.dslrWhiteBalance = newWB; changed = true; }
       
       if (data.settings?.dslrFocusMode && data.settings.dslrFocusMode !== 'auto' && s.dslrFocusMode !== data.settings.dslrFocusMode) { 
           s.dslrFocusMode = data.settings.dslrFocusMode; 
@@ -180,7 +183,7 @@ export function initIpcHandlers(
       if (changed) {
         fs.writeFileSync(SETTINGS_FILE, JSON.stringify(s, null, 2))
         if (applyToCamera) {
-          dslrManager.applyExposure(s.dslrIso, s.dslrShutterSpeed, s.dslrAperture)
+          dslrManager.applyExposure(s.dslrIso, s.dslrShutterSpeed, s.dslrAperture, s.dslrWhiteBalance, s.dslrWhiteBalanceKelvin)
           dslrManager.setFocusMode(s.dslrFocusMode as any)
         }
         if (!mainWindow.isDestroyed()) {
@@ -196,6 +199,8 @@ export function initIpcHandlers(
             dslrIso: s.dslrIso,
             dslrShutterSpeed: s.dslrShutterSpeed,
             dslrAperture: s.dslrAperture,
+            dslrWhiteBalance: s.dslrWhiteBalance,
+            dslrWhiteBalanceKelvin: s.dslrWhiteBalanceKelvin,
             dslrFocusMode: s.dslrFocusMode,
           }),
         }).catch(() => {})
@@ -209,7 +214,7 @@ export function initIpcHandlers(
         }
       } else if (applyToCamera) {
         // Ensure camera is aligned with local settings
-        dslrManager.applyExposure(s.dslrIso, s.dslrShutterSpeed, s.dslrAperture)
+        dslrManager.applyExposure(s.dslrIso, s.dslrShutterSpeed, s.dslrAperture, s.dslrWhiteBalance, s.dslrWhiteBalanceKelvin)
       }
     } catch (err) {
       console.error('[IPC] Failed to restore camera settings', err)
@@ -219,19 +224,25 @@ export function initIpcHandlers(
   // ------------------------------------------------------------------
   // Detect DSLR (on-demand from renderer / settings panel)
   // ------------------------------------------------------------------
-  ipcMain.handle('detect-dslr', async (): Promise<{ connected: boolean; model: string; cameras: any[] }> => {
+  ipcMain.handle('detect-dslr', async (): Promise<{ connected: boolean; model: string; cameras: any[]; whiteBalanceChoices: string[] }> => {
     console.log('[IPC] detect-dslr called')
     const cached = dslrManager.getStatus()
 
     // If liveview is already active, the camera is connected — skip spawning
     // gphoto2 commands that compete with the liveview stream for the USB interface.
     if (cached.liveviewActive) {
-      return { connected: true, model: cached.model, cameras: cached.cameras }
+      const choices = dslrManager.getStatus().configChoices?.whitebalance || []
+      return { connected: true, model: cached.model, cameras: cached.cameras, whiteBalanceChoices: choices }
     }
 
     const { connected } = await dslrManager.detect()
+    // Wait for config choices so the UI gets the actual camera white balance presets
+    if (connected) {
+      await dslrManager.fetchConfigChoices()
+    }
     const status = dslrManager.getStatus()
-    console.log(`[IPC] detect-dslr result: connected=${connected}, model="${status.model}"`)
+    const whiteBalanceChoices = status.configChoices?.whitebalance || []
+    console.log(`[IPC] detect-dslr result: connected=${connected}, model="${status.model}", wbChoices=${whiteBalanceChoices.length}`)
 
     if (connected && status.model) {
       const s = getSettingsSync()
@@ -244,7 +255,7 @@ export function initIpcHandlers(
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send('dslr-status', status)
     }
-    return { connected, model: status.model, cameras: status.cameras }
+    return { connected, model: status.model, cameras: status.cameras, whiteBalanceChoices }
   })
 
   // ------------------------------------------------------------------
@@ -303,7 +314,9 @@ export function initIpcHandlers(
       dslrManager.applyExposure(
         settings.dslrIso || 'auto',
         settings.dslrShutterSpeed || 'auto',
-        settings.dslrAperture || 'auto'
+        settings.dslrAperture || 'auto',
+        settings.dslrWhiteBalance || 'auto',
+        settings.dslrWhiteBalanceKelvin
       )
     }
     return { success: true }
@@ -439,6 +452,8 @@ export function initIpcHandlers(
     dslrIso?: string
     dslrShutterSpeed?: string
     dslrAperture?: string
+    dslrWhiteBalance?: string
+    dslrWhiteBalanceKelvin?: number
     dslrFocusMode?: string
     liveviewMode?: 'mjpeg' | 'polling'
     autoPreview?: boolean
@@ -463,6 +478,8 @@ export function initIpcHandlers(
           dslrIso: merged.dslrIso,
           dslrShutterSpeed: merged.dslrShutterSpeed,
           dslrAperture: merged.dslrAperture,
+          dslrWhiteBalance: merged.dslrWhiteBalance,
+          dslrWhiteBalanceKelvin: merged.dslrWhiteBalanceKelvin,
           dslrFocusMode: merged.dslrFocusMode,
         }
         if (merged.otp) body.otp = merged.otp
@@ -482,6 +499,8 @@ export function initIpcHandlers(
               dslrIso: merged.dslrIso,
               dslrShutterSpeed: merged.dslrShutterSpeed,
               dslrAperture: merged.dslrAperture,
+              dslrWhiteBalance: merged.dslrWhiteBalance,
+              dslrWhiteBalanceKelvin: merged.dslrWhiteBalanceKelvin,
               dslrFocusMode: merged.dslrFocusMode,
             }),
           })
@@ -511,7 +530,9 @@ export function initIpcHandlers(
             dslrManager.applyExposure(
               merged.dslrIso || 'auto',
               merged.dslrShutterSpeed || 'auto',
-              merged.dslrAperture || 'auto'
+              merged.dslrAperture || 'auto',
+              merged.dslrWhiteBalance || 'auto',
+              merged.dslrWhiteBalanceKelvin
             )
           }
           if (settings.dslrFocusMode && settings.dslrFocusMode !== existing.dslrFocusMode) {
@@ -519,18 +540,31 @@ export function initIpcHandlers(
           }
           await dslrManager.startLiveview(_liveviewFrameCallback, newMode)
         } else {
+          const wbChanged = merged.dslrWhiteBalance && merged.dslrWhiteBalance !== existing.dslrWhiteBalance
           if (autoPreviewOn) {
-            // Auto preview: don't apply manual settings to camera during preview.
+            // Auto preview: don't apply iso/shutter/aperture to camera during preview.
             // If autoPreview was just turned ON, reset camera to auto now.
             if (autoPreviewChanged) {
               dslrManager.applyAutoExposure()
             }
+            // White balance is applied regardless of autoPreview.
+            if (wbChanged) {
+              dslrManager.applyExposure(
+                'auto',
+                'auto',
+                'auto',
+                merged.dslrWhiteBalance || 'auto',
+                merged.dslrWhiteBalanceKelvin
+              )
+            }
           } else {
-            // Normal path: apply exposure settings while liveview is running.
+            // Normal path: apply all exposure settings while liveview is running.
             dslrManager.applyExposure(
               merged.dslrIso || 'auto',
               merged.dslrShutterSpeed || 'auto',
-              merged.dslrAperture || 'auto'
+              merged.dslrAperture || 'auto',
+              merged.dslrWhiteBalance || 'auto',
+              merged.dslrWhiteBalanceKelvin
             )
           }
           if (settings.dslrFocusMode && settings.dslrFocusMode !== existing.dslrFocusMode) {

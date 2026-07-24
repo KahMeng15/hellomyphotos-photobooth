@@ -75,6 +75,8 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
     autoPreview?: boolean
     liveviewRetryAttempts?: number
     shutterOffsetDelay?: number
+    dslrWhiteBalance?: string
+    dslrWhiteBalanceKelvin?: number
   }) => ipcRenderer.invoke('save-settings', settings),
 
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),

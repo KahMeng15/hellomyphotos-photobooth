@@ -52,6 +52,8 @@ interface BoothSettings {
   dslrShutterSpeed?: string
   dslrAperture?: string
   dslrFocusMode?: string
+  dslrWhiteBalance?: string
+  dslrWhiteBalanceKelvin?: number
   liveviewMode?: 'mjpeg' | 'polling'
   autoPreview?: boolean
   liveviewRetryAttempts?: number
@@ -68,7 +70,7 @@ export class Settings {
   private visible = false
   private dirty = false
   private onChange: (settings: BoothSettings) => void
-  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', liveviewMode: 'mjpeg', autoPreview: false, liveviewRetryAttempts: 1, shutterOffsetDelay: 0 }
+  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', dslrWhiteBalance: 'auto', dslrWhiteBalanceKelvin: 5200, liveviewMode: 'mjpeg', autoPreview: false, liveviewRetryAttempts: 1, shutterOffsetDelay: 0 }
   private serverInput!: HTMLInputElement
   private cameraSelect!: HTMLSelectElement
   private audioSelect!: HTMLSelectElement
@@ -96,6 +98,11 @@ export class Settings {
   private pollingBtn!: HTMLButtonElement
   private autoPreviewTrack!: HTMLDivElement
   private autoPreviewThumb!: HTMLDivElement
+  private wbSelect!: HTMLSelectElement
+  private wbKelvinRow!: HTMLDivElement
+  private wbKelvinInput!: HTMLInputElement
+  private wbKelvinDisplay!: HTMLSpanElement
+  private whiteBalanceChoices: string[] = []
 
   constructor(container: HTMLElement, onChange: (settings: BoothSettings) => void) {
     this.onChange = onChange
@@ -210,7 +217,6 @@ export class Settings {
     const isoChoices = ['auto', '100', '200', '400', '800', '1600', '3200', '6400']
     const shutterChoices = ['auto', '1/30', '1/40', '1/50', '1/60', '1/80', '1/100', '1/125', '1/160', '1/200', '1/250', '1/320', '1/400', '1/500', '1/640', '1/800']
     const apertureChoices = ['auto', '2.8', '4', '4.5', '5', '5.6', '6.3', '7.1', '8', '9', '10', '11']
-
     const createChoiceSlider = (labelStr: string, current: string, choices: string[], onChange: (v: string) => void, altBg: boolean) => {
       const row = document.createElement('div')
       row.style.cssText = `display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: ${altBg ? '#111' : '#191919'}; border-bottom: 1px solid #252525;`
@@ -258,6 +264,77 @@ export class Settings {
     for (const f of dslrFields) dslrBox.appendChild(f)
     dslrFields[dslrFields.length - 1].style.borderBottom = 'none'
     this.dslrExposureSection.appendChild(dslrBox)
+
+    const getWbOptions = () => {
+      const opts = this.whiteBalanceChoices.length > 0 ? [...this.whiteBalanceChoices] : ['Auto', 'Daylight', 'Shadow', 'Cloudy', 'Tungsten', 'Fluorescent', 'Flash']
+      if (!opts.includes('Custom')) opts.push('Custom')
+      return opts
+    }
+
+    const populateWbDropdown = () => {
+      this.wbSelect.innerHTML = ''
+      for (const opt of getWbOptions()) {
+        const el = document.createElement('option')
+        el.value = opt
+        el.textContent = opt
+        this.wbSelect.appendChild(el)
+      }
+      this.wbSelect.value = this.settings.dslrWhiteBalance || 'Auto'
+    }
+
+    const wbRow = document.createElement('div')
+    wbRow.style.cssText = 'display: flex; padding: 0.75rem 1rem; background: #111; align-items: center; justify-content: space-between; margin-top: 0.5rem; border: 1px solid #2a2a2a; border-radius: 8px;'
+    const wbLabel = document.createElement('label')
+    wbLabel.textContent = 'White Balance'
+    wbLabel.style.cssText = 'font-size: 0.875rem; color: #ccc; font-weight: 500;'
+    wbRow.appendChild(wbLabel)
+    this.wbSelect = document.createElement('select')
+    this.wbSelect.style.cssText = 'padding: 0.375rem 0.5rem; border: 1px solid #333; border-radius: 6px; background: #0f0f0f; color: #fff; font-size: 0.8125rem; outline: none; cursor: pointer;'
+    populateWbDropdown()
+    this.wbSelect.addEventListener('change', () => {
+      this.settings.dslrWhiteBalance = this.wbSelect.value
+      const isCustomWb = this.wbSelect.value === 'Custom' || this.wbSelect.value === 'Color Temperature'
+      this.wbKelvinRow.style.display = isCustomWb ? 'flex' : 'none'
+      this.markDirty()
+    })
+    this.strInputs.push(this.wbSelect as any)
+    wbRow.appendChild(this.wbSelect)
+    this.dslrExposureSection.appendChild(wbRow)
+
+    this.wbKelvinRow = document.createElement('div')
+    this.wbKelvinRow.style.cssText = 'display: none; padding: 0.75rem 1rem; background: #191919; align-items: center; justify-content: space-between; border: 1px solid #2a2a2a; border-radius: 8px; margin-top: 0.375rem;'
+    const kelvinLabel = document.createElement('label')
+    kelvinLabel.textContent = 'Kelvin'
+    kelvinLabel.style.cssText = 'font-size: 0.875rem; color: #ccc; font-weight: 500; min-width: 60px;'
+    this.wbKelvinRow.appendChild(kelvinLabel)
+
+    const kelvinWrapper = document.createElement('div')
+    kelvinWrapper.style.cssText = 'display: flex; align-items: center; gap: 0.75rem; flex: 1;'
+
+    this.wbKelvinInput = document.createElement('input')
+    this.wbKelvinInput.type = 'range'
+    this.wbKelvinInput.min = '2500'
+    this.wbKelvinInput.max = '10000'
+    this.wbKelvinInput.step = '100'
+    this.wbKelvinInput.value = String(this.settings.dslrWhiteBalanceKelvin || 5200)
+    this.wbKelvinInput.style.cssText = 'flex: 1;'
+
+    this.wbKelvinDisplay = document.createElement('span')
+    this.wbKelvinDisplay.textContent = this.wbKelvinInput.value + 'K'
+    this.wbKelvinDisplay.style.cssText = 'font-size: 0.875rem; font-weight: 600; color: #fff; min-width: 60px; text-align: right;'
+
+    this.wbKelvinInput.addEventListener('input', () => {
+      this.wbKelvinDisplay.textContent = this.wbKelvinInput.value + 'K'
+      this.settings.dslrWhiteBalanceKelvin = parseInt(this.wbKelvinInput.value, 10)
+      this.markDirty()
+    })
+
+    kelvinWrapper.appendChild(this.wbKelvinInput)
+    kelvinWrapper.appendChild(this.wbKelvinDisplay)
+    this.wbKelvinRow.appendChild(kelvinWrapper)
+    this.dslrExposureSection.appendChild(this.wbKelvinRow)
+
+    if (this.wbSelect.value === 'Custom' || this.wbSelect.value === 'Color Temperature') this.wbKelvinRow.style.display = 'flex'
 
     const focusTitle = document.createElement('h3')
     focusTitle.textContent = 'Focus'
@@ -653,6 +730,28 @@ export class Settings {
       padding: 0.375rem 0.875rem; border: 1px solid #444; border-radius: 6px;
       background: #222; color: #ccc; font-size: 0.75rem; cursor: pointer;
     `
+    const updateWbChoices = (choices?: string[]) => {
+      if (choices && choices.length > 0) {
+        this.whiteBalanceChoices = choices
+      }
+      // Rebuild dropdown preserving current selection
+      const currentVal = this.settings.dslrWhiteBalance
+      const opts = this.whiteBalanceChoices.length > 0 ? [...this.whiteBalanceChoices] : ['Auto', 'Daylight', 'Shadow', 'Cloudy', 'Tungsten', 'Fluorescent', 'Flash']
+      if (!opts.includes('Custom')) opts.push('Custom')
+      this.wbSelect.innerHTML = ''
+      for (const opt of opts) {
+        const el = document.createElement('option')
+        el.value = opt
+        el.textContent = opt
+        this.wbSelect.appendChild(el)
+      }
+      if (currentVal && opts.includes(currentVal)) {
+        this.wbSelect.value = currentVal
+      }
+      const isCustomWb = this.wbSelect.value === 'Custom' || this.wbSelect.value === 'Color Temperature'
+      this.wbKelvinRow.style.display = isCustomWb ? 'flex' : 'none'
+    }
+
     this.dslrScanBtn.addEventListener('click', async () => {
       this.dslrScanBtn.disabled = true
       this.dslrScanBtn.textContent = 'Scanning…'
@@ -662,10 +761,14 @@ export class Settings {
         this.dslrModel = result?.model || ''
         this.refreshLvToggle()
         
+        if (result?.whiteBalanceChoices) {
+          updateWbChoices(result.whiteBalanceChoices)
+        }
+
         if (result?.connected) {
           this.dslrStatusEl.style.color = '#4caf50'
           this.dslrStatusEl.textContent = `● Connected — ${result.model || 'Unknown camera'}`
-          
+
           if (result.cameras && result.cameras.length > 1) {
             this.dslrSelect.innerHTML = ''
             result.cameras.forEach((c: any) => {
@@ -1036,6 +1139,16 @@ export class Settings {
       const idx = choices.indexOf(val)
       input.value = String(idx >= 0 ? idx : 0)
       display.textContent = choices[parseInt(input.value)]
+    }
+    if (this.wbSelect) {
+      this.wbSelect.value = this.settings.dslrWhiteBalance || 'Auto'
+      const isCustomWb = this.wbSelect.value === 'Custom' || this.wbSelect.value === 'Color Temperature'
+      this.wbKelvinRow.style.display = isCustomWb ? 'flex' : 'none'
+    }
+    if (this.wbKelvinInput) {
+      const kv = this.settings.dslrWhiteBalanceKelvin || 5200
+      this.wbKelvinInput.value = String(kv)
+      this.wbKelvinDisplay.textContent = kv + 'K'
     }
   }
 

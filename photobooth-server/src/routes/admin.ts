@@ -106,10 +106,10 @@ router.get('/events', async (req: Request, res: Response) => {
 
 router.post('/events', async (req: Request, res: Response) => {
   try {
-    const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode } = req.body
+    const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance } = req.body
     if (!name) return res.status(400).json({ error: 'Event name required' })
 
-    const { id, otp } = createEvent(name, date || new Date().toISOString().split('T')[0], description || '', { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode })
+    const { id, otp } = createEvent(name, date || new Date().toISOString().split('T')[0], description || '', { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance })
     const event = getEvent(id)
     logger.info(`Event created: ${name} (${id}) otp=${otp}`)
     res.json({ success: true, event, otp })
@@ -132,17 +132,17 @@ router.get('/events/:id', async (req: Request, res: Response) => {
     try {
       const event = getEvent(req.params.id)
       if (!event) return res.status(404).json({ error: 'Event not found' })
-      const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode } = req.body
+      const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance } = req.body
       updateEventById(req.params.id,
         name ?? event.name,
         date ?? event.date,
         description ?? event.description,
-        { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode }
+        { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance }
       )
 
       // If settings changed, push settings-update command to booth
       const updated = getEvent(req.params.id)!
-      const settingsChanged = photoCount !== undefined || countdown !== undefined || captureInterval !== undefined || postCapturePreview !== undefined || dslrIso !== undefined || dslrShutterSpeed !== undefined || dslrAperture !== undefined || dslrFocusMode !== undefined
+      const settingsChanged = photoCount !== undefined || countdown !== undefined || captureInterval !== undefined || postCapturePreview !== undefined || dslrIso !== undefined || dslrShutterSpeed !== undefined || dslrAperture !== undefined || dslrFocusMode !== undefined || dslrWhiteBalance !== undefined
       if (settingsChanged) {
         pendingCommands.push({
           id: uuidv4(),
@@ -156,6 +156,7 @@ router.get('/events/:id', async (req: Request, res: Response) => {
             dslrShutterSpeed: updated.dslr_shutterspeed,
             dslrAperture: updated.dslr_aperture,
             dslrFocusMode: updated.dslr_focus_mode,
+            dslrWhiteBalance: updated.dslr_whitebalance,
           },
           createdAt: Date.now(),
         })
@@ -545,7 +546,7 @@ router.get('/settings/defaults', (req: Request, res: Response) => {
 })
 
 router.put('/settings/defaults', (req: Request, res: Response) => {
-  const { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode } = req.body
+  const { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance } = req.body
   const settings = {
     photoCount: Math.max(1, Math.min(4, photoCount ?? 4)),
     countdown: Math.max(3, Math.min(10, countdown ?? 5)),
@@ -555,6 +556,7 @@ router.put('/settings/defaults', (req: Request, res: Response) => {
     dslrShutterSpeed: dslrShutterSpeed?.toString().trim() || 'auto',
     dslrAperture: dslrAperture?.toString().trim() || 'auto',
     dslrFocusMode: dslrFocusMode?.toString().trim() || 'auto',
+    dslrWhiteBalance: dslrWhiteBalance?.toString().trim() || 'auto',
   }
   updateGlobalSettings(settings)
   res.json({ success: true, settings })
