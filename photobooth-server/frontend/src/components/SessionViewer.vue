@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div class="overlay" @click.self="$emit('close')">
+    <div v-show="fullscreenPhotoIndex === null" class="overlay" @click.self="$emit('close')">
       <div class="viewer">
         <button class="close-btn" @click="$emit('close')">✕</button>
 
@@ -16,6 +16,7 @@
             :src="photo.url"
             :alt="'Photo ' + (i + 1)"
             class="strip-img"
+            @click="openFullscreen(i)"
           />
         </div>
 
@@ -30,6 +31,34 @@
 
         <div v-if="shareError" class="share-error">{{ shareError }}</div>
       </div>
+    </div>
+
+    <div v-if="fullscreenPhotoIndex !== null" class="fs-overlay" @click="handleFullscreenClick" @mousemove="resetControlsTimer" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
+      <transition name="fade">
+        <button v-show="showControls" class="fs-close-btn" @click.stop="closeFullscreen">✕</button>
+      </transition>
+      
+      <transition name="fade">
+        <button v-show="showControls && fullscreenPhotoIndex > 0" class="fs-nav-btn fs-prev" @click.stop="prevPhoto">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+      </transition>
+      
+      <img
+        :src="session.photos[fullscreenPhotoIndex].url"
+        class="fs-image"
+        :alt="'Fullscreen Photo ' + (fullscreenPhotoIndex + 1)"
+      />
+      
+      <transition name="fade">
+        <button v-show="showControls && fullscreenPhotoIndex < session.photos.length - 1" class="fs-nav-btn fs-next" @click.stop="nextPhoto">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </transition>
     </div>
   </Teleport>
 
@@ -62,6 +91,77 @@ const shareError = ref('')
 const showQrCode = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 let shareUrl = ''
+
+const fullscreenPhotoIndex = ref<number | null>(null)
+let touchStartX = 0
+
+const showControls = ref(true)
+let controlsTimeout: number | null = null
+
+function resetControlsTimer() {
+  showControls.value = true
+  if (controlsTimeout) clearTimeout(controlsTimeout)
+  controlsTimeout = window.setTimeout(() => {
+    showControls.value = false
+  }, 3000)
+}
+
+function handleFullscreenClick(e: MouseEvent | TouchEvent) {
+  if (!showControls.value) {
+    e.preventDefault()
+    e.stopPropagation()
+    resetControlsTimer()
+    return
+  }
+  
+  if (e.target === e.currentTarget) {
+    closeFullscreen()
+  } else {
+    resetControlsTimer()
+  }
+}
+
+function openFullscreen(index: number) {
+  fullscreenPhotoIndex.value = index
+  resetControlsTimer()
+}
+
+function closeFullscreen() {
+  fullscreenPhotoIndex.value = null
+  if (controlsTimeout) clearTimeout(controlsTimeout)
+}
+
+function prevPhoto() {
+  if (fullscreenPhotoIndex.value !== null && fullscreenPhotoIndex.value > 0) {
+    fullscreenPhotoIndex.value--
+    resetControlsTimer()
+  }
+}
+
+function nextPhoto() {
+  if (fullscreenPhotoIndex.value !== null && fullscreenPhotoIndex.value < props.session.photos.length - 1) {
+    fullscreenPhotoIndex.value++
+    resetControlsTimer()
+  }
+}
+
+function handleTouchStart(e: TouchEvent) {
+  touchStartX = e.changedTouches[0].screenX
+  resetControlsTimer()
+}
+
+function handleTouchEnd(e: TouchEvent) {
+  const touchEndX = e.changedTouches[0].screenX
+  const diffX = touchStartX - touchEndX
+  
+  if (Math.abs(diffX) > 50) {
+    if (diffX > 0) {
+      nextPhoto()
+    } else {
+      prevPhoto()
+    }
+  }
+}
 
 async function copyShareLink() {
   shareError.value = ''
@@ -204,6 +304,11 @@ function formatTime(ts: string) {
   border-radius: 6px;
   cursor: pointer;
   flex-shrink: 0;
+  transition: opacity 0.2s;
+}
+
+.strip-img:hover {
+  opacity: 0.8;
 }
 
 .viewer-actions {
@@ -259,5 +364,83 @@ function formatTime(ts: string) {
   margin-top: 0.5rem;
   font-size: 0.75rem;
   color: #f44336;
+}
+
+.fs-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.fs-close-btn {
+  position: absolute;
+  top: 1.5rem;
+  right: 2rem;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 2rem;
+  cursor: pointer;
+  z-index: 210;
+  opacity: 0.7;
+}
+
+.fs-close-btn:hover {
+  opacity: 1;
+}
+
+.fs-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  border: none;
+  font-size: 3rem;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 210;
+  border-radius: 50%;
+  opacity: 0.7;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.fs-nav-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.fs-prev {
+  left: 2rem;
+}
+
+.fs-next {
+  right: 2rem;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.fs-image {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  object-fit: contain;
+  user-select: none;
 }
 </style>

@@ -40,6 +40,11 @@
         <div class="feed-header">
           <h2>Photos</h2>
           <div class="feed-header-right">
+            <button @click="toggleArchive" :class="['btn-icon', { active: showArchive }]" title="View Archive" style="margin-right: 0.75rem;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+            </button>
             <div class="view-toggle">
               <button @click="setViewMode('grid-sm')" :class="['btn-view', { active: viewMode === 'grid-sm' }]" title="Small grid">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -62,7 +67,8 @@
 
         <div v-if="selectedSessions.size > 0" class="selection-bar">
           <span class="selection-count">{{ selectedSessions.size }} selected</span>
-          <button @click="archiveSelected" class="btn-action btn-archive">Archive</button>
+          <button v-if="!showArchive" @click="archiveSelected" class="btn-action btn-archive">Archive</button>
+          <button v-else @click="restoreSelected" class="btn-action btn-archive">Restore</button>
           <button @click="deleteSelected" class="btn-action btn-delete">Delete</button>
           <button @click="selectedSessions.clear()" class="btn-action btn-cancel">Clear</button>
         </div>
@@ -161,6 +167,7 @@ const photoSessions = ref<any[]>([])
 const boothConnected = ref(false)
 const boothState = ref<string | null>(null)
 const showPanel = ref(false)
+const showArchive = ref(false)
 const feedRef = ref<HTMLElement | null>(null)
 const viewMode = ref<'grid-sm' | 'grid-lg' | 'list'>((localStorage.getItem('hellomyphoto_viewMode') as any) || 'grid-lg')
 const selectedSessions = ref(new Set<string>())
@@ -184,6 +191,12 @@ function handleCancel() {
   confirmResolve?.(false)
   confirmResolve = null
   confirmState.value = null
+}
+
+function toggleArchive() {
+  showArchive.value = !showArchive.value
+  selectedSessions.value.clear()
+  loadSessions()
 }
 
 function setViewMode(mode: 'grid-sm' | 'grid-lg' | 'list') {
@@ -259,8 +272,12 @@ onUnmounted(() => {
 
 async function loadSessions() {
   const eventId = route.params.id as string
-  const { data } = await axios.get(`/api/admin/events/${eventId}/photos`)
-  photoSessions.value = data.sessions
+  const { data } = await axios.get(`/api/admin/events/${eventId}/photos?includeArchived=${showArchive.value}`)
+  if (showArchive.value) {
+    photoSessions.value = data.sessions.filter((s: any) => s.archived)
+  } else {
+    photoSessions.value = data.sessions
+  }
 }
 
 function selectSession(session: PhotoSession) {
@@ -314,6 +331,16 @@ async function archiveSelected() {
   } catch {}
 }
 
+async function restoreSelected() {
+  const ids = Array.from(selectedSessions.value)
+  if (!ids.length) return
+  try {
+    await Promise.all(ids.map(id => axios.patch(`/api/admin/events/${route.params.id}/session/${id}/restore`)))
+    selectedSessions.value = new Set()
+    await loadSessions()
+  } catch {}
+}
+
 async function deleteSelected() {
   const ids = Array.from(selectedSessions.value)
   if (!ids.length) return
@@ -330,6 +357,67 @@ function formatTime(ts: string) {
   return new Date(ts).toLocaleString()
 }
 </script>
+
+<style>
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+.confirm-modal {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 360px;
+  width: 100%;
+}
+.confirm-modal p {
+  font-size: 0.9375rem;
+  color: #ccc;
+  margin: 0 0 1.25rem;
+  line-height: 1.4;
+}
+.confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+.btn-confirm {
+  padding: 0.5rem 1rem;
+  background: #f44336;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-confirm:hover {
+  background: #d32f2f;
+}
+.btn-cancel-modal {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: #888;
+  border: 1px solid #333;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.btn-cancel-modal:hover {
+  border-color: #555;
+  color: #ccc;
+}
+</style>
 
 <style scoped>
 .dashboard {
@@ -417,6 +505,12 @@ function formatTime(ts: string) {
 .btn-icon:hover {
   border-color: #555;
   color: #fff;
+}
+
+.btn-icon.active {
+  background: #2a2a2a;
+  color: #fff;
+  border-color: #2196F3;
 }
 
 .dashboard-grid {
@@ -646,58 +740,6 @@ function formatTime(ts: string) {
   text-align: center;
   padding: 4rem 2rem;
   color: #666;
-}
-
-.confirm-modal {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
-  padding: 1.5rem;
-  max-width: 360px;
-  width: 100%;
-}
-
-.confirm-modal p {
-  font-size: 0.9375rem;
-  color: #ccc;
-  margin: 0 0 1.25rem;
-  line-height: 1.4;
-}
-
-.confirm-actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
-}
-
-.btn-confirm {
-  padding: 0.5rem 1rem;
-  background: #f44336;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.btn-confirm:hover {
-  background: #d32f2f;
-}
-
-.btn-cancel-modal {
-  padding: 0.5rem 1rem;
-  background: transparent;
-  color: #888;
-  border: 1px solid #333;
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  cursor: pointer;
-}
-
-.btn-cancel-modal:hover {
-  border-color: #555;
-  color: #ccc;
 }
 
 @media (max-width: 768px) {
