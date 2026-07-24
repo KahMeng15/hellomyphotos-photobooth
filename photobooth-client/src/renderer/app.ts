@@ -72,6 +72,8 @@ declare global {
         cameraMode?: 'webcam' | 'dslr'
         dslrFocusMode?: string
         autoPreview?: boolean
+        liveviewRetryAttempts?: number
+        shutterOffsetDelay?: number
       }) => Promise<any>
       getServerConfig: () => Promise<{ serverUrl: string }>
       killPtpDaemon: () => Promise<{ success: boolean; error?: string }>

@@ -39,6 +39,8 @@ const DEFAULT_SETTINGS = {
   dslrFocusMode: 'auto',
   liveviewMode: 'mjpeg',
   autoPreview: false,
+  liveviewRetryAttempts: 1,
+  shutterOffsetDelay: 0,
 }
 
 let _offlineQueue: OfflineQueue
@@ -74,6 +76,9 @@ export function initIpcHandlers(
   const settings = getSettingsSync()
   if (settings.dslrCameraPort) {
     _dslrManager.setCameraPort(settings.dslrCameraPort)
+  }
+  if (settings.liveviewRetryAttempts) {
+    _dslrManager.setLiveviewRetryAttempts(settings.liveviewRetryAttempts)
   }
 
   // ------------------------------------------------------------------
@@ -432,6 +437,8 @@ export function initIpcHandlers(
     dslrFocusMode?: string
     liveviewMode?: 'mjpeg' | 'polling'
     autoPreview?: boolean
+    liveviewRetryAttempts?: number
+    shutterOffsetDelay?: number
   }) => {
     try {
       const existing = getSettingsSync()
@@ -476,6 +483,11 @@ export function initIpcHandlers(
         }
       } catch {}
       
+      // Update liveview retry count on the DslrManager
+      if (typeof merged.liveviewRetryAttempts === 'number') {
+        _dslrManager.setLiveviewRetryAttempts(merged.liveviewRetryAttempts)
+      }
+
       // Apply new DSLR exposure settings to the live view if connected
       if (merged.cameraMode === 'dslr') {
         const status = dslrManager.getStatus()

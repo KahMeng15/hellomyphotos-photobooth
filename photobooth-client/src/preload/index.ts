@@ -73,6 +73,8 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
     cameraMode?: 'webcam' | 'dslr'
     liveviewMode?: 'mjpeg' | 'polling'
     autoPreview?: boolean
+    liveviewRetryAttempts?: number
+    shutterOffsetDelay?: number
   }) => ipcRenderer.invoke('save-settings', settings),
 
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),

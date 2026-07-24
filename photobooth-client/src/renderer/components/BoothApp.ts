@@ -66,7 +66,9 @@ export class BoothApp {
     dslrFocusMode?: string
     liveviewMode?: 'mjpeg' | 'polling'
     autoPreview?: boolean
-  } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', liveviewMode: 'mjpeg', autoPreview: false }
+    liveviewRetryAttempts?: number
+    shutterOffsetDelay?: number
+  } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', liveviewMode: 'mjpeg', autoPreview: false, liveviewRetryAttempts: 1, shutterOffsetDelay: 0 }
   private serverOnline = true
   private selectedFrame: string | null = null
   private serverUrl = 'http://localhost:3000'
@@ -862,22 +864,19 @@ export class BoothApp {
 
       let prepDone = false
       let prepPromise: Promise<void> | null = null
-      let tLastTick = 0
       const tCountdownStart = Date.now()
 
-      const onLastTick = () => {
-        if (this.cameraMode === 'dslr' && !prepDone) {
+      const offset = this.settingsData.shutterOffsetDelay || 0
+      const onPrep = offset > 0 ? () => {
+        if (!prepDone) {
           prepDone = true
-          tLastTick = Date.now()
-          console.log(`[BoothApp] ⏱ onLastTick fired at t+${tLastTick - tCountdownStart} ms from countdown start — starting prepDslrCapture()`)
+          console.log(`[BoothApp] ⏱ Shutter offset: starting prep ${offset}s before 0 at t+${Date.now() - tCountdownStart} ms`)
           prepPromise = this.prepDslrCapture()
-          prepPromise.catch((err) => {
-            console.error('[BoothApp] prepDslrCapture failed:', err)
-          })
+          prepPromise.catch((err) => console.error('[BoothApp] prepDslrCapture failed:', err))
         }
-      }
+      } : undefined
 
-      await this.countdown.play(this.settingsData.countdown, audioCtx, onLastTick, () => this.waitIfPaused())
+      await this.countdown.play(this.settingsData.countdown, audioCtx, onPrep, () => this.waitIfPaused(), offset)
       if (!this.isCapturing) { audioCtx.close(); return }
       const tCountdownEnd = Date.now()
       console.log(`[BoothApp] ⏱ COUNTDOWN = 0 at t+${tCountdownEnd - tCountdownStart} ms`)
@@ -885,20 +884,19 @@ export class BoothApp {
       let result: { success: boolean; path?: string; error?: string }
 
       if (this.cameraMode === 'dslr') {
-        // Wait for prep to FULLY complete before firing the shutter.
-        // prepDslrCapture() runs fire-and-forget during the countdown (onLastTick
-        // at tick "1"), so it overlaps the last second of countdown. We await it
-        // here in case it's not finished by the time the countdown ends.
-        if (prepPromise !== null) {
-          const tWaitStart = Date.now()
-          console.log(`[BoothApp] ⏱ Awaiting prepDslrCapture (started ${tWaitStart - tLastTick} ms ago)...`)
-          await (prepPromise as Promise<void>).catch(() => {})  // errors already logged in onLastTick
-          prepPromise = null
-          const tWaitEnd = Date.now()
-          const extraWait = tWaitEnd - tCountdownEnd
-          console.log(`[BoothApp] ⏱ prepDslrCapture DONE — total ${tWaitEnd - tLastTick} ms, added ${extraWait} ms delay after countdown=0`)
+        // If offset is 0, prep wasn't fired during countdown — do it now
+        if (offset === 0) {
+          console.log(`[BoothApp] ⏱ Starting prepDslrCapture at t+${Date.now() - tCountdownStart} ms`)
+          prepPromise = this.prepDslrCapture()
+          prepDone = true
         }
-        console.log(`[BoothApp] ⏱ Calling captureDslrShot() at t+${Date.now() - tCountdownStart} ms from countdown start`)
+        // Await prep completion before firing shutter
+        if (prepPromise !== null) {
+          await prepPromise.catch(() => {})
+          prepPromise = null
+          console.log(`[BoothApp] ⏱ prepDslrCapture DONE at t+${Date.now() - tCountdownStart} ms`)
+        }
+        console.log(`[BoothApp] ⏱ Calling captureDslrShot() at t+${Date.now() - tCountdownStart} ms`)
         result = await this.captureDslrShot(prepDone)
         console.log(`[BoothApp] ⏱ captureDslrShot() returned at t+${Date.now() - tCountdownStart} ms`)
       } else {

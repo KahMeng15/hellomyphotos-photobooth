@@ -15,7 +15,8 @@ export class CountdownUI {
     this.overlay.appendChild(this.countdownEl)
   }
 
-  async play(seconds: number, audioCtx: AudioContext, onLastTick?: () => void, pauseCheck?: () => Promise<void>): Promise<void> {
+  async play(seconds: number, audioCtx: AudioContext, onPrep?: () => void, pauseCheck?: () => Promise<void>, prepAt = 1): Promise<void> {
+    const prepTick = Math.ceil(prepAt)
     for (let i = seconds; i > 0; i--) {
       if (pauseCheck) await pauseCheck()
       this.countdownEl.textContent = String(i)
@@ -24,10 +25,8 @@ export class CountdownUI {
 
       this.playBeep(audioCtx, i === 1 ? 880 : 660)
 
-      // Fire DSLR prep at "1" — this stops liveview and begins camera readiness
-      // steps so that when the countdown hits 0 the shutter fires immediately.
-      if (i === 1 && onLastTick) {
-        onLastTick()
+      if (i === prepTick && onPrep) {
+        onPrep()
       }
 
       await this.delay(500, pauseCheck)

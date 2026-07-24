@@ -787,6 +787,13 @@ export class DslrManager {
   private _lastPtpKill = 0
   private static PTP_KILL_COOLDOWN = 3000 // ms
 
+  // Number of attempts for starting liveview (1 = no retry)
+  private _liveviewRetryAttempts = 1
+
+  setLiveviewRetryAttempts(n: number): void {
+    this._liveviewRetryAttempts = Math.max(1, Math.floor(n))
+  }
+
   // Disconnect poll
   private disconnectPollTimer: NodeJS.Timeout | null = null
 
@@ -973,8 +980,18 @@ export class DslrManager {
         }, this.selectedPort, this.cameraModel)
         this.liveviewActive = true
         this.gphoto2Stream = stream
-        const ok = await stream.start(20000, 0)
-        if (!ok) {
+
+        let streamOk = false
+        for (let attempt = 1; attempt <= this._liveviewRetryAttempts; attempt++) {
+          streamOk = await stream.start(20000, 0)
+          if (streamOk) break
+          log.warn(`[DslrManager] Stream attempt ${attempt}/${this._liveviewRetryAttempts} failed${attempt < this._liveviewRetryAttempts ? ' — retrying in 1s' : ''}`)
+          if (attempt < this._liveviewRetryAttempts) {
+            await new Promise(r => setTimeout(r, 1000))
+          }
+        }
+
+        if (!streamOk) {
           log.warn('[DslrManager] Fresh MJPEG stream failed — retrying with viewfinder cycle')
           this.liveviewActive = false
           this.gphoto2Stream = null
@@ -1116,7 +1133,17 @@ export class DslrManager {
    * (i.e. the camera is genuinely accessible), false otherwise.
    */
   async startLiveview(onFrame: (jpeg: Buffer) => void, liveviewMode: 'mjpeg' | 'polling' = 'mjpeg'): Promise<boolean> {
-    return this.enqueue(() => this.startLiveviewInternal(onFrame, liveviewMode))
+    return this.enqueue(async () => {
+      for (let attempt = 1; attempt <= this._liveviewRetryAttempts; attempt++) {
+        const ok = await this.startLiveviewInternal(onFrame, liveviewMode)
+        if (ok) return true
+        log.warn(`[DslrManager] startLiveview attempt ${attempt}/${this._liveviewRetryAttempts} failed${attempt < this._liveviewRetryAttempts ? ' — retrying in 1s' : ''}`)
+        if (attempt < this._liveviewRetryAttempts) {
+          await new Promise(r => setTimeout(r, 1000))
+        }
+      }
+      return false
+    })
   }
 
   private async startLiveviewInternal(onFrame: (jpeg: Buffer) => void, liveviewMode: 'mjpeg' | 'polling' = 'mjpeg'): Promise<boolean> {

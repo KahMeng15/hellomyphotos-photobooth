@@ -54,6 +54,8 @@ interface BoothSettings {
   dslrFocusMode?: string
   liveviewMode?: 'mjpeg' | 'polling'
   autoPreview?: boolean
+  liveviewRetryAttempts?: number
+  shutterOffsetDelay?: number
 }
 
 interface MediaDeviceInfo {
@@ -66,7 +68,7 @@ export class Settings {
   private visible = false
   private dirty = false
   private onChange: (settings: BoothSettings) => void
-  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', liveviewMode: 'mjpeg', autoPreview: false }
+  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', liveviewMode: 'mjpeg', autoPreview: false, liveviewRetryAttempts: 1, shutterOffsetDelay: 0 }
   private serverInput!: HTMLInputElement
   private cameraSelect!: HTMLSelectElement
   private audioSelect!: HTMLSelectElement
@@ -310,6 +312,7 @@ export class Settings {
       this.createField('Countdown (seconds)', 3, 10, this.settings.countdown, (v) => { this.settings.countdown = v; this.markDirty() }, true),
       this.createField('Interval (seconds)', 0, 5, this.settings.captureInterval, (v) => { this.settings.captureInterval = v; this.markDirty() }, false),
       this.createField('Preview (seconds)', 1, 5, this.settings.postCapturePreview, (v) => { this.settings.postCapturePreview = v; this.markDirty() }, true),
+      this.createFloatField('Shutter offset (s)', 0, 10, 0.1, this.settings.shutterOffsetDelay || 0, (v) => { this.settings.shutterOffsetDelay = v; this.markDirty() }, false),
     ]
     const settingsBox = document.createElement('div')
     settingsBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden;'
@@ -318,7 +321,7 @@ export class Settings {
     col3.appendChild(settingsBox)
 
     const lvTitle = document.createElement('h3')
-    lvTitle.textContent = 'Liveview Mode'
+    lvTitle.textContent = 'Preview'
     lvTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;'
     col3.appendChild(lvTitle)
 
@@ -327,8 +330,8 @@ export class Settings {
     lvDesc.style.cssText = 'font-size: 0.6875rem; color: #555; margin: 0.25rem 0 0; line-height: 1.4;'
     col3.appendChild(lvDesc)
 
-    const lvBox = document.createElement('div')
-    lvBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden;'
+    const liveviewBox = document.createElement('div')
+    liveviewBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden;'
 
     const lvRow = document.createElement('div')
     lvRow.style.cssText = 'display: flex; padding: 0.75rem 1rem; background: #191919; align-items: center; justify-content: space-between;'
@@ -357,14 +360,10 @@ export class Settings {
     lvToggle.appendChild(this.mjpegBtn)
     lvToggle.appendChild(this.pollingBtn)
     lvRow.appendChild(lvToggle)
-    lvBox.appendChild(lvRow)
-    col3.appendChild(lvBox)
-
-    const autoPreviewBox = document.createElement('div')
-    autoPreviewBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden;'
+    liveviewBox.appendChild(lvRow)
 
     const autoPreviewRow = document.createElement('div')
-    autoPreviewRow.style.cssText = 'display: flex; padding: 0.75rem 1rem; background: #191919; align-items: center; justify-content: space-between;'
+    autoPreviewRow.style.cssText = 'display: flex; padding: 0.75rem 1rem; background: #111; align-items: center; justify-content: space-between; border-top: 1px solid #252525;'
 
     const autoPreviewLabel = document.createElement('label')
     autoPreviewLabel.textContent = 'Auto exposure during preview'
@@ -380,8 +379,42 @@ export class Settings {
       this.markDirty()
     })
     autoPreviewRow.appendChild(this.autoPreviewCb)
-    autoPreviewBox.appendChild(autoPreviewRow)
-    col3.appendChild(autoPreviewBox)
+    liveviewBox.appendChild(autoPreviewRow)
+
+    const retryRow = document.createElement('div')
+    retryRow.style.cssText = 'display: flex; padding: 0.75rem 1rem; background: #191919; align-items: center; justify-content: space-between; border-top: 1px solid #252525;'
+
+    const retryLabel = document.createElement('label')
+    retryLabel.textContent = 'Liveview retry attempts'
+    retryLabel.style.cssText = 'font-size: 0.875rem; color: #ccc; font-weight: 500;'
+    retryRow.appendChild(retryLabel)
+
+    const retryInput = document.createElement('input')
+    retryInput.type = 'number'
+    retryInput.min = '1'
+    retryInput.max = '10'
+    retryInput.value = String(this.settings.liveviewRetryAttempts || 1)
+    retryInput.style.cssText = `
+      width: 60px; padding: 0.375rem 0.5rem; border: 1px solid #333; border-radius: 6px;
+      background: #0f0f0f; color: #fff; font-size: 0.875rem; font-weight: 600;
+      outline: none; text-align: center; box-sizing: border-box;
+    `
+    retryInput.addEventListener('focus', () => { retryInput.style.borderColor = '#666'; retryInput.style.boxShadow = '0 0 0 1px #555' })
+    retryInput.addEventListener('blur', () => { retryInput.style.borderColor = '#333'; retryInput.style.boxShadow = 'none' })
+    retryInput.addEventListener('change', () => {
+      let val = parseInt(retryInput.value, 10)
+      if (isNaN(val)) val = 1
+      val = Math.max(1, Math.min(10, val))
+      retryInput.value = String(val)
+      this.settings.liveviewRetryAttempts = val
+      this.markDirty()
+    })
+    this.numInputs.push(retryInput)
+    retryRow.appendChild(retryInput)
+
+    liveviewBox.appendChild(retryRow)
+
+    col3.appendChild(liveviewBox)
 
     this.grid.appendChild(col1)
     this.grid.appendChild(this.col2)
@@ -883,6 +916,52 @@ export class Settings {
     return field
   }
 
+  private createFloatField(
+    label: string,
+    min: number,
+    max: number,
+    step: number,
+    currentValue: number,
+    onChange: (value: number) => void,
+    isEven: boolean
+  ): HTMLDivElement {
+    const field = document.createElement('div')
+    field.style.cssText = `display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: ${isEven ? '#191919' : '#111'}; border-bottom: 1px solid #252525;`
+
+    const lbl = document.createElement('label')
+    lbl.textContent = label
+    lbl.style.cssText = 'font-size: 0.8125rem; color: #ccc; font-weight: 500;'
+    field.appendChild(lbl)
+
+    const input = document.createElement('input')
+    input.type = 'number'
+    input.min = String(min)
+    input.max = String(max)
+    input.step = String(step)
+    input.value = String(currentValue)
+    input.style.cssText = `
+      width: 60px; padding: 0.375rem 0.5rem; border: 1px solid #333; border-radius: 6px;
+      background: #0f0f0f; color: #fff; font-size: 0.875rem; font-weight: 600;
+      outline: none; text-align: center; box-sizing: border-box;
+    `
+
+    this.numInputs.push(input)
+
+    input.addEventListener('focus', () => { input.style.borderColor = '#666'; input.style.boxShadow = '0 0 0 1px #555' })
+    input.addEventListener('blur', () => { input.style.borderColor = '#333'; input.style.boxShadow = 'none' })
+
+    input.addEventListener('change', () => {
+      let val = parseFloat(input.value)
+      if (isNaN(val)) val = min
+      val = Math.max(min, Math.min(max, val))
+      input.value = String(val)
+      onChange(val)
+    })
+
+    field.appendChild(input)
+    return field
+  }
+
   private createStringField(
     label: string,
     currentValue: string,
@@ -934,7 +1013,7 @@ export class Settings {
     this.refreshLvToggle()
     if (this.autoPreviewCb) this.autoPreviewCb.checked = !!this.settings.autoPreview
 
-    const numValues = [this.settings.photoCount, this.settings.countdown, this.settings.captureInterval, this.settings.postCapturePreview]
+    const numValues = [this.settings.photoCount, this.settings.countdown, this.settings.captureInterval, this.settings.postCapturePreview, this.settings.shutterOffsetDelay || 0, this.settings.liveviewRetryAttempts || 1]
     for (let i = 0; i < this.numInputs.length; i++) {
       this.numInputs[i].value = String(numValues[i])
     }
