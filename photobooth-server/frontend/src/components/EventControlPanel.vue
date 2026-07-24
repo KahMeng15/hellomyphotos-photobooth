@@ -209,6 +209,16 @@
               <label style="display:block;margin-bottom:0.5rem;">Date & Time</label>
               <input type="datetime-local" v-model="eventSettings.expiryValue" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;" />
             </div>
+
+            <div class="field-row" style="margin-top:1rem;">
+              <label style="display:block;margin-bottom:0.5rem;">Organizer</label>
+              <input type="text" v-model="eventSettings.organizer" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;" />
+            </div>
+
+            <div class="field-row" style="margin-top:1rem;">
+              <label style="display:block;margin-bottom:0.5rem;">Contact Info</label>
+              <textarea v-model="eventSettings.contactInfo" class="text-input" style="width:100%;height:100px;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;resize:vertical;"></textarea>
+            </div>
           </div>
           
           <div v-if="settingsMsg" :class="['settings-msg', settingsMsgType]" style="margin-top:1rem;">{{ settingsMsg }}</div>
@@ -320,7 +330,7 @@ const paused = ref(false)
 const otpCopied = ref(false)
 const showSettingsModal = ref(false)
 const showEventSettingsModal = ref(false)
-const eventSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', obfuscateLinks: false, expiryType: 'none', expiryValue: '1_year' })
+const eventSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', obfuscateLinks: false, expiryType: 'none', expiryValue: '1_year', organizer: '', contactInfo: '' })
 const settingsSaving = ref(false)
 const settingsMsg = ref('')
 const settingsMsgType = ref<'success' | 'error'>('success')
@@ -356,7 +366,12 @@ onMounted(async () => {
       dslrIso: event.value.dslr_iso || 'auto',
       dslrShutterSpeed: event.value.dslr_shutterspeed || 'auto',
       dslrAperture: event.value.dslr_aperture || 'auto',
-      dslrFocusMode: event.value.dslr_focus_mode || 'auto'
+      dslrFocusMode: event.value.dslr_focus_mode || 'auto',
+      obfuscateLinks: !!event.value.obfuscate_links,
+      expiryType: event.value.expiry_type || 'none',
+      expiryValue: event.value.expiry_value || '',
+      organizer: event.value.organizer || '',
+      contactInfo: event.value.contact_info || ''
     }
   } catch (err) {
     console.error('Failed to fetch event', err)
@@ -425,6 +440,8 @@ async function saveEventSettings() {
       obfuscateLinks: eventSettings.value.obfuscateLinks ? 1 : 0,
       expiryType: eventSettings.value.expiryType,
       expiryValue: eventSettings.value.expiryValue,
+      organizer: eventSettings.value.organizer,
+      contactInfo: eventSettings.value.contactInfo,
     })
     settingsMsg.value = 'Settings saved'
     settingsMsgType.value = 'success'

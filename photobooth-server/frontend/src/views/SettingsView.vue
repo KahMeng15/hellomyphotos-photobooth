@@ -28,6 +28,14 @@
             <label>Preview</label>
             <input type="number" min="1" max="5" v-model.number="settings.postCapturePreview" class="num-input" />
           </div>
+          <div class="field-row">
+            <label>Organizer</label>
+            <input type="text" v-model="settings.organizer" class="str-input" style="width: 150px; text-align: left;" />
+          </div>
+          <div class="field-row" style="flex-direction: column; align-items: stretch; gap: 0.5rem; padding: 0.75rem;">
+            <label style="align-self: flex-start;">Contact Info</label>
+            <textarea v-model="settings.contactInfo" class="str-input" style="width: 100%; height: 60px; text-align: left;"></textarea>
+          </div>
         </div>
       </section>
 
@@ -86,8 +94,8 @@ const shutterChoices = ['auto', '1/30', '1/40', '1/50', '1/60', '1/80', '1/100',
 const apertureChoices = ['auto', '2.8', '4', '4.5', '5', '5.6', '6.3', '7.1', '8', '9', '10', '11']
 
 const router = useRouter()
-const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto' })
-const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto' })
+const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', organizer: '', contactInfo: '' })
+const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', organizer: '', contactInfo: '' })
 const saved = ref(false)
 
 const dirty = computed(() =>
@@ -98,7 +106,7 @@ const dirty = computed(() =>
   settings.value.dslrIso !== originalSettings.value.dslrIso ||
   settings.value.dslrShutterSpeed !== originalSettings.value.dslrShutterSpeed ||
   settings.value.dslrAperture !== originalSettings.value.dslrAperture ||
-  settings.value.dslrFocusMode !== originalSettings.value.dslrFocusMode
+  settings.value.dslrFocusMode !== originalSettings.value.dslrFocusMode || settings.value.organizer !== originalSettings.value.organizer || settings.value.contactInfo !== originalSettings.value.contactInfo
 )
 
 onMounted(async () => {

@@ -18,8 +18,13 @@
     <template v-else-if="session">
       <div class="share-content">
         <header class="share-header">
-          <h1>{{ session.eventName || 'hellomyphotos' }}</h1>
-          <p class="subtitle">here are your photos</p>
+          <h1>Hello there! Here are your photos!</h1>
+          <p class="subtitle">
+            {{ session.eventName || 'hellomyphotos' }}<template v-if="session.organizer"><br/>
+              <a v-if="session.contactInfo" href="#" @click.prevent="showContactModal = true" class="contact-link">{{ session.organizer }}</a>
+              <span v-else>{{ session.organizer }}</span>
+            </template>
+          </p>
         </header>
 
         <div v-if="session.photos.length > 2" class="hero-preview">
@@ -47,8 +52,8 @@
 
       <footer class="share-footer">
         <p>
-          Photos taken with <a href="https://kahmeng15.github.io/hellomyphotos" target="_blank" rel="noopener noreferrer">hellomyphotos</a>, an app project by <a href="https://kahmeng15.github.io" target="_blank" rel="noopener noreferrer">kahmeng</a>.<br/>
-          Learn more about this app at <a href="https://kahmeng15.github.io/hellomyphotos" target="_blank" rel="noopener noreferrer">kahmeng15.github.io/hellomyphotos</a>.<br/>
+          Photos taken with <a href="https://hellomyphotos.vercel.app" target="_blank" rel="noopener noreferrer">hellomyphotos</a>, an app project by <a href="https://kahmeng15.github.io" target="_blank" rel="noopener noreferrer">kahmeng</a>.<br/>
+          Learn more about this app at <a href="https://hellomyphotos.vercel.app" target="_blank" rel="noopener noreferrer">hellomyphotos.vercel.app</a>.<br/>
           Have some feedback? Submit it <a href="https://kahmeng15.github.io/feedback/" target="_blank" rel="noopener noreferrer">here</a>.
         </p>
       </footer>
@@ -71,6 +76,19 @@
         </button>
       </div>
     </template>
+    <Teleport to="body">
+      <div v-if="showContactModal" class="modal-overlay" @click.self="showContactModal = false">
+        <div class="modal-page">
+          <div class="modal-header">
+            <button class="back-btn" @click="showContactModal = false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+            <h2>Contact Organizer</h2>
+          </div>
+          <div class="modal-body">
+            <div style="white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; color: #ccc;">{{ session?.contactInfo }}</div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -93,11 +111,14 @@ interface SessionData {
   createdAt: string
   expiresAt?: string | null
   photos: SessionPhoto[]
+  organizer?: string
+  contactInfo?: string
 }
 
 const route = useRoute()
 const loading = ref(true)
 const error = ref(false)
+const showContactModal = ref(false)
 const expired = ref(false)
 const session = ref<SessionData | null>(null)
 const selectedPhotoIndex = ref<number | null>(null)
@@ -145,13 +166,17 @@ onUnmounted(() => {
 })
 
 function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    if (showContactModal.value) showContactModal.value = false
+    if (selectedPhotoIndex.value !== null) selectedPhotoIndex.value = null
+    return
+  }
+
   if (selectedPhotoIndex.value === null) return
   if (e.key === 'ArrowRight') {
     nextPhoto()
   } else if (e.key === 'ArrowLeft') {
     prevPhoto()
-  } else if (e.key === 'Escape') {
-    selectedPhotoIndex.value = null
   }
 }
 
@@ -518,5 +543,68 @@ async function downloadAll() {
   max-width: 90vw;
   max-height: 80vh;
   border-radius: 8px;
+}
+
+.contact-link {
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.contact-link:hover {
+  color: #fff;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-page {
+  background: #1a1a1a;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.modal-header h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 0 1rem;
+  color: #fff;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: #ccc;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.back-btn:hover { background: #333; color: #fff; }
+
+.modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
 }
 </style>

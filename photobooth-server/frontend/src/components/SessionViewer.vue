@@ -26,6 +26,9 @@
           <button @click="copyShareLink" class="btn-action">
             {{ linkCopied ? 'Copied!' : 'Copy Share Link' }}
           </button>
+          <button @click="resetShareLink" class="btn-action btn-danger" style="margin-left: 0.5rem;" :disabled="resettingLink">
+            {{ resettingLink ? 'Resetting...' : 'Reset Link' }}
+          </button>
           <button @click="showQr" class="btn-action">QR Code</button>
           <button @click="downloadAll" class="btn-action">Download All</button>
           <button @click="deleteSession" class="btn-action btn-danger">Delete</button>
@@ -90,6 +93,7 @@ const emit = defineEmits<{ close: [] }>()
 
 const photosStore = usePhotosStore()
 const linkCopied = ref(false)
+const resettingLink = ref(false)
 const shareError = ref('')
 const showQrCode = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
@@ -164,6 +168,26 @@ function handleTouchEnd(e: TouchEvent) {
       prevPhoto()
     }
   }
+}
+
+async function resetShareLink() {
+  if (!confirm('Are you sure you want to reset the share link? The old link will stop working immediately.')) return
+  resettingLink.value = true
+  try {
+    const { data } = await axios.post(`/api/admin/events/${props.session.eventId}/sessions/${props.session.sessionId}/reset-link`)
+    if (data.shareId) {
+      (props.session as any).share_id = data.shareId
+      shareUrl = ''
+      if (showQrCode.value) {
+        showQrCode.value = false
+        await nextTick()
+        showQr()
+      }
+    }
+  } catch (err) {
+    shareError.value = 'Failed to reset link'
+  }
+  resettingLink.value = false
 }
 
 async function copyShareLink() {

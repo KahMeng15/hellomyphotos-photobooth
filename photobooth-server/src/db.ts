@@ -93,15 +93,19 @@ try { db.exec(`ALTER TABLE events ADD COLUMN dslr_whitebalance_kelvin INTEGER NO
 try { db.exec(`ALTER TABLE events ADD COLUMN obfuscate_links INTEGER NOT NULL DEFAULT 0`) } catch {}
 try { db.exec(`ALTER TABLE events ADD COLUMN expiry_type TEXT NOT NULL DEFAULT 'none'`) } catch {}
 try { db.exec(`ALTER TABLE events ADD COLUMN expiry_value TEXT NOT NULL DEFAULT ''`) } catch {}
+try { db.exec(`ALTER TABLE events ADD COLUMN organizer TEXT NOT NULL DEFAULT ''`) } catch {}
+try { db.exec(`ALTER TABLE events ADD COLUMN contact_info TEXT NOT NULL DEFAULT ''`) } catch {}
 
 
 try { db.exec(`ALTER TABLE global_settings ADD COLUMN dslr_whitebalance_kelvin INTEGER NOT NULL DEFAULT 5200`) } catch {}
+try { db.exec(`ALTER TABLE global_settings ADD COLUMN organizer TEXT NOT NULL DEFAULT ''`) } catch {}
+try { db.exec(`ALTER TABLE global_settings ADD COLUMN contact_info TEXT NOT NULL DEFAULT ''`) } catch {}
 try { db.exec(`ALTER TABLE camera_settings ADD COLUMN dslr_whitebalance_kelvin INTEGER NOT NULL DEFAULT 5200`) } catch {}
 
 // Seed defaults row
 db.exec(`
   INSERT OR IGNORE INTO global_settings (id, photo_count, countdown, capture_interval, post_capture_preview, dslr_iso, dslr_shutterspeed, dslr_aperture, dslr_focus_mode, dslr_whitebalance, dslr_whitebalance_kelvin)
-  VALUES (1, 4, 5, 1, 2, 'auto', 'auto', 'auto', 'auto', 'auto', 5200)
+  VALUES (1, 4, 5, 1, 2, 'auto', 'auto', 'auto', 'auto', 'auto', 5200) /* organizer/contact_info added below */
 `)
 
 
@@ -154,12 +158,12 @@ db.exec(`
 `)
 
 const insertEvent = db.prepare(`
-  INSERT INTO events (id, name, date, description, otp, status, photo_count, countdown, capture_interval, post_capture_preview, dslr_iso, dslr_shutterspeed, dslr_aperture, dslr_focus_mode, dslr_whitebalance, dslr_whitebalance_kelvin, obfuscate_links, expiry_type, expiry_value)
-  VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO events (id, name, date, description, otp, status, photo_count, countdown, capture_interval, post_capture_preview, dslr_iso, dslr_shutterspeed, dslr_aperture, dslr_focus_mode, dslr_whitebalance, dslr_whitebalance_kelvin, obfuscate_links, expiry_type, expiry_value, organizer, contact_info)
+  VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `)
 
 const updateEvent = db.prepare(`
-  UPDATE events SET name = ?, date = ?, description = ?, photo_count = ?, countdown = ?, capture_interval = ?, post_capture_preview = ?, dslr_iso = ?, dslr_shutterspeed = ?, dslr_aperture = ?, dslr_focus_mode = ?, dslr_whitebalance = ?, dslr_whitebalance_kelvin = ?, obfuscate_links = ?, expiry_type = ?, expiry_value = ? WHERE id = ?
+  UPDATE events SET name = ?, date = ?, description = ?, photo_count = ?, countdown = ?, capture_interval = ?, post_capture_preview = ?, dslr_iso = ?, dslr_shutterspeed = ?, dslr_aperture = ?, dslr_focus_mode = ?, dslr_whitebalance = ?, dslr_whitebalance_kelvin = ?, obfuscate_links = ?, expiry_type = ?, expiry_value = ?, organizer = ?, contact_info = ? WHERE id = ?
 `)
 
 const updateEventSettings = db.prepare(`
@@ -202,7 +206,7 @@ function generateOtp(): string {
   return digits
 }
 
-export function createEvent(name: string, date: string, description: string, settings?: { photoCount?: number; countdown?: number; captureInterval?: number; postCapturePreview?: number; dslrIso?: string; dslrShutterSpeed?: string; dslrAperture?: string; dslrFocusMode?: string; dslrWhiteBalance?: string; dslrWhiteBalanceKelvin?: number; obfuscateLinks?: number; expiryType?: string; expiryValue?: string }) {
+export function createEvent(name: string, date: string, description: string, settings?: { photoCount?: number; countdown?: number; captureInterval?: number; postCapturePreview?: number; dslrIso?: string; dslrShutterSpeed?: string; dslrAperture?: string; dslrFocusMode?: string; dslrWhiteBalance?: string; dslrWhiteBalanceKelvin?: number; obfuscateLinks?: number; expiryType?: string; expiryValue?: string; organizer?: string; contactInfo?: string }) {
   const id = `evt_${Date.now()}_${randomInt(1000, 9999)}`
   const otp = generateOtp()
   const defaults = getGlobalSettings()
@@ -219,12 +223,12 @@ export function createEvent(name: string, date: string, description: string, set
   const obfuscateLinks = settings?.obfuscateLinks ?? 0
   const expiryType = settings?.expiryType ?? 'none'
   const expiryValue = settings?.expiryValue ?? ''
-  insertEvent.run(id, name, date, description, otp, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, dslrWhiteBalanceKelvin, obfuscateLinks, expiryType, expiryValue)
+  insertEvent.run(id, name, date, description, otp, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, dslrWhiteBalanceKelvin, obfuscateLinks, expiryType, expiryValue, settings?.organizer ?? '', settings?.contactInfo ?? '')
   logger.info(`Event created: ${id} (${name}) otp=${otp}`)
   return { id, otp }
 }
 
-export function updateEventById(id: string, name: string, date: string, description: string, settings?: { photoCount?: number; countdown?: number; captureInterval?: number; postCapturePreview?: number; dslrIso?: string; dslrShutterSpeed?: string; dslrAperture?: string; dslrFocusMode?: string; dslrWhiteBalance?: string; dslrWhiteBalanceKelvin?: number; obfuscateLinks?: number; expiryType?: string; expiryValue?: string }) {
+export function updateEventById(id: string, name: string, date: string, description: string, settings?: { photoCount?: number; countdown?: number; captureInterval?: number; postCapturePreview?: number; dslrIso?: string; dslrShutterSpeed?: string; dslrAperture?: string; dslrFocusMode?: string; dslrWhiteBalance?: string; dslrWhiteBalanceKelvin?: number; obfuscateLinks?: number; expiryType?: string; expiryValue?: string; organizer?: string; contactInfo?: string }) {
   const existing = getEvent(id)!
   updateEvent.run(
     name, date, description,
@@ -241,13 +245,15 @@ export function updateEventById(id: string, name: string, date: string, descript
     settings?.obfuscateLinks ?? existing.obfuscate_links,
     settings?.expiryType ?? existing.expiry_type,
     settings?.expiryValue ?? existing.expiry_value,
+    settings?.organizer ?? existing.organizer,
+    settings?.contactInfo ?? existing.contact_info,
     id
   )
 }
 
-export function updateEventSettingsById(id: string, settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; dslrIso: string; dslrShutterSpeed: string; dslrAperture: string; dslrFocusMode?: string; dslrWhiteBalance?: string; dslrWhiteBalanceKelvin?: number; obfuscateLinks?: number; expiryType?: string; expiryValue?: string }) {
+export function updateEventSettingsById(id: string, settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; dslrIso: string; dslrShutterSpeed: string; dslrAperture: string; dslrFocusMode?: string; dslrWhiteBalance?: string; dslrWhiteBalanceKelvin?: number; obfuscateLinks?: number; expiryType?: string; expiryValue?: string; organizer?: string; contactInfo?: string }) {
   const existing = getEvent(id)!
-  updateEventSettings.run(settings.photoCount, settings.countdown, settings.captureInterval, settings.postCapturePreview, settings.dslrIso, settings.dslrShutterSpeed, settings.dslrAperture, settings.dslrFocusMode ?? existing.dslr_focus_mode, settings.dslrWhiteBalance ?? existing.dslr_whitebalance ?? 'auto', settings.dslrWhiteBalanceKelvin ?? existing.dslr_whitebalance_kelvin ?? 5200, settings.obfuscateLinks ?? existing.obfuscate_links ?? 0, settings.expiryType ?? existing.expiry_type ?? 'none', settings.expiryValue ?? existing.expiry_value ?? '', id)
+  updateEventSettings.run(settings.photoCount, settings.countdown, settings.captureInterval, settings.postCapturePreview, settings.dslrIso, settings.dslrShutterSpeed, settings.dslrAperture, settings.dslrFocusMode ?? existing.dslr_focus_mode, settings.dslrWhiteBalance ?? existing.dslr_whitebalance ?? 'auto', settings.dslrWhiteBalanceKelvin ?? existing.dslr_whitebalance_kelvin ?? 5200, settings.obfuscateLinks ?? existing.obfuscate_links ?? 0, settings.expiryType ?? existing.expiry_type ?? 'none', settings.expiryValue ?? existing.expiry_value ?? '', settings.organizer ?? existing.organizer ?? '', settings.contactInfo ?? existing.contact_info ?? '', id)
 }
 
 export function getEvent(id: string) {
@@ -257,7 +263,7 @@ export function getEvent(id: string) {
     capture_interval: number; post_capture_preview: number;
     dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string;
     dslr_focus_mode: string; dslr_whitebalance: string; dslr_whitebalance_kelvin: number;
-    obfuscate_links: number; expiry_type: string; expiry_value: string;
+    obfuscate_links: number; expiry_type: string; expiry_value: string; organizer: string; contact_info: string;
     created_at: string
   } | undefined
 }
@@ -269,7 +275,7 @@ export function getEventByOtp(otp: string) {
     capture_interval: number; post_capture_preview: number;
     dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string;
     dslr_focus_mode: string; dslr_whitebalance: string; dslr_whitebalance_kelvin: number;
-    obfuscate_links: number; expiry_type: string; expiry_value: string;
+    obfuscate_links: number; expiry_type: string; expiry_value: string; organizer: string; contact_info: string;
     created_at: string
   } | undefined
 }
@@ -282,7 +288,7 @@ export function listEvents(includeEnded = false) {
     capture_interval: number; post_capture_preview: number;
     dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string;
     dslr_focus_mode: string; dslr_whitebalance: string; dslr_whitebalance_kelvin: number;
-    obfuscate_links: number; expiry_type: string; expiry_value: string;
+    obfuscate_links: number; expiry_type: string; expiry_value: string; organizer: string; contact_info: string;
     created_at: string
   }>
 }
@@ -334,8 +340,8 @@ export function restoreSession(sessionId: string) {
 
 const getDefaultsStmt = db.prepare('SELECT * FROM global_settings WHERE id = 1')
 const upsertDefaultsStmt = db.prepare(`
-  INSERT INTO global_settings (id, photo_count, countdown, capture_interval, post_capture_preview, dslr_iso, dslr_shutterspeed, dslr_aperture, dslr_focus_mode, dslr_whitebalance, dslr_whitebalance_kelvin)
-  VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO global_settings (id, photo_count, countdown, capture_interval, post_capture_preview, dslr_iso, dslr_shutterspeed, dslr_aperture, dslr_focus_mode, dslr_whitebalance, dslr_whitebalance_kelvin, organizer, contact_info)
+  VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(id) DO UPDATE SET
     photo_count = excluded.photo_count,
     countdown = excluded.countdown,
@@ -346,11 +352,13 @@ const upsertDefaultsStmt = db.prepare(`
     dslr_aperture = excluded.dslr_aperture,
     dslr_focus_mode = excluded.dslr_focus_mode,
     dslr_whitebalance = excluded.dslr_whitebalance,
-    dslr_whitebalance_kelvin = excluded.dslr_whitebalance_kelvin
+    dslr_whitebalance_kelvin = excluded.dslr_whitebalance_kelvin,
+    organizer = excluded.organizer,
+    contact_info = excluded.contact_info
 `)
 
 export function getGlobalSettings() {
-  const row = getDefaultsStmt.get() as { photo_count: number; countdown: number; capture_interval: number; post_capture_preview: number; dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string; dslr_focus_mode: string; dslr_whitebalance: string; dslr_whitebalance_kelvin: number } | undefined
+  const row = getDefaultsStmt.get() as { photo_count: number; countdown: number; capture_interval: number; post_capture_preview: number; dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string; dslr_focus_mode: string; dslr_whitebalance: string; dslr_whitebalance_kelvin: number; organizer: string; contact_info: string } | undefined
   return {
     photoCount: row?.photo_count ?? 4,
     countdown: row?.countdown ?? 5,
@@ -362,11 +370,13 @@ export function getGlobalSettings() {
     dslrFocusMode: row?.dslr_focus_mode ?? 'auto',
     dslrWhiteBalance: row?.dslr_whitebalance ?? 'auto',
     dslrWhiteBalanceKelvin: row?.dslr_whitebalance_kelvin ?? 5200,
+    organizer: (row as any)?.organizer ?? '',
+    contactInfo: (row as any)?.contact_info ?? '',
   }
 }
 
-export function updateGlobalSettings(settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; dslrIso: string; dslrShutterSpeed: string; dslrAperture: string; dslrFocusMode?: string; dslrWhiteBalance?: string; dslrWhiteBalanceKelvin?: number }) {
-  upsertDefaultsStmt.run(settings.photoCount, settings.countdown, settings.captureInterval, settings.postCapturePreview, settings.dslrIso, settings.dslrShutterSpeed, settings.dslrAperture, settings.dslrFocusMode ?? 'auto', settings.dslrWhiteBalance ?? 'auto', settings.dslrWhiteBalanceKelvin ?? 5200)
+export function updateGlobalSettings(settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; dslrIso: string; dslrShutterSpeed: string; dslrAperture: string; dslrFocusMode?: string; dslrWhiteBalance?: string; dslrWhiteBalanceKelvin?: number; organizer?: string; contactInfo?: string }) {
+  upsertDefaultsStmt.run(settings.photoCount, settings.countdown, settings.captureInterval, settings.postCapturePreview, settings.dslrIso, settings.dslrShutterSpeed, settings.dslrAperture, settings.dslrFocusMode ?? 'auto', settings.dslrWhiteBalance ?? 'auto', settings.dslrWhiteBalanceKelvin ?? 5200, (settings as any).organizer ?? '', (settings as any).contactInfo ?? '')
   logger.info('Global defaults updated', settings)
 }
 
@@ -385,7 +395,7 @@ const upsertCameraSettingsStmt = db.prepare(`
 `)
 
 export function getCameraSettings(model: string) {
-  const row = getCameraSettingsStmt.get(model) as { dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string; dslr_focus_mode: string; dslr_whitebalance: string; dslr_whitebalance_kelvin: number } | undefined
+  const row = getCameraSettingsStmt.get(model) as { dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string; dslr_focus_mode: string; dslr_whitebalance: string; dslr_whitebalance_kelvin: number; organizer: string; contact_info: string } | undefined
   if (!row) return null
   return {
     dslrIso: row.dslr_iso,
@@ -397,13 +407,19 @@ export function getCameraSettings(model: string) {
   }
 }
 
-export function updateCameraSettings(model: string, settings: { dslrIso: string; dslrShutterSpeed: string; dslrAperture: string; dslrFocusMode?: string; dslrWhiteBalance?: string; dslrWhiteBalanceKelvin?: number }) {
+export function updateCameraSettings(model: string, settings: { dslrIso: string; dslrShutterSpeed: string; dslrAperture: string; dslrFocusMode?: string; dslrWhiteBalance?: string; dslrWhiteBalanceKelvin?: number; organizer?: string; contactInfo?: string }) {
   upsertCameraSettingsStmt.run(model, settings.dslrIso, settings.dslrShutterSpeed, settings.dslrAperture, settings.dslrFocusMode ?? 'auto', settings.dslrWhiteBalance ?? 'auto', settings.dslrWhiteBalanceKelvin ?? 5200)
   logger.info(`Camera settings updated for model ${model}`, settings)
 }
 
 export function closeDb() {
   db.close()
+}
+
+export function regenerateSessionShareId(sessionId: string) {
+  const newShareId = randomBytes(4).toString('hex')
+  db.prepare('UPDATE photo_sessions SET share_id = ? WHERE id = ?').run(newShareId, sessionId)
+  return newShareId
 }
 
 export function getPhotoSessionByShareId(shareId: string) {

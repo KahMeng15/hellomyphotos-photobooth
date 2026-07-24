@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express'
+import {
+  regenerateSessionShareId, Router, Request, Response } from 'express'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs/promises'
@@ -189,12 +190,12 @@ router.get('/events/:id/analytics', async (req: Request, res: Response) => {
     try {
       const event = getEvent(req.params.id)
       if (!event) return res.status(404).json({ error: 'Event not found' })
-      const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, obfuscateLinks, expiryType, expiryValue } = req.body
+      const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, obfuscateLinks, expiryType, expiryValue, organizer, contactInfo } = req.body
       updateEventById(req.params.id,
         name ?? event.name,
         date ?? event.date,
         description ?? event.description,
-        { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, obfuscateLinks, expiryType, expiryValue }
+        { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, obfuscateLinks, expiryType, expiryValue, organizer, contactInfo }
       )
 
       // If settings changed, push settings-update command to booth
@@ -226,7 +227,16 @@ router.get('/events/:id/analytics', async (req: Request, res: Response) => {
     }
   })
 
-router.post('/events/:id/end', async (req: Request, res: Response) => {
+router.post('/events/:eventId/sessions/:sessionId/reset-link', async (req: Request, res: Response) => {
+    try {
+      const newShareId = regenerateSessionShareId(req.params.sessionId)
+      res.json({ shareId: newShareId })
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to reset link' })
+    }
+  })
+
+  router.post('/events/:id/end', async (req: Request, res: Response) => {
   try {
     const event = getEvent(req.params.id)
     if (!event) return res.status(404).json({ error: 'Event not found' })

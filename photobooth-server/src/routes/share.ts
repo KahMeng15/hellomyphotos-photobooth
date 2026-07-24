@@ -8,7 +8,7 @@ import { config } from '../config'
 import { logger } from '../utils/logger'
 import { authMiddleware } from '../middleware/authMiddleware'
 import { getEvent, getPhotoSessionByShareId, getPhotoSession, logShareAnalytics } from '../db'
-import UAParser from 'ua-parser-js'
+import { UAParser } from 'ua-parser-js'
 
 const router = Router()
 
@@ -145,6 +145,8 @@ router.get('/:token', async (req: Request, res: Response) => {
     res.json({
       eventId: event.id,
       eventName: event.name,
+      organizer: (event as any).organizer || '',
+      contactInfo: (event as any).contact_info || '',
       eventDate: event.date,
       photoCount: photos.length,
       expiresAt: expiryDate ? expiryDate.toISOString() : null,
