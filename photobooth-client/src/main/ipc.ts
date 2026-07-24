@@ -158,7 +158,9 @@ export function initIpcHandlers(
       
       const reconcile = (serverVal: string | undefined, hwVal: string, currentAppVal: string) => {
         if (serverVal && serverVal !== 'auto') return serverVal
+        if (serverVal === 'auto') return 'auto'
         if (currentAppVal && currentAppVal !== 'auto') return currentAppVal
+        if (currentAppVal === 'auto') return 'auto'
         return hwVal
       }
 
@@ -232,7 +234,10 @@ export function initIpcHandlers(
     console.log(`[IPC] detect-dslr result: connected=${connected}, model="${status.model}"`)
 
     if (connected && status.model) {
-      await syncCameraSettingsFromServer(status.model)
+      const s = getSettingsSync()
+      if (!s.autoPreview) {
+        await syncCameraSettingsFromServer(status.model)
+      }
     }
 
     // Push updated status to renderer
@@ -492,32 +497,42 @@ export function initIpcHandlers(
       if (merged.cameraMode === 'dslr') {
         const status = dslrManager.getStatus()
         const modeChanged = merged.liveviewMode && merged.liveviewMode !== existing.liveviewMode
+        const autoPreviewOn = !!merged.autoPreview
+        const autoPreviewChanged = autoPreviewOn !== !!existing.autoPreview
 
         if (modeChanged && status.liveviewActive && _liveviewFrameCallback) {
           // Liveview mode changed — full restart with new mode.
-          // 1. Stop liveview (drops mirror on Canon)
-          // 2. Apply exposure config while mirror is down (--set-config can claim USB)
-          // 3. Start liveview with the new mode
           const newMode = merged.liveviewMode as 'mjpeg' | 'polling'
           console.log(`[IPC] liveviewMode changed: ${existing.liveviewMode} → ${newMode} — full restart`)
           await dslrManager.stopLiveview()
-          dslrManager.applyExposure(
-            merged.dslrIso || 'auto',
-            merged.dslrShutterSpeed || 'auto',
-            merged.dslrAperture || 'auto'
-          )
+          if (autoPreviewOn) {
+            await dslrManager.applyAutoExposure()
+          } else {
+            dslrManager.applyExposure(
+              merged.dslrIso || 'auto',
+              merged.dslrShutterSpeed || 'auto',
+              merged.dslrAperture || 'auto'
+            )
+          }
           if (settings.dslrFocusMode && settings.dslrFocusMode !== existing.dslrFocusMode) {
             dslrManager.setFocusMode(settings.dslrFocusMode as 'auto' | 'manual')
           }
           await dslrManager.startLiveview(_liveviewFrameCallback, newMode)
         } else {
-          // Normal path: apply exposure settings while liveview is running.
-          // applyExposure handles the kill-MJPEG→apply→restart-MJPEG cycle internally.
-          dslrManager.applyExposure(
-            merged.dslrIso || 'auto',
-            merged.dslrShutterSpeed || 'auto',
-            merged.dslrAperture || 'auto'
-          )
+          if (autoPreviewOn) {
+            // Auto preview: don't apply manual settings to camera during preview.
+            // If autoPreview was just turned ON, reset camera to auto now.
+            if (autoPreviewChanged) {
+              dslrManager.applyAutoExposure()
+            }
+          } else {
+            // Normal path: apply exposure settings while liveview is running.
+            dslrManager.applyExposure(
+              merged.dslrIso || 'auto',
+              merged.dslrShutterSpeed || 'auto',
+              merged.dslrAperture || 'auto'
+            )
+          }
           if (settings.dslrFocusMode && settings.dslrFocusMode !== existing.dslrFocusMode) {
             dslrManager.setFocusMode(settings.dslrFocusMode as 'auto' | 'manual')
           }

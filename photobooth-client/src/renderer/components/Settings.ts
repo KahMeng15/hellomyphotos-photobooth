@@ -94,7 +94,8 @@ export class Settings {
   private dslrModel = ''
   private mjpegBtn!: HTMLButtonElement
   private pollingBtn!: HTMLButtonElement
-  private autoPreviewCb!: HTMLInputElement
+  private autoPreviewTrack!: HTMLDivElement
+  private autoPreviewThumb!: HTMLDivElement
 
   constructor(container: HTMLElement, onChange: (settings: BoothSettings) => void) {
     this.onChange = onChange
@@ -370,15 +371,20 @@ export class Settings {
     autoPreviewLabel.style.cssText = 'font-size: 0.875rem; color: #ccc; font-weight: 500; cursor: pointer;'
     autoPreviewRow.appendChild(autoPreviewLabel)
 
-    this.autoPreviewCb = document.createElement('input')
-    this.autoPreviewCb.type = 'checkbox'
-    this.autoPreviewCb.checked = !!this.settings.autoPreview
-    this.autoPreviewCb.style.cssText = 'width: 1.125rem; height: 1.125rem; cursor: pointer; accent-color: #fff;'
-    this.autoPreviewCb.addEventListener('change', () => {
-      this.settings.autoPreview = this.autoPreviewCb.checked
+    this.autoPreviewTrack = document.createElement('div')
+    this.autoPreviewThumb = document.createElement('div')
+    const applyToggle = (on: boolean) => {
+      this.autoPreviewTrack.style.cssText = `position: relative; width: 44px; height: 24px; border-radius: 12px; cursor: pointer; transition: background 150ms; flex-shrink: 0; background: ${on ? '#fff' : '#333'};`
+      this.autoPreviewThumb.style.cssText = `position: absolute; top: 3px; left: ${on ? '23px' : '3px'}; width: 18px; height: 18px; border-radius: 50%; background: ${on ? '#000' : '#888'}; transition: left 150ms;`
+    }
+    applyToggle(!!this.settings.autoPreview)
+    this.autoPreviewTrack.appendChild(this.autoPreviewThumb)
+    this.autoPreviewTrack.addEventListener('click', () => {
+      this.settings.autoPreview = !this.settings.autoPreview
+      applyToggle(!!this.settings.autoPreview)
       this.markDirty()
     })
-    autoPreviewRow.appendChild(this.autoPreviewCb)
+    autoPreviewRow.appendChild(this.autoPreviewTrack)
     liveviewBox.appendChild(autoPreviewRow)
 
     const retryRow = document.createElement('div')
@@ -1011,7 +1017,12 @@ export class Settings {
 
   private refreshFields() {
     this.refreshLvToggle()
-    if (this.autoPreviewCb) this.autoPreviewCb.checked = !!this.settings.autoPreview
+    if (this.autoPreviewTrack) {
+      const on = !!this.settings.autoPreview
+      this.autoPreviewTrack.style.background = on ? '#fff' : '#333'
+      this.autoPreviewThumb.style.left = on ? '23px' : '3px'
+      this.autoPreviewThumb.style.background = on ? '#000' : '#888'
+    }
 
     const numValues = [this.settings.photoCount, this.settings.countdown, this.settings.captureInterval, this.settings.postCapturePreview, this.settings.shutterOffsetDelay || 0, this.settings.liveviewRetryAttempts || 1]
     for (let i = 0; i < this.numInputs.length; i++) {

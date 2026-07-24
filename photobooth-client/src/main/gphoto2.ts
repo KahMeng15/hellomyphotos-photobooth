@@ -859,10 +859,8 @@ export class DslrManager {
             .filter(l => l.startsWith('Choice:'))
             .map(l => l.replace(/^Choice:\s*\d+\s*/, '').trim())
           if (choices.length > 0) {
-            // 'auto' is usually implicitly supported, so we prefix it if not present
-            const finalChoices = choices.some(c => c.toLowerCase() === 'auto') ? choices : ['auto', ...choices]
-            this.configChoices[key] = finalChoices
-            log.info(`[DslrManager] Fetched ${finalChoices.length} choices for ${key}`)
+            this.configChoices[key] = choices
+            log.info(`[DslrManager] Fetched ${choices.length} choices for ${key}`)
           }
         }
       } catch (err: any) {
@@ -931,22 +929,42 @@ export class DslrManager {
     this._lastPtpKill = now
   }
 
+  /** Apply auto exposure for configs that have a valid "Auto" choice. */
+  private async _applyConfigAuto(): Promise<void> {
+    const configArgs: string[] = []
+    for (const key of ['iso', 'shutterspeed', 'aperture'] as const) {
+      const choices = this.configChoices[key]
+      if (choices && choices.length > 0) {
+        const autoVal = choices.find(c => c.toLowerCase() === 'auto')
+        if (autoVal) {
+          configArgs.push('--set-config', `${key}=${autoVal}`)
+        }
+      }
+    }
+    if (configArgs.length > 0) {
+      const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+      const res = await this.execGphoto2([...configArgs, ...portArgs], 15000)
+      if (res.code === 0) log.ok('[DslrManager] Auto exposure applied')
+      else log.warn(`[DslrManager] Auto exposure returned code=${res.code}: ${res.stderr.trim().slice(0, 100)}`)
+    }
+  }
+
   async applyExposure(iso: string, shutterspeed: string, aperture: string) {
     return this.enqueue(async () => {
       if (this.isWindows || !this.connected) return
       log.info(`[DslrManager] Applying exposure settings to camera: iso=${iso}, shutter=${shutterspeed}, aperture=${aperture}`)
-      const configArgs = []
+
+      const needsAuto = (!iso || iso === 'auto') || (!shutterspeed || shutterspeed === 'auto') || (!aperture || aperture === 'auto')
+      const configArgs: string[] = []
       if (iso && iso.toLowerCase() !== 'auto') configArgs.push('--set-config', `iso=${iso}`)
       if (shutterspeed && shutterspeed.toLowerCase() !== 'auto') configArgs.push('--set-config', `shutterspeed=${shutterspeed}`)
       if (aperture && aperture.toLowerCase() !== 'auto') configArgs.push('--set-config', `aperture=${aperture}`)
-      
-      if (configArgs.length === 0) return
+
+      if (!needsAuto && configArgs.length === 0) return
 
       const wasLiveview = this.liveviewActive
+      const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
 
-      // Kill the MJPEG stream process directly WITHOUT the viewfinder=0 mirror
-      // drop (stopLiveviewInternal does that for Canon). Keeping the mirror up
-      // means the next --capture-movie can grab the first frame immediately.
       if (wasLiveview) {
         log.info('[DslrManager] Killing MJPEG stream (keeping mirror up)...')
         if (this.gphoto2Stream) {
@@ -960,18 +978,20 @@ export class DslrManager {
 
       await this._ensureUsbAccess(wasLiveview)
 
-      const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+      if (needsAuto) {
+        await this._applyConfigAuto()
+      }
 
-      const res = await this.execGphoto2([...configArgs, ...portArgs], 15000)
-      if (res.code !== 0) {
-        log.warn(`[DslrManager] Failed to apply exposure settings: ${res.stderr.trim()}`)
-      } else {
-        log.ok('[DslrManager] Exposure settings applied successfully')
+      if (configArgs.length > 0) {
+        const res = await this.execGphoto2([...configArgs, ...portArgs], 15000)
+        if (res.code !== 0) {
+          log.warn(`[DslrManager] Failed to apply exposure settings: ${res.stderr.trim()}`)
+        } else {
+          log.ok('[DslrManager] Exposure settings applied successfully')
+        }
       }
 
       if (wasLiveview && this.mainWindow && !this.mainWindow.isDestroyed()) {
-        // Mirror is still up from the previous liveview — no viewfinder=1 or
-        // wait-event needed. Start the MJPEG stream directly.
         log.info('[DslrManager] Starting fresh MJPEG stream (mirror is up)...')
         const stream = new Gphoto2LiveviewStream((jpeg) => {
           if (this.mainWindow && !this.mainWindow.isDestroyed()) {
@@ -995,7 +1015,6 @@ export class DslrManager {
           log.warn('[DslrManager] Fresh MJPEG stream failed — retrying with viewfinder cycle')
           this.liveviewActive = false
           this.gphoto2Stream = null
-          // Full reset: drop mirror, wait, re-init, restart
           await this.execGphoto2(['--set-config', '/main/actions/viewfinder=0', ...portArgs], 5000).catch(() => {})
           await new Promise(r => setTimeout(r, 2000))
           await this.startLiveviewInternal((jpeg) => {
@@ -1012,24 +1031,7 @@ export class DslrManager {
     return this.enqueue(async () => {
       if (this.isWindows || !this.connected) return
       log.info('[DslrManager] Resetting exposure to auto for live preview')
-      const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
-      const configArgs: string[] = []
-      for (const key of ['iso', 'shutterspeed', 'aperture'] as const) {
-        const choices = this.configChoices[key]
-        if (choices && choices.length > 0) {
-          const autoVal = choices.find(c => c.toLowerCase() === 'auto')
-          if (autoVal) {
-            configArgs.push('--set-config', `${key}=${autoVal}`)
-          } else {
-            configArgs.push('--set-config', `${key}=${choices[0]}`)
-          }
-        }
-      }
-      if (configArgs.length > 0) {
-        const res = await this.execGphoto2([...configArgs, ...portArgs], 15000)
-        if (res.code === 0) log.ok('[DslrManager] Auto exposure applied')
-        else log.warn(`[DslrManager] Auto exposure returned code=${res.code}: ${res.stderr.trim().slice(0, 100)}`)
-      }
+      await this._applyConfigAuto()
     })
   }
 
