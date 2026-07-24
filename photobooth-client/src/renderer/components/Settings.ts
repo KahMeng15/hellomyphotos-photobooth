@@ -105,16 +105,17 @@ export class Settings {
 
     this.overlay = document.createElement('div')
     this.overlay.style.cssText = `
-      position: absolute; inset: 0; background: #0f0f0f;
-      display: none; flex-direction: column;
-      z-index: 30; pointer-events: all;
+      position: absolute; right: 20px; bottom: 20px; background: #0f0f0f;
+      display: none; flex-direction: column; border-radius: 12px;
+      z-index: 30; pointer-events: all; width: 350px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333;
     `
 
     const panel = document.createElement('div')
     panel.style.cssText = `
-      background: #0f0f0f; padding: 2rem;
+      padding: 1.5rem;
       width: 100%; box-sizing: border-box;
-      flex: 1; overflow-y: auto;
+      overflow-y: auto; max-height: 80vh;
     `
 
     const header = document.createElement('div')
@@ -295,12 +296,7 @@ export class Settings {
     fields[fields.length - 1].style.borderBottom = 'none'
     col3.appendChild(settingsBox)
 
-    grid.appendChild(col1)
-    grid.appendChild(col2)
-    grid.appendChild(col3)
-    panel.appendChild(grid)
-
-
+    panel.appendChild(this.dslrExposureSection)
 
     this.overlay.appendChild(panel)
     container.appendChild(this.overlay)
@@ -654,10 +650,7 @@ export class Settings {
       this.dslrKillPtpBtn.style.cursor = isDslr ? 'pointer' : 'default'
     }
 
-    if (this.dslrExposureSection) {
-      this.dslrExposureSection.style.opacity = isDslr ? '1' : '0.35'
-      this.dslrExposureSection.style.pointerEvents = isDslr ? 'auto' : 'none'
-    }
+    // Removed dimming so it's always interactable in the limited modal
   }
 
   // -------------------------------------------------------------------------
