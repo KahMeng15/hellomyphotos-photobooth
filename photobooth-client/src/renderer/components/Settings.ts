@@ -58,6 +58,7 @@ interface BoothSettings {
   autoPreview?: boolean
   liveviewRetryAttempts?: number
   shutterOffsetDelay?: number
+  settingsPasscode?: string
 }
 
 interface MediaDeviceInfo {
@@ -78,6 +79,7 @@ export class Settings {
   private numInputs: HTMLInputElement[] = []
   private strInputs: HTMLInputElement[] = []
   private connectionStatus!: HTMLDivElement
+  private passcodeInput!: HTMLInputElement
   private connectedEvent: { name: string; date: string; description: string } | null = null
   // Camera source
   private webcamModeBtn!: HTMLButtonElement
@@ -187,7 +189,7 @@ export class Settings {
     this.grid = document.createElement('div')
     this.grid.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; align-items: start;'
 
-    // Column 1 — Server URL + Event OTP
+    // Column 1 — Server URL + Event OTP + App Passcode
     const col1 = document.createElement('div')
     col1.style.cssText = 'display: flex; flex-direction: column; gap: 1.5rem;'
     const serverSection = this.createServerSection()
@@ -195,6 +197,8 @@ export class Settings {
     const otpSection = this.createOtpSection()
     otpSection.style.borderBottom = 'none'
     col1.appendChild(otpSection)
+    const passcodeSection = this.createPasscodeSection()
+    col1.appendChild(passcodeSection)
 
     // Column 2 — Camera Source, Devices, DSLR Exposure, Focus
     this.col2 = document.createElement('div')
@@ -657,6 +661,63 @@ export class Settings {
       testBtn.textContent = 'Test'
       testBtn.style.opacity = '1'
     })
+
+    return section
+  }
+
+  private createPasscodeSection(): HTMLDivElement {
+    const section = document.createElement('div')
+    section.style.cssText = 'margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #2a2a2a;'
+
+    const label = document.createElement('label')
+    label.textContent = 'App Settings Passcode'
+    label.style.cssText = 'display: block; font-size: 0.8125rem; color: #888; margin-bottom: 0.375rem;'
+    section.appendChild(label)
+
+    const desc = document.createElement('p')
+    desc.textContent = 'Optional. Lock settings page with a passcode. (Bypassed if not connected to an event)'
+    desc.style.cssText = 'font-size: 0.75rem; color: #666; margin: 0 0 0.5rem; line-height: 1.4;'
+    section.appendChild(desc)
+
+    const row = document.createElement('div')
+    row.style.cssText = 'display: flex; gap: 0.5rem; align-items: stretch;'
+
+    const input = document.createElement('input')
+    this.passcodeInput = input
+    input.type = 'password'
+    input.placeholder = 'Leave blank to disable'
+    input.value = this.settings.settingsPasscode || ''
+    input.style.cssText = `
+      flex: 1; font-size: 1rem; padding: 0.625rem;
+      background: #111; border: 1px solid #333;
+      border-radius: 8px; color: #fff; text-align: center;
+      outline: none;
+    `
+
+    input.addEventListener('input', () => {
+      this.settings.settingsPasscode = input.value.trim() || undefined
+      this.markDirty()
+    })
+
+    const revealBtn = document.createElement('button')
+    revealBtn.textContent = 'Show'
+    revealBtn.style.cssText = `
+      padding: 0.625rem 1rem; border: 1px solid #555; border-radius: 8px;
+      background: #222; color: #fff; font-size: 0.8125rem; cursor: pointer;
+    `
+    revealBtn.addEventListener('click', () => {
+      if (input.type === 'password') {
+        input.type = 'text'
+        revealBtn.textContent = 'Hide'
+      } else {
+        input.type = 'password'
+        revealBtn.textContent = 'Show'
+      }
+    })
+
+    row.appendChild(input)
+    row.appendChild(revealBtn)
+    section.appendChild(row)
 
     return section
   }
@@ -1125,6 +1186,10 @@ export class Settings {
       this.autoPreviewTrack.style.background = on ? '#fff' : '#333'
       this.autoPreviewThumb.style.left = on ? '23px' : '3px'
       this.autoPreviewThumb.style.background = on ? '#000' : '#888'
+    }
+
+    if (this.passcodeInput) {
+      this.passcodeInput.value = this.settings.settingsPasscode || ''
     }
 
     const numValues = [this.settings.photoCount, this.settings.countdown, this.settings.captureInterval, this.settings.postCapturePreview, this.settings.shutterOffsetDelay || 0, this.settings.liveviewRetryAttempts || 1]

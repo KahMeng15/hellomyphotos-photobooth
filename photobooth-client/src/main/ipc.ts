@@ -459,6 +459,7 @@ export function initIpcHandlers(
     autoPreview?: boolean
     liveviewRetryAttempts?: number
     shutterOffsetDelay?: number
+    settingsPasscode?: string
   }) => {
     try {
       const existing = getSettingsSync()
@@ -481,6 +482,7 @@ export function initIpcHandlers(
           dslrWhiteBalance: merged.dslrWhiteBalance,
           dslrWhiteBalanceKelvin: merged.dslrWhiteBalanceKelvin,
           dslrFocusMode: merged.dslrFocusMode,
+          settingsPasscode: merged.settingsPasscode,
         }
         if (merged.otp) body.otp = merged.otp
         await fetch(`${syncUrl}/api/booth/settings`, {

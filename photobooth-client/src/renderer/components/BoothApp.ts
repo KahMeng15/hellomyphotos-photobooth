@@ -70,6 +70,7 @@ export class BoothApp {
     autoPreview?: boolean
     liveviewRetryAttempts?: number
     shutterOffsetDelay?: number
+    settingsPasscode?: string
   } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', liveviewMode: 'mjpeg', autoPreview: false, liveviewRetryAttempts: 1, shutterOffsetDelay: 0, dslrWhiteBalance: 'auto', dslrWhiteBalanceKelvin: 5200 }
   private serverOnline = true
   private selectedFrame: string | null = null
@@ -176,7 +177,7 @@ export class BoothApp {
     this.settingsBtn = document.createElement('button')
     this.settingsBtn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`
     Object.assign(this.settingsBtn.style, iconBtnStyle)
-    this.settingsBtn.addEventListener('click', () => this.settings.toggle('exposure'))
+    this.settingsBtn.addEventListener('click', () => this.openSettings('exposure'))
 
     this.pauseBtn = document.createElement('button')
     this.pauseBtn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>`
@@ -271,7 +272,7 @@ export class BoothApp {
       background: 'transparent', color: '#888', border: '1px solid #333',
       borderRadius: '100px', cursor: 'pointer',
     })
-    settingsBtn.addEventListener('click', () => this.settings.toggle('full'))
+    settingsBtn.addEventListener('click', () => this.openSettings('full'))
     this.landingEl.appendChild(settingsBtn)
 
     // ------------------------------------------------------------------
@@ -476,8 +477,95 @@ export class BoothApp {
       }
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 's' || e.key === 'S')) {
         e.preventDefault()
-        this.settings.toggle()
+        this.openSettings()
       }
+    })
+  }
+
+  private async openSettings(mode: 'exposure' | 'full' = 'full') {
+    if (this.settingsData.settingsPasscode && this.isEventConnected()) {
+      const entered = await this.promptPasscode()
+      if (entered !== this.settingsData.settingsPasscode) {
+        return
+      }
+    }
+    this.settings.toggle(mode)
+  }
+
+  private promptPasscode(): Promise<string | null> {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div')
+      Object.assign(overlay.style, {
+        position: 'absolute', inset: '0', zIndex: '100',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+      })
+      
+      const box = document.createElement('div')
+      Object.assign(box.style, {
+        background: '#1a1a1a', padding: '2rem', borderRadius: '12px',
+        border: '1px solid #333', textAlign: 'center', width: '300px'
+      })
+      
+      const title = document.createElement('h3')
+      title.textContent = 'Settings Locked'
+      title.style.cssText = 'margin: 0 0 1rem; font-size: 1.25rem; font-weight: 600;'
+      
+      const input = document.createElement('input')
+      input.type = 'password'
+      input.placeholder = 'Enter Passcode'
+      input.style.cssText = 'width: 100%; box-sizing: border-box; padding: 0.75rem; border-radius: 6px; border: 1px solid #333; background: #0f0f0f; color: #fff; font-size: 1rem; margin-bottom: 1rem; text-align: center; outline: none;'
+      
+      const errText = document.createElement('div')
+      errText.style.cssText = 'color: #ff4444; font-size: 0.875rem; margin-bottom: 1rem; display: none;'
+      errText.textContent = 'Incorrect passcode'
+      
+      const actions = document.createElement('div')
+      actions.style.cssText = 'display: flex; gap: 0.5rem; justify-content: center;'
+      
+      const cancelBtn = document.createElement('button')
+      cancelBtn.textContent = 'Cancel'
+      cancelBtn.style.cssText = 'padding: 0.75rem 1.5rem; background: transparent; border: 1px solid #333; color: #888; border-radius: 6px; cursor: pointer;'
+      
+      const submitBtn = document.createElement('button')
+      submitBtn.textContent = 'Unlock'
+      submitBtn.style.cssText = 'padding: 0.75rem 1.5rem; background: #fff; color: #000; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;'
+      
+      box.appendChild(title)
+      box.appendChild(input)
+      box.appendChild(errText)
+      actions.appendChild(cancelBtn)
+      actions.appendChild(submitBtn)
+      box.appendChild(actions)
+      overlay.appendChild(box)
+      this.container.appendChild(overlay)
+      
+      input.focus()
+      
+      const submit = () => {
+        const val = input.value.trim()
+        if (val === this.settingsData.settingsPasscode) {
+          overlay.remove()
+          resolve(val)
+        } else {
+          errText.style.display = 'block'
+          input.value = ''
+          input.focus()
+        }
+      }
+      
+      submitBtn.addEventListener('click', submit)
+      cancelBtn.addEventListener('click', () => {
+        overlay.remove()
+        resolve(null)
+      })
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submit()
+        if (e.key === 'Escape') {
+          overlay.remove()
+          resolve(null)
+        }
+      })
     })
   }
 
