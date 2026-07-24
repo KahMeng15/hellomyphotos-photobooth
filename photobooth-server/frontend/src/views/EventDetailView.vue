@@ -12,6 +12,11 @@
         
       </div>
       <div class="header-right">
+        <button v-if="authStore.user?.role === 'admin'" @click="showAnalytics = true" class="btn-icon" title="Analytics">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+        </button>
         <button @click="togglePanel" class="btn-icon btn-panel-toggle" title="Booth controller">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -130,6 +135,12 @@
       @close="photosStore.clearSelection()"
     />
 
+    <AnalyticsModal 
+      v-if="showAnalytics && event" 
+      :eventId="event.id" 
+      @close="showAnalytics = false" 
+    />
+
     <Teleport to="body">
       <div v-if="confirmState" class="modal-overlay" @click.self="confirmState = null">
         <div class="confirm-modal">
@@ -145,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { usePhotosStore } from '../stores/photos'
@@ -154,6 +165,7 @@ import { useWebSocket } from '../composables/useWebSocket'
 import EventControlPanel from '../components/EventControlPanel.vue'
 import PhotoViewer from '../components/PhotoViewer.vue'
 import SessionViewer from '../components/SessionViewer.vue'
+import AnalyticsModal from '../components/AnalyticsModal.vue'
 import axios from 'axios'
 
 const route = useRoute()
@@ -168,6 +180,7 @@ const boothConnected = ref(false)
 const boothState = ref<string | null>(null)
 const showPanel = ref(false)
 const showArchive = ref(false)
+const showAnalytics = ref(false)
 const feedRef = ref<HTMLElement | null>(null)
 const viewMode = ref<'grid-sm' | 'grid-lg' | 'list'>((localStorage.getItem('hellomyphoto_viewMode') as any) || 'grid-lg')
 const selectedSessions = ref(new Set<string>())

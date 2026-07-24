@@ -5,30 +5,37 @@ import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { rateLimitLogin } from '../middleware/authMiddleware'
+import { findUserByEmail, countUsers, insertUser } from '../db'
 
 const router = Router()
 
-let cachedPasswordHash: string | null = null
-
-async function getPasswordHash(): Promise<string> {
-  if (!cachedPasswordHash) {
-    cachedPasswordHash = await bcrypt.hash(config.operator.password, 10)
+async function seedAdminIfNeeded() {
+  if (countUsers() === 0) {
+    const defaultHash = await bcrypt.hash(config.operator.password, 10)
+    insertUser(uuidv4(), config.operator.email, defaultHash, 'admin')
+    logger.info(`Seeded default admin user: ${config.operator.email}`)
   }
-  return cachedPasswordHash
 }
 
 router.post('/login', rateLimitLogin, async (req: Request, res: Response) => {
   try {
+    await seedAdminIfNeeded()
+
     const { email, password } = req.body
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password required' })
     }
 
-    const passwordHash = await getPasswordHash()
-    const isValid = await bcrypt.compare(password, passwordHash)
+    const user = findUserByEmail(email)
+    if (!user) {
+      logger.warn(`Failed login attempt for unknown user: ${email}`)
+      return res.status(401).json({ error: 'Invalid credentials' })
+    }
 
-    if (email !== config.operator.email || !isValid) {
+    const isValid = await bcrypt.compare(password, user.password_hash)
+
+    if (!isValid) {
       logger.warn(`Failed login attempt for: ${email}`)
       return res.status(401).json({ error: 'Invalid credentials' })
     }
@@ -36,13 +43,13 @@ router.post('/login', rateLimitLogin, async (req: Request, res: Response) => {
     const sessionId = uuidv4()
 
     const accessToken = jwt.sign(
-      { userId: 'operator-1', email: config.operator.email, role: 'admin', sessionId },
+      { userId: user.id, email: user.email, role: user.role, sessionId },
       config.jwt.secret,
       { expiresIn: '15m' }
     )
 
     const refreshToken = jwt.sign(
-      { userId: 'operator-1', email: config.operator.email, sessionId },
+      { userId: user.id, email: user.email, role: user.role, sessionId },
       config.jwt.refreshSecret,
       { expiresIn: '7d' }
     )
@@ -61,12 +68,12 @@ router.post('/login', rateLimitLogin, async (req: Request, res: Response) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     })
 
-    logger.info(`Operator logged in: ${config.operator.email}`)
+    logger.info(`${user.role} logged in: ${user.email}`)
 
     res.json({
       success: true,
       accessToken,
-      user: { email: config.operator.email, role: 'admin' },
+      user: { email: user.email, role: user.role },
     })
   } catch (error: any) {
     logger.error('Login error', { error: error.message })
@@ -82,7 +89,7 @@ router.post('/refresh', (req: Request, res: Response) => {
     const decoded = jwt.verify(token, config.jwt.refreshSecret) as any
 
     const newAccessToken = jwt.sign(
-      { userId: decoded.userId, email: decoded.email, role: 'admin', sessionId: decoded.sessionId },
+      { userId: decoded.userId, email: decoded.email, role: decoded.role, sessionId: decoded.sessionId },
       config.jwt.secret,
       { expiresIn: '15m' }
     )
@@ -103,7 +110,7 @@ router.post('/refresh', (req: Request, res: Response) => {
 router.post('/logout', (req: Request, res: Response) => {
   res.clearCookie('accessToken')
   res.clearCookie('refreshToken')
-  logger.info('Operator logged out')
+  logger.info('User logged out')
   res.json({ success: true })
 })
 

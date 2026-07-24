@@ -192,7 +192,8 @@ async function showQr() {
   if (showQrCode.value) {
     await nextTick()
     if (qrCanvas.value) {
-      await QRCode.toCanvas(qrCanvas.value, shareUrl, {
+      const qrUrl = shareUrl.includes('?') ? `${shareUrl}&ref=qr` : `${shareUrl}?ref=qr`
+      await QRCode.toCanvas(qrCanvas.value, qrUrl, {
         width: 200,
         margin: 2,
       })

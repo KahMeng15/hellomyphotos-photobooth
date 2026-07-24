@@ -6,7 +6,8 @@ import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { authMiddleware } from '../middleware/authMiddleware'
-import { getEvent, getPhotoSessionByShareId, getPhotoSession } from '../db'
+import { getEvent, getPhotoSessionByShareId, getPhotoSession, logShareAnalytics } from '../db'
+import UAParser from 'ua-parser-js'
 
 const router = Router()
 
@@ -154,6 +155,33 @@ router.get('/:token', async (req: Request, res: Response) => {
   }
 })
 
+router.post('/:token/analytics', async (req: Request, res: Response) => {
+  try {
+    const token = req.params.token
+    const { source } = req.body
+    
+    let eventId = shareTokens.get(token)
+    if (!eventId) {
+      let sess = getPhotoSessionByShareId(token)
+      if (!sess) sess = getPhotoSession(token) as any
+      if (sess) eventId = sess.event_id
+    }
+    if (!eventId) return res.status(404).json({ error: 'Not found' })
+
+    const parser = new UAParser(req.headers['user-agent'])
+    const deviceType = parser.getDevice().type || 'Desktop'
+    const os = parser.getOS().name || 'Unknown OS'
+    const browser = parser.getBrowser().name || 'Unknown Browser'
+    const ip = req.ip || req.socket.remoteAddress || 'Unknown IP'
+
+    logShareAnalytics(token, ip, deviceType, os, browser, 'view', null, source)
+    res.json({ success: true })
+  } catch (error: any) {
+    logger.error(`Analytics error: ${error.message}`)
+    res.status(500).json({ error: error.message })
+  }
+})
+
 router.get('/:token/photo/:filename', async (req: Request, res: Response) => {
   try {
     const token = req.params.token
@@ -220,6 +248,13 @@ router.get('/:token/photo/:filename', async (req: Request, res: Response) => {
     const download = req.query.download !== undefined
 
     if (download) {
+      const parser = new UAParser(req.headers['user-agent'])
+      const deviceType = parser.getDevice().type || 'Desktop'
+      const os = parser.getOS().name || 'Unknown OS'
+      const browser = parser.getBrowser().name || 'Unknown Browser'
+      const ip = req.ip || req.socket.remoteAddress || 'Unknown IP'
+      logShareAnalytics(token, ip, deviceType, os, browser, 'download', targetFilename)
+      
       const ext = path.extname(targetFilename).toLowerCase()
       if (ext === '.webp') {
         const index = targetFilename.match(/_(\d+)\.webp$/)

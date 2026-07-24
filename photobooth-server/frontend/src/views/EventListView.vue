@@ -23,6 +23,7 @@
         <div class="events-header-right">
           <span class="event-count">{{ events.length }} event{{ events.length !== 1 ? 's' : '' }}</span>
           <router-link to="/settings" class="btn-link">Default Settings</router-link>
+          <router-link v-if="authStore.user?.role === 'admin'" to="/users" class="btn-link">Manage Users</router-link>
         </div>
       </div>
 

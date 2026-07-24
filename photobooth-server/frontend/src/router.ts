@@ -41,6 +41,12 @@ export const router = createRouter({
       name: 'share',
       component: () => import('./views/ShareView.vue'),
     },
+    {
+      path: '/users',
+      name: 'users',
+      component: () => import('./views/UsersView.vue'),
+      meta: { requiresAuth: true },
+    },
   ],
 })
 

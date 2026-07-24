@@ -128,6 +128,31 @@ db.exec(`
     WHERE share_id IS NOT NULL
 `)
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('admin','operator')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`)
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS share_analytics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    share_id TEXT NOT NULL,
+    ip_address TEXT,
+    device_type TEXT,
+    os TEXT,
+    browser TEXT,
+    action TEXT NOT NULL,
+    target_file TEXT,
+    source TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`)
+
 const insertEvent = db.prepare(`
   INSERT INTO events (id, name, date, description, otp, status, photo_count, countdown, capture_interval, post_capture_preview, dslr_iso, dslr_shutterspeed, dslr_aperture, dslr_focus_mode, dslr_whitebalance, dslr_whitebalance_kelvin, obfuscate_links, expiry_type, expiry_value)
   VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -385,4 +410,77 @@ export function getPhotoSessionByShareId(shareId: string) {
   return findPhotoSessionByShareId.get(shareId) as {
     id: string; event_id: string; created_at: string; share_id: string; archived: number;
   } | undefined
+}
+
+const insertShareAnalytics = db.prepare(`
+  INSERT INTO share_analytics (share_id, ip_address, device_type, os, browser, action, target_file, source)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`)
+
+export function logShareAnalytics(
+  shareId: string, 
+  ipAddress: string | null, 
+  deviceType: string | null, 
+  os: string | null, 
+  browser: string | null, 
+  action: string, 
+  targetFile: string | null = null,
+  source: string | null = null
+) {
+  insertShareAnalytics.run(shareId, ipAddress, deviceType, os, browser, action, targetFile, source)
+}
+
+const getEventShareIds = db.prepare(`
+  SELECT share_id FROM photo_sessions WHERE event_id = ? AND share_id IS NOT NULL
+`)
+
+export function getEventAnalytics(eventId: string) {
+  const shareIds = (getEventShareIds.all(eventId) as { share_id: string }[]).map(r => r.share_id)
+  if (shareIds.length === 0) return { totalVisits: 0, uniqueVisitors: 0, logs: [] }
+
+  const placeholders = shareIds.map(() => '?').join(',')
+  
+  const totalVisits = (db.prepare(`
+    SELECT COUNT(*) as count FROM share_analytics WHERE share_id IN (${placeholders}) AND action = 'view'
+  `).get(...shareIds) as { count: number }).count
+
+  const uniqueVisitors = (db.prepare(`
+    SELECT COUNT(DISTINCT ip_address) as count FROM share_analytics WHERE share_id IN (${placeholders}) AND ip_address IS NOT NULL
+  `).get(...shareIds) as { count: number }).count
+
+  const logs = db.prepare(`
+    SELECT * FROM share_analytics WHERE share_id IN (${placeholders}) ORDER BY created_at DESC LIMIT 100
+  `).all(...shareIds)
+
+  return { totalVisits, uniqueVisitors, logs }
+}
+
+const findUserByEmailStmt = db.prepare('SELECT * FROM users WHERE email = ?')
+const insertUserStmt = db.prepare('INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, ?)')
+const getAllUsersStmt = db.prepare('SELECT id, email, role, created_at FROM users')
+const deleteUserStmt = db.prepare('DELETE FROM users WHERE id = ?')
+const updateUserRoleStmt = db.prepare('UPDATE users SET role = ? WHERE id = ?')
+
+export function findUserByEmail(email: string) {
+  return findUserByEmailStmt.get(email) as any
+}
+
+export function insertUser(id: string, email: string, passwordHash: string, role: string) {
+  insertUserStmt.run(id, email, passwordHash, role)
+}
+
+export function getAllUsers() {
+  return getAllUsersStmt.all()
+}
+
+export function deleteUser(id: string) {
+  deleteUserStmt.run(id)
+}
+
+export function countUsers() {
+  return (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count
+}
+
+export function updateUserRole(id: string, role: string) {
+  updateUserRoleStmt.run(role, id)
 }

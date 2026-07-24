@@ -156,6 +156,11 @@ onMounted(async () => {
       expired.value = true
     } else {
       session.value = data
+      
+      // Ping analytics in background
+      const source = route.query.ref === 'qr' ? 'qr' : 'direct'
+      axios.post(`/api/share/${token}/analytics`, { source }).catch(() => {})
+
       if (session.value.photos.length > 2) {
         heroInterval = window.setInterval(() => {
           if (session.value) {
@@ -218,6 +223,8 @@ async function downloadAll() {
 
 .share-content {
   flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .actions-wrapper {
@@ -444,13 +451,45 @@ async function downloadAll() {
 .lightbox-next { right: 2rem; }
 
 @media (max-width: 640px) {
+  .share-header {
+    order: 2;
+    margin-top: -100px;
+    position: relative;
+    z-index: 10;
+    padding-top: 1.5rem;
+    border-bottom: none;
+  }
+  .hero-preview {
+    order: 1;
+    padding: 0;
+    position: relative;
+  }
+  .hero-preview::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 160px;
+    background: linear-gradient(to top, #0f0f0f, transparent);
+    pointer-events: none;
+  }
+  .hero-preview img {
+    border-radius: 0;
+    border: none;
+    margin: 0;
+    width: 100%;
+    max-height: 60vh;
+    object-fit: cover;
+  }
   .photo-grid {
+    order: 3;
     grid-template-columns: 1fr;
     padding: 1rem;
     gap: 1rem;
   }
-  .hero-preview {
-    padding: 0 1rem;
+  .actions-wrapper {
+    order: 4;
   }
   .lightbox-prev { left: 0.5rem; padding: 0.5rem; }
   .lightbox-next { right: 0.5rem; padding: 0.5rem; }

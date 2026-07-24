@@ -9,14 +9,62 @@ import { jobQueue } from '../queue'
 import { pendingCommands } from './booth'
 import { v4 as uuidv4 } from 'uuid'
 import { io } from '../server'
+import bcrypt from 'bcryptjs'
+import { requireRole } from '../middleware/authMiddleware'
 import {
   createEvent, updateEventById, getEvent, listEvents,
   endEvent, deleteEvent, listEventPhotoSessions,
   updateEventSettingsById, getGlobalSettings, updateGlobalSettings,
-  archiveSession, restoreSession
+  archiveSession, restoreSession, getEventAnalytics,
+  getAllUsers, insertUser, deleteUser, findUserByEmail
 } from '../db'
 
 const router = Router()
+
+// --- USER MANAGEMENT (RBAC) ---
+router.get('/users', requireRole('admin'), (req: Request, res: Response) => {
+  try {
+    const users = getAllUsers()
+    res.json({ users })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.post('/users', requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { email, password, role } = req.body
+    if (!email || !password || !role) {
+      return res.status(400).json({ error: 'Email, password, and role are required' })
+    }
+    
+    if (findUserByEmail(email)) {
+      return res.status(400).json({ error: 'User already exists' })
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10)
+    insertUser(uuidv4(), email, passwordHash, role)
+    res.json({ success: true })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.delete('/users/:id', requireRole('admin'), (req: Request, res: Response) => {
+  try {
+    const currentUser = (req as any).user
+    if (currentUser.userId === req.params.id) {
+      return res.status(400).json({ error: 'Cannot delete yourself' })
+    }
+    deleteUser(req.params.id)
+    res.json({ success: true })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// --- END USER MANAGEMENT ---
+
 
 const frameStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, config.storage.frames),
@@ -123,6 +171,15 @@ router.get('/events/:id', async (req: Request, res: Response) => {
     const event = getEvent(req.params.id)
     if (!event) return res.status(404).json({ error: 'Event not found' })
     res.json({ event })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.get('/events/:id/analytics', async (req: Request, res: Response) => {
+  try {
+    const analytics = getEventAnalytics(req.params.id)
+    res.json(analytics)
   } catch (error: any) {
     res.status(500).json({ error: error.message })
   }
