@@ -328,20 +328,34 @@ class Gphoto2LiveviewStream {
    * @param pollingBudgetMs      Dedicated budget for Phase 2 --capture-preview
    *   polling. This is independent of Phase 1 so Sony cameras are never starved.
    */
-  async start(firstFrameTimeoutMs = 15000, pollingBudgetMs = 15000): Promise<boolean> {
+  async start(firstFrameTimeoutMs = 15000, pollingBudgetMs = 15000, forcePolling = false): Promise<boolean> {
     if (this.active) {
       log.warn('[gphoto2 stream] start() called but already active')
       return true
     }
-    log.info('[gphoto2 stream] Starting liveview (phase 1: MJPEG stream)')
     this.active = true
     this.frameCount = 0
     this.missCount = 0
     this.ptpKillCount = 0
+
+    if (forcePolling) {
+      // Polling mode uses --capture-preview which physically fires the shutter
+      // and writes full-res photos on Canon DSLRs — not a lightweight preview.
+      // Force MJPEG for Canon regardless of the setting.
+      if (this.cameraModel.toLowerCase().includes('canon')) {
+        log.warn('[gphoto2 stream] Canon detected — forcePolling overridden, using MJPEG')
+        this.usingPolling = false
+      } else {
+        log.info('[gphoto2 stream] Polling mode — skipping MJPEG')
+        this.usingPolling = true
+        const pollingDeadline = Date.now() + pollingBudgetMs
+        return this.tryPreviewPolling(pollingDeadline)
+      }
+    }
+
+    log.info('[gphoto2 stream] Starting liveview (phase 1: MJPEG stream)')
     this.usingPolling = false
 
-    // Phase 1: --capture-movie --stdout.
-    // Use a private deadline so Phase 1 can never consume the polling budget.
     const mjpegDeadline = Date.now() + firstFrameTimeoutMs
     const mjpegOk = await this.tryMjpegStream(mjpegDeadline)
     if (mjpegOk) return true
@@ -352,11 +366,6 @@ class Gphoto2LiveviewStream {
       return false
     }
 
-    // Phase 2: Fall back to polling --capture-preview at ~3 fps.
-    // Give Phase 2 its OWN fresh deadline regardless of how long Phase 1 ran.
-    // This ensures Sony cameras (which don't support --capture-movie) always
-    // get a real polling window even if Phase 1 burned the entire firstFrameTimeoutMs
-    // in PTPCamera kill-retry loops.
     log.info('[gphoto2 stream] MJPEG produced no frames — falling back to --capture-preview polling')
     this.usingPolling = true
     const pollingDeadline = Date.now() + pollingBudgetMs
@@ -895,29 +904,35 @@ export class DslrManager {
       
       if (configArgs.length === 0) return
 
-      const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
       const wasLiveview = this.liveviewActive
+
+      // Kill the MJPEG stream process directly WITHOUT the viewfinder=0 mirror
+      // drop (stopLiveviewInternal does that for Canon). Keeping the mirror up
+      // means the next --capture-movie can grab the first frame immediately.
       if (wasLiveview) {
-        log.info('[DslrManager] Stopping liveview temporarily to apply exposure settings')
-        await this.stopLiveviewInternal()
-        await new Promise(r => setTimeout(r, 1000))
+        log.info('[DslrManager] Killing MJPEG stream (keeping mirror up)...')
+        if (this.gphoto2Stream) {
+          await this.gphoto2Stream.stop()
+          this.gphoto2Stream = null
+        }
+        this.liveviewActive = false
+        this.stopDisconnectPoll()
+        await new Promise(r => setTimeout(r, 500))
       }
 
       try {
-        // Full eviction like startLiveview uses, because pkill alone isn't enough on macOS
         if (!this.isWindows) {
            await killPtpDaemon()
         }
       } catch (e) {}
 
-      // refresh port if killPtpDaemon re-enumerated the USB
       if (!this.isWindows) {
         await this.detectGphoto2()
       }
-      
-      const currentPortArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
 
-      const res = await this.execGphoto2([...configArgs, ...currentPortArgs], 15000)
+      const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+
+      const res = await this.execGphoto2([...configArgs, ...portArgs], 15000)
       if (res.code !== 0) {
         log.warn(`[DslrManager] Failed to apply exposure settings: ${res.stderr.trim()}`)
       } else {
@@ -925,12 +940,30 @@ export class DslrManager {
       }
 
       if (wasLiveview && this.mainWindow && !this.mainWindow.isDestroyed()) {
-        log.info('[DslrManager] Resuming liveview after applying exposure')
-        await this.startLiveviewInternal((jpeg) => {
+        // Mirror is still up from the previous liveview — no viewfinder=1 or
+        // wait-event needed. Start the MJPEG stream directly.
+        log.info('[DslrManager] Starting fresh MJPEG stream (mirror is up)...')
+        const stream = new Gphoto2LiveviewStream((jpeg) => {
           if (this.mainWindow && !this.mainWindow.isDestroyed()) {
             this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
           }
-        })
+        }, this.selectedPort, this.cameraModel)
+        this.liveviewActive = true
+        this.gphoto2Stream = stream
+        const ok = await stream.start(20000, 0)
+        if (!ok) {
+          log.warn('[DslrManager] Fresh MJPEG stream failed — retrying with viewfinder cycle')
+          this.liveviewActive = false
+          this.gphoto2Stream = null
+          // Full reset: drop mirror, wait, re-init, restart
+          await this.execGphoto2(['--set-config', '/main/actions/viewfinder=0', ...portArgs], 5000).catch(() => {})
+          await new Promise(r => setTimeout(r, 2000))
+          await this.startLiveviewInternal((jpeg) => {
+            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+              this.mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
+            }
+          })
+        }
       }
     })
   }
@@ -1028,15 +1061,18 @@ export class DslrManager {
    * Start streaming live preview frames.
    * Kills the macOS PTPCamera daemon first, then starts the frame pump.
    *
+   * @param liveviewMode 'mjpeg' (default, high-fps) or 'polling' (lower fps,
+   *   but USB is free between frames so --set-config can run without restart).
+   *
    * Returns true if the first real frame was received within 6 s
    * (i.e. the camera is genuinely accessible), false otherwise.
    */
-  async startLiveview(onFrame: (jpeg: Buffer) => void): Promise<boolean> {
-    return this.enqueue(() => this.startLiveviewInternal(onFrame))
+  async startLiveview(onFrame: (jpeg: Buffer) => void, liveviewMode: 'mjpeg' | 'polling' = 'mjpeg'): Promise<boolean> {
+    return this.enqueue(() => this.startLiveviewInternal(onFrame, liveviewMode))
   }
 
-  private async startLiveviewInternal(onFrame: (jpeg: Buffer) => void): Promise<boolean> {
-    log.info(`[DslrManager] startLiveview() called (liveviewActive=${this.liveviewActive}, connected=${this.connected}, platform=${process.platform})`)
+  private async startLiveviewInternal(onFrame: (jpeg: Buffer) => void, liveviewMode: 'mjpeg' | 'polling' = 'mjpeg'): Promise<boolean> {
+    log.info(`[DslrManager] startLiveview() called (liveviewActive=${this.liveviewActive}, connected=${this.connected}, platform=${process.platform}, mode=${liveviewMode})`)
     if (this.liveviewActive) {
       log.warn('[DslrManager] startLiveview() ignored — already active')
       return true
@@ -1065,16 +1101,14 @@ export class DslrManager {
       this.dcc.startLiveview(onFrame)
       firstFrameOk = true
     } else {
-      log.info('[DslrManager] Using gphoto2 backend — PTPCamera racing mode')
+      log.info(`[DslrManager] Using gphoto2 backend — mode=${liveviewMode}`)
       this.gphoto2Stream = new Gphoto2LiveviewStream(onFrame, this.selectedPort, this.cameraModel)
-      // Phase 1 (MJPEG): 15 s to exhaust launchd's PTPCamera throttle for Canon/Nikon.
-      // Phase 2 (polling): 15 s independent budget for Sony --capture-preview fallback.
-      // These two budgets are independent so Sony cameras are never starved by Phase 1.
-      firstFrameOk = await this.gphoto2Stream.start(15000, 15000)
+      const forcePolling = liveviewMode === 'polling'
+      firstFrameOk = await this.gphoto2Stream.start(15000, 15000, forcePolling)
     }
 
     if (!firstFrameOk) {
-      log.error('[DslrManager] Liveview failed — no frames received from MJPEG or preview polling. Check USB cable.')
+      log.error('[DslrManager] Liveview failed — no frames received. Check USB cable.')
       this.liveviewActive = false
       this.gphoto2Stream = null
       return false
@@ -1082,7 +1116,7 @@ export class DslrManager {
 
     this.startDisconnectPoll()
     this.pushStatus()
-    log.ok('[DslrManager] startLiveview() confirmed — first frame received')
+    log.ok(`[DslrManager] startLiveview() confirmed — first frame received (mode=${liveviewMode})`)
     return true
   }
 
@@ -1609,8 +1643,27 @@ export class DslrManager {
     }
     log.info(`[DslrManager] setFocusMode(${mode})`)
     const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
-    const wasLiveview = this.liveviewActive
 
+    const afValue = mode === 'auto' ? '0' : '3'
+    const configPaths = [
+      `/main/capturesettings/focusmode2=${afValue}`,
+      `/main/capturesettings/focusmode=${afValue}`,
+      `/main/settings/focusmode=${afValue}`,
+      `/main/actions/focusmode=${afValue}`,
+    ]
+
+    // Try without stopping liveview first — most cameras support live config changes.
+    for (const cfg of configPaths) {
+      const res = await this.execGphoto2(['--set-config', cfg, ...portArgs], 5000)
+      if (res.code === 0) {
+        log.ok(`[DslrManager] Focus mode set to ${mode} (in-place, liveview kept active)`)
+        return { success: true }
+      }
+    }
+
+    log.warn('[DslrManager] In-place focus mode change failed — falling back to stop/restart')
+
+    const wasLiveview = this.liveviewActive
     if (wasLiveview) {
       await this.stopLiveview()
       await new Promise(r => setTimeout(r, 500))
@@ -1620,21 +1673,8 @@ export class DslrManager {
       require('child_process').execSync('pkill -9 -f PTPCamera 2>/dev/null; pkill -9 -f ptpcamerad 2>/dev/null')
     } catch (e) {}
 
-    // gphoto2 focus mode config: try common paths.
-    // IMPORTANT: --set-config expects a SINGLE "key=value" argument, not two separate tokens.
-    // Canon EOS cameras typically use focusmode2 for the physical AF/MF switch.
-    // '0'=One Shot AF, '1'=AI Servo AF, '4'=MF — but the exact enum varies by model.
-    // We try a range of known config paths and values.
-    const afValue = mode === 'auto' ? '0' : '3'    // 0=One Shot (AF), 3=MF on most Canon
-    const configPaths = [
-      `/main/capturesettings/focusmode2=${afValue}`,  // Canon EOS: physical AF/MF selector
-      `/main/capturesettings/focusmode=${afValue}`,
-      `/main/settings/focusmode=${afValue}`,
-      `/main/actions/focusmode=${afValue}`,
-    ]
     let success = false
     for (const cfg of configPaths) {
-      // Pass key=value as a single argument — this is how gphoto2 --set-config works.
       const res = await this.execGphoto2(['--set-config', cfg, ...portArgs], 5000)
       if (res.code === 0) {
         success = true
@@ -1651,7 +1691,7 @@ export class DslrManager {
     }
 
     if (success) {
-      log.ok(`[DslrManager] Focus mode set to ${mode}`)
+      log.ok(`[DslrManager] Focus mode set to ${mode} (after fallback)`)
       return { success: true }
     }
     log.warn(`[DslrManager] Could not set focus mode to ${mode} — camera may not support it`)

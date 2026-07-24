@@ -64,7 +64,8 @@ export class BoothApp {
     dslrShutterSpeed?: string
     dslrAperture?: string
     dslrFocusMode?: string
-  } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000' }
+    liveviewMode?: 'mjpeg' | 'polling'
+  } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', liveviewMode: 'mjpeg' }
   private serverOnline = true
   private selectedFrame: string | null = null
   private serverUrl = 'http://localhost:3000'

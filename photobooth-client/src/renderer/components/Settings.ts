@@ -52,6 +52,7 @@ interface BoothSettings {
   dslrShutterSpeed?: string
   dslrAperture?: string
   dslrFocusMode?: string
+  liveviewMode?: 'mjpeg' | 'polling'
 }
 
 interface MediaDeviceInfo {
@@ -64,7 +65,7 @@ export class Settings {
   private visible = false
   private dirty = false
   private onChange: (settings: BoothSettings) => void
-  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto' }
+  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', liveviewMode: 'mjpeg' }
   private serverInput!: HTMLInputElement
   private cameraSelect!: HTMLSelectElement
   private audioSelect!: HTMLSelectElement
@@ -87,6 +88,9 @@ export class Settings {
   private grid!: HTMLDivElement
   private col2!: HTMLDivElement
   private dslrSliderRefs: Array<{ input: HTMLInputElement; display: HTMLSpanElement; choices: string[] }> = []
+  private dslrModel = ''
+  private mjpegBtn!: HTMLButtonElement
+  private pollingBtn!: HTMLButtonElement
 
   constructor(container: HTMLElement, onChange: (settings: BoothSettings) => void) {
     this.onChange = onChange
@@ -239,6 +243,49 @@ export class Settings {
     for (const f of dslrFields) dslrBox.appendChild(f)
     dslrFields[dslrFields.length - 1].style.borderBottom = 'none'
     this.dslrExposureSection.appendChild(dslrBox)
+
+    const liveviewTitle = document.createElement('h3')
+    liveviewTitle.textContent = 'Liveview Mode'
+    liveviewTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;'
+    this.dslrExposureSection.appendChild(liveviewTitle)
+
+    const lvDesc = document.createElement('p')
+    lvDesc.textContent = 'MJPEG: smooth 30fps preview (settings apply with brief pause). Polling: lower ~3fps (settings update without interruption).'
+    lvDesc.style.cssText = 'font-size: 0.6875rem; color: #555; margin: 0.25rem 0 0; line-height: 1.4;'
+    this.dslrExposureSection.appendChild(lvDesc)
+
+    const lvBox = document.createElement('div')
+    lvBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden;'
+
+    const lvRow = document.createElement('div')
+    lvRow.style.cssText = 'display: flex; padding: 0.75rem 1rem; background: #191919; align-items: center; justify-content: space-between;'
+
+    const lvLabel = document.createElement('label')
+    lvLabel.textContent = 'Liveview Mode'
+    lvLabel.style.cssText = 'font-size: 0.875rem; color: #ccc; font-weight: 500;'
+    lvRow.appendChild(lvLabel)
+
+    const lvToggle = document.createElement('div')
+    lvToggle.style.cssText = 'display: flex; border: 1px solid #333; border-radius: 6px; overflow: hidden;'
+
+    this.mjpegBtn = document.createElement('button')
+    this.mjpegBtn.textContent = 'MJPEG'
+    this.pollingBtn = document.createElement('button')
+    this.pollingBtn.textContent = 'Polling'
+
+    this.refreshLvToggle()
+
+    this.mjpegBtn.addEventListener('click', () => { this.settings.liveviewMode = 'mjpeg'; this.refreshLvToggle(); this.markDirty() })
+    this.pollingBtn.addEventListener('click', () => {
+      if (this.dslrModel.toLowerCase().includes('canon')) return
+      this.settings.liveviewMode = 'polling'; this.refreshLvToggle(); this.markDirty()
+    })
+
+    lvToggle.appendChild(this.mjpegBtn)
+    lvToggle.appendChild(this.pollingBtn)
+    lvRow.appendChild(lvToggle)
+    lvBox.appendChild(lvRow)
+    this.dslrExposureSection.appendChild(lvBox)
 
     const focusTitle = document.createElement('h3')
     focusTitle.textContent = 'Focus'
@@ -538,6 +585,8 @@ export class Settings {
       try {
         const result = await window.hellomyphoto?.detectDslr()
         this.dslrSelectContainer.style.display = 'none'
+        this.dslrModel = result?.model || ''
+        this.refreshLvToggle()
         
         if (result?.connected) {
           this.dslrStatusEl.style.color = '#4caf50'
@@ -586,6 +635,8 @@ export class Settings {
           this.dslrStatusEl.style.color = '#f0ad4e'
           // Auto re-scan after killing
           const detectResult = await window.hellomyphoto?.detectDslr()
+          this.dslrModel = detectResult?.model || ''
+          this.refreshLvToggle()
           if (detectResult?.connected) {
             this.dslrStatusEl.style.color = '#4caf50'
             this.dslrStatusEl.textContent = `● Connected — ${detectResult.model || 'Unknown camera'}`
@@ -836,7 +887,17 @@ export class Settings {
     return field
   }
 
+  private refreshLvToggle() {
+    const mode = this.settings.liveviewMode || 'mjpeg'
+    const isCanon = this.dslrModel.toLowerCase().includes('canon')
+    this.mjpegBtn.style.cssText = `padding: 0.375rem 0.75rem; font-size: 0.75rem; font-weight: 600; border: none; cursor: pointer; ${mode === 'mjpeg' ? 'background: #fff; color: #000;' : 'background: #111; color: #888;'}`
+    this.pollingBtn.style.cssText = `padding: 0.375rem 0.75rem; font-size: 0.75rem; font-weight: 600; border: none; cursor: ${isCanon ? 'not-allowed' : 'pointer'}; ${mode === 'polling' ? 'background: #fff; color: #000;' : isCanon ? 'background: #111; color: #444;' : 'background: #111; color: #888;'}`
+    this.pollingBtn.title = isCanon ? 'Polling not supported on Canon DSLRs (fires shutter instead of live preview)' : ''
+  }
+
   private refreshFields() {
+    this.refreshLvToggle()
+
     const numValues = [this.settings.photoCount, this.settings.countdown, this.settings.captureInterval, this.settings.postCapturePreview]
     for (let i = 0; i < this.numInputs.length; i++) {
       this.numInputs[i].value = String(numValues[i])
@@ -978,6 +1039,8 @@ export class Settings {
       // Show current DSLR detection status when panel opens
       window.hellomyphoto?.detectDslr().then((result) => {
         if (!this.visible) return
+        this.dslrModel = result?.model || ''
+        this.refreshLvToggle()
         if (result?.connected) {
           this.dslrStatusEl.style.color = '#4caf50'
           this.dslrStatusEl.textContent = `● ${result.model || 'Camera'} connected`

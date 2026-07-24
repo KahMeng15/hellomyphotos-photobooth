@@ -18,6 +18,7 @@ const DEFAULT_SETTINGS = {
   dslrShutterSpeed: 'auto',
   dslrAperture: 'auto',
   dslrFocusMode: 'auto',
+  liveviewMode: 'mjpeg',
 }
 
 let _offlineQueue: OfflineQueue
@@ -25,6 +26,9 @@ let _serverUrl: string
 let _setServerUrl: (url: string) => void
 let _dslrManager: DslrManager
 let _mainWindow: BrowserWindow
+
+/** Stashed frame callback so save-settings can restart liveview with a new mode. */
+let _liveviewFrameCallback: ((jpeg: Buffer) => void) | null = null
 
 function getSettingsSync() {
   try {
@@ -72,8 +76,11 @@ export function initIpcHandlers(
       }
 
       console.log('[IPC] Camera detected — starting liveview stream (will kill PTPCamera on macOS, then wait for first frame)...')
+      const savedSettings = getSettingsSync()
+      const liveviewMode: 'mjpeg' | 'polling' = savedSettings.liveviewMode || 'mjpeg'
+      console.log(`[IPC] start-dslr-liveview — liveviewMode from settings: ${liveviewMode}`)
       let framesSent = 0
-      const liveviewOk = await dslrManager.startLiveview((jpeg) => {
+      _liveviewFrameCallback = (jpeg) => {
         if (!mainWindow.isDestroyed()) {
           framesSent++
           if (framesSent === 1) console.log(`[IPC] First dslr-frame sent to renderer (${jpeg.length} bytes base64)`)
@@ -81,7 +88,8 @@ export function initIpcHandlers(
           // Send as base64 string; renderer wraps in data:image/jpeg;base64,
           mainWindow.webContents.send('dslr-frame', jpeg.toString('base64'))
         }
-      })
+      }
+      const liveviewOk = await dslrManager.startLiveview(_liveviewFrameCallback, liveviewMode)
 
       if (!liveviewOk) {
         const msg = 'Camera found but liveview failed to start. The macOS PTPCamera daemon may still be holding the USB interface. Unplug and re-plug the camera, then try again.'
@@ -177,6 +185,14 @@ export function initIpcHandlers(
   // ------------------------------------------------------------------
   ipcMain.handle('detect-dslr', async (): Promise<{ connected: boolean; model: string; cameras: any[] }> => {
     console.log('[IPC] detect-dslr called')
+    const cached = dslrManager.getStatus()
+
+    // If liveview is already active, the camera is connected — skip spawning
+    // gphoto2 commands that compete with the liveview stream for the USB interface.
+    if (cached.liveviewActive) {
+      return { connected: true, model: cached.model, cameras: cached.cameras }
+    }
+
     const { connected } = await dslrManager.detect()
     const status = dslrManager.getStatus()
     console.log(`[IPC] detect-dslr result: connected=${connected}, model="${status.model}"`)
@@ -373,6 +389,7 @@ export function initIpcHandlers(
     dslrShutterSpeed?: string
     dslrAperture?: string
     dslrFocusMode?: string
+    liveviewMode?: 'mjpeg' | 'polling'
   }) => {
     try {
       const existing = getSettingsSync()
@@ -419,14 +436,37 @@ export function initIpcHandlers(
       
       // Apply new DSLR exposure settings to the live view if connected
       if (merged.cameraMode === 'dslr') {
-        dslrManager.applyExposure(
-          merged.dslrIso || 'auto',
-          merged.dslrShutterSpeed || 'auto',
-          merged.dslrAperture || 'auto'
-        )
-        // Apply focus mode if changed
-        if (settings.dslrFocusMode && settings.dslrFocusMode !== existing.dslrFocusMode) {
-          dslrManager.setFocusMode(settings.dslrFocusMode as 'auto' | 'manual')
+        const status = dslrManager.getStatus()
+        const modeChanged = merged.liveviewMode && merged.liveviewMode !== existing.liveviewMode
+
+        if (modeChanged && status.liveviewActive && _liveviewFrameCallback) {
+          // Liveview mode changed — full restart with new mode.
+          // 1. Stop liveview (drops mirror on Canon)
+          // 2. Apply exposure config while mirror is down (--set-config can claim USB)
+          // 3. Start liveview with the new mode
+          const newMode = merged.liveviewMode as 'mjpeg' | 'polling'
+          console.log(`[IPC] liveviewMode changed: ${existing.liveviewMode} → ${newMode} — full restart`)
+          await dslrManager.stopLiveview()
+          dslrManager.applyExposure(
+            merged.dslrIso || 'auto',
+            merged.dslrShutterSpeed || 'auto',
+            merged.dslrAperture || 'auto'
+          )
+          if (settings.dslrFocusMode && settings.dslrFocusMode !== existing.dslrFocusMode) {
+            dslrManager.setFocusMode(settings.dslrFocusMode as 'auto' | 'manual')
+          }
+          await dslrManager.startLiveview(_liveviewFrameCallback, newMode)
+        } else {
+          // Normal path: apply exposure settings while liveview is running.
+          // applyExposure handles the kill-MJPEG→apply→restart-MJPEG cycle internally.
+          dslrManager.applyExposure(
+            merged.dslrIso || 'auto',
+            merged.dslrShutterSpeed || 'auto',
+            merged.dslrAperture || 'auto'
+          )
+          if (settings.dslrFocusMode && settings.dslrFocusMode !== existing.dslrFocusMode) {
+            dslrManager.setFocusMode(settings.dslrFocusMode as 'auto' | 'manual')
+          }
         }
       }
       return { success: true }
