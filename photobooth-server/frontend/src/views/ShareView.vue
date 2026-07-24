@@ -53,10 +53,10 @@
         </p>
       </footer>
 
-      <div v-if="selectedPhotoIndex !== null" class="lightbox" @click.self="selectedPhotoIndex = null">
-        <button class="lightbox-close" @click="selectedPhotoIndex = null">✕</button>
+      <div v-if="selectedPhotoIndex !== null" class="lightbox" @click.self="selectedPhotoIndex = null" @mousemove="resetControlsTimeout" @touchstart="resetControlsTimeout" @click="resetControlsTimeout">
+        <button class="lightbox-close" :class="{ 'hidden-control': !showControls }" @click="selectedPhotoIndex = null">✕</button>
         
-        <button v-if="selectedPhotoIndex > 0" class="lightbox-nav-btn lightbox-prev" @click.stop="prevPhoto">
+        <button v-if="selectedPhotoIndex > 0" class="lightbox-nav-btn lightbox-prev" :class="{ 'hidden-control': !showControls }" @click.stop="prevPhoto(); resetControlsTimeout()">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
@@ -64,22 +64,18 @@
 
         <img :src="session.photos[selectedPhotoIndex].url" alt="Photo" class="lightbox-img" />
 
-        <button v-if="selectedPhotoIndex < session.photos.length - 1" class="lightbox-nav-btn lightbox-next" @click.stop="nextPhoto">
+        <button v-if="selectedPhotoIndex < session.photos.length - 1" class="lightbox-nav-btn lightbox-next" :class="{ 'hidden-control': !showControls }" @click.stop="nextPhoto(); resetControlsTimeout()">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
         </button>
-
-        <a :href="downloadUrl(session.photos[selectedPhotoIndex].id)" class="lightbox-download" download @click.stop>
-          Download JPEG
-        </a>
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 
@@ -107,6 +103,25 @@ const session = ref<SessionData | null>(null)
 const selectedPhotoIndex = ref<number | null>(null)
 const heroIndex = ref(0)
 let heroInterval: number | null = null
+
+const showControls = ref(true)
+let controlsTimeout: number | null = null
+
+function resetControlsTimeout() {
+  showControls.value = true
+  if (controlsTimeout !== null) window.clearTimeout(controlsTimeout)
+  controlsTimeout = window.setTimeout(() => {
+    showControls.value = false
+  }, 2500)
+}
+
+watch(selectedPhotoIndex, (newVal) => {
+  if (newVal !== null) {
+    resetControlsTimeout()
+  } else {
+    if (controlsTimeout !== null) window.clearTimeout(controlsTimeout)
+  }
+})
 
 const expiryText = computed(() => {
   if (!session.value || !session.value.expiresAt) return null
@@ -199,15 +214,13 @@ function downloadUrl(photoId: string) {
 
 async function downloadAll() {
   if (!session.value) return
-  for (const photo of session.value.photos) {
-    const link = document.createElement('a')
-    link.href = downloadUrl(photo.id)
-    link.download = ''
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    await new Promise((r) => setTimeout(r, 500))
-  }
+  const token = route.params.token as string
+  const link = document.createElement('a')
+  link.href = `/api/share/${token}/download-all`
+  link.download = ''
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 </script>
 
@@ -422,6 +435,12 @@ async function downloadAll() {
   font-size: 1.5rem;
   cursor: pointer;
   opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+
+.hidden-control {
+  opacity: 0 !important;
+  pointer-events: none;
 }
 
 .lightbox-close:hover {
@@ -441,7 +460,7 @@ async function downloadAll() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s;
+  transition: opacity 0.3s ease, background 0.2s;
   z-index: 1010;
 }
 .lightbox-nav-btn:hover {
@@ -500,20 +519,4 @@ async function downloadAll() {
   max-height: 80vh;
   border-radius: 8px;
 }
-
-.lightbox-download {
-  padding: 0.625rem 1.25rem;
-  background: #2a2a2a;
-  color: #ccc;
-  text-decoration: none;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.lightbox-download:hover {
-  background: #3a3a3a;
-  color: #fff;
-}
-
 </style>

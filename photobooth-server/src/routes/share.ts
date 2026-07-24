@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import path from 'path'
 import fs from 'fs/promises'
 import sharp from 'sharp'
+const archiver = require('archiver')
 import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
@@ -182,6 +183,88 @@ router.post('/:token/analytics', async (req: Request, res: Response) => {
   }
 })
 
+router.get('/:token/download-all', async (req: Request, res: Response) => {
+  try {
+    const token = req.params.token
+    let eventId = shareTokens.get(token)
+    let isSessionToken = false
+    let sessionFilter = ''
+
+    if (!eventId) {
+      let sess = getPhotoSessionByShareId(token)
+      if (!sess) sess = getPhotoSession(token) as any
+      if (sess) {
+        eventId = sess.event_id
+        isSessionToken = true
+        sessionFilter = sess.id
+      }
+    }
+
+    if (!eventId) return res.status(404).json({ error: 'Share link not found' })
+
+    const event = getEvent(eventId)
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+    if (checkExpiry(event)) return res.status(403).json({ error: 'Expired' })
+
+    const eventDir = config.eventPhotosDir(eventId)
+    let files: string[] = []
+    try { files = await fs.readdir(eventDir) } catch {}
+
+    const sessionFiles = files
+      .filter((f) => !f.includes('_thumb') && !f.includes('_strip'))
+      .filter((f) => isSessionToken ? f.startsWith(sessionFilter) : true)
+      .sort()
+
+    if (sessionFiles.length === 0) {
+      return res.status(404).json({ error: 'No photos found' })
+    }
+
+    const safeEventName = event.name.replace(/[^a-zA-Z0-9_-]/g, '_')
+    const zipFilename = `${eventId}_${safeEventName}_photos.zip`
+
+    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`)
+
+    const archive = new archiver.ZipArchive({ zlib: { level: 9 } })
+    archive.on('error', (err: Error) => { throw err })
+    archive.pipe(res)
+
+    for (let i = 0; i < sessionFiles.length; i++) {
+      const filename = sessionFiles[i]
+      const filePath = path.join(eventDir, filename)
+      const indexMatch = filename.match(/_(\d+)\.\w+$/)
+      const photoNum = indexMatch ? indexMatch[1] : (i + 1).toString()
+      const ext = path.extname(filename).toLowerCase()
+
+      try {
+        if (ext === '.webp') {
+          const webpBuf = await fs.readFile(filePath)
+          const jpegBuf = await sharp(webpBuf).jpeg({ quality: 85 }).toBuffer()
+          archive.append(jpegBuf, { name: `${eventId}_${safeEventName}_image_${photoNum}.jpg` })
+        } else {
+          archive.file(filePath, { name: `${eventId}_${safeEventName}_image_${photoNum}${ext}` })
+        }
+      } catch (err) {
+        logger.error(`Error adding file to zip: ${filename}`, err)
+      }
+    }
+
+    const parser = new UAParser(req.headers['user-agent'])
+    const deviceType = parser.getDevice().type || 'Desktop'
+    const os = parser.getOS().name || 'Unknown OS'
+    const browser = parser.getBrowser().name || 'Unknown Browser'
+    const ip = req.ip || req.socket.remoteAddress || 'Unknown IP'
+    logShareAnalytics(token, ip, deviceType, os, browser, 'download', 'all')
+
+    await archive.finalize()
+  } catch (error: any) {
+    logger.error(`Download all failed: ${error.message}`)
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message })
+    }
+  }
+})
+
 router.get('/:token/photo/:filename', async (req: Request, res: Response) => {
   try {
     const token = req.params.token
@@ -255,21 +338,24 @@ router.get('/:token/photo/:filename', async (req: Request, res: Response) => {
       const ip = req.ip || req.socket.remoteAddress || 'Unknown IP'
       logShareAnalytics(token, ip, deviceType, os, browser, 'download', targetFilename)
       
+      const safeEventName = event.name.replace(/[^a-zA-Z0-9_-]/g, '_')
+      const indexMatch = targetFilename.match(/_(\d+)\.\w+$/)
+      const photoNum = indexMatch ? indexMatch[1] : '1'
+
       const ext = path.extname(targetFilename).toLowerCase()
       if (ext === '.webp') {
-        const index = targetFilename.match(/_(\d+)\.webp$/)
-        const photoNum = index ? index[1] : '1'
+        const downloadFilename = `${eventId}_${safeEventName}_image_${photoNum}.jpg`
 
         const webpBuf = await fs.readFile(filePath)
         const jpegBuf = await sharp(webpBuf).jpeg({ quality: 85 }).toBuffer()
 
         res.setHeader('Content-Type', 'image/jpeg')
-        res.setHeader('Content-Disposition', `attachment; filename="photo-${photoNum}.jpg"`)
+        res.setHeader('Content-Disposition', `attachment; filename="${downloadFilename}"`)
         res.setHeader('Content-Length', jpegBuf.length.toString())
         return res.send(jpegBuf)
       } else {
-         // other formats
-         res.setHeader('Content-Disposition', `attachment; filename="photo.jpg"`)
+         const downloadFilename = `${eventId}_${safeEventName}_image_${photoNum}${ext}`
+         res.setHeader('Content-Disposition', `attachment; filename="${downloadFilename}"`)
       }
     }
 
