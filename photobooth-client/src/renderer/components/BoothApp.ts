@@ -1049,7 +1049,9 @@ export class BoothApp {
       return { success: false, error: 'IPC bridge unavailable' }
     }
 
-    // Play shutter sound + flash optimistically (before download completes)
+    // Play shutter sound + flash 1 s after the processing overlay appears
+    // (gives the camera time to begin the capture before we cue the user)
+    await this.delay(1000)
     this.audio.playShutter()
     this.flashWhite().catch(() => {})
 
