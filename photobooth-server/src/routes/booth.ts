@@ -255,16 +255,18 @@ router.post('/settings', async (req: Request, res: Response) => {
   if (!event) {
     return res.status(404).json({ error: 'Event not found for OTP' })
   }
-  const settings = {
+  const settings: any = {
     photoCount: Math.max(1, Math.min(4, photoCount ?? event.photo_count)),
     countdown: Math.max(3, Math.min(10, countdown ?? event.countdown)),
     captureInterval: Math.max(0, Math.min(5, captureInterval ?? event.capture_interval)),
     postCapturePreview: Math.max(1, Math.min(5, postCapturePreview ?? event.post_capture_preview)),
-    dslrIso: dslrIso ?? event.dslr_iso,
-    dslrShutterSpeed: dslrShutterSpeed ?? event.dslr_shutterspeed,
-    dslrAperture: dslrAperture ?? event.dslr_aperture,
-    dslrFocusMode: dslrFocusMode ?? event.dslr_focus_mode,
   }
+  
+  settings.dslrIso = dslrIso ?? event.dslr_iso
+  settings.dslrShutterSpeed = dslrShutterSpeed ?? event.dslr_shutterspeed
+  settings.dslrAperture = dslrAperture ?? event.dslr_aperture
+  settings.dslrFocusMode = dslrFocusMode ?? event.dslr_focus_mode
+  
   updateEventSettingsById(event.id, settings)
   logger.info('Booth settings synced to event', { eventId: event.id, ...settings })
   io.emit('settings-updated', { eventId: event.id, settings })

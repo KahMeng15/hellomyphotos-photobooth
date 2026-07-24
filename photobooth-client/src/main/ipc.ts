@@ -111,22 +111,61 @@ export function initIpcHandlers(
     try {
       const res = await fetch(`${_serverUrl}/api/booth/camera-settings?model=${encodeURIComponent(model)}`)
       const data = await res.json()
-      if (data.success && data.settings) {
-        const s = getSettingsSync()
-        let changed = false
-        if (data.settings.dslrIso && s.dslrIso !== data.settings.dslrIso) { s.dslrIso = data.settings.dslrIso; changed = true; }
-        if (data.settings.dslrShutterSpeed && s.dslrShutterSpeed !== data.settings.dslrShutterSpeed) { s.dslrShutterSpeed = data.settings.dslrShutterSpeed; changed = true; }
-        if (data.settings.dslrAperture && s.dslrAperture !== data.settings.dslrAperture) { s.dslrAperture = data.settings.dslrAperture; changed = true; }
-        if (data.settings.dslrFocusMode && s.dslrFocusMode !== data.settings.dslrFocusMode) { s.dslrFocusMode = data.settings.dslrFocusMode; changed = true; }
-        
-        if (changed) {
-          fs.writeFileSync(SETTINGS_FILE, JSON.stringify(s, null, 2))
-          dslrManager.applyExposure(s.dslrIso, s.dslrShutterSpeed, s.dslrAperture)
-          dslrManager.setFocusMode(s.dslrFocusMode as any)
-          if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('booth-command', { type: 'settings-update', settings: s })
-          }
+      
+      const hw = await dslrManager.getHardwareSettings()
+      const s = getSettingsSync()
+      let changed = false
+      
+      const reconcile = (serverVal: string | undefined, hwVal: string, currentAppVal: string) => {
+        if (serverVal && serverVal !== 'auto') return serverVal
+        if (currentAppVal && currentAppVal !== 'auto') return currentAppVal
+        return hwVal
+      }
+
+      const newIso = reconcile(data.settings?.dslrIso, hw.iso, s.dslrIso)
+      const newShutter = reconcile(data.settings?.dslrShutterSpeed, hw.shutterspeed, s.dslrShutterSpeed)
+      const newAperture = reconcile(data.settings?.dslrAperture, hw.aperture, s.dslrAperture)
+      
+      if (newIso !== s.dslrIso) { s.dslrIso = newIso; changed = true; }
+      if (newShutter !== s.dslrShutterSpeed) { s.dslrShutterSpeed = newShutter; changed = true; }
+      if (newAperture !== s.dslrAperture) { s.dslrAperture = newAperture; changed = true; }
+      
+      if (data.settings?.dslrFocusMode && data.settings.dslrFocusMode !== 'auto' && s.dslrFocusMode !== data.settings.dslrFocusMode) { 
+          s.dslrFocusMode = data.settings.dslrFocusMode; 
+          changed = true; 
+      }
+
+      if (changed) {
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(s, null, 2))
+        dslrManager.applyExposure(s.dslrIso, s.dslrShutterSpeed, s.dslrAperture)
+        dslrManager.setFocusMode(s.dslrFocusMode as any)
+        if (!mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('booth-command', { type: 'settings-update', settings: s })
         }
+        
+        // Push adopted settings up to server
+        fetch(`${_serverUrl}/api/booth/camera-settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: model,
+            dslrIso: s.dslrIso,
+            dslrShutterSpeed: s.dslrShutterSpeed,
+            dslrAperture: s.dslrAperture,
+            dslrFocusMode: s.dslrFocusMode,
+          }),
+        }).catch(() => {})
+
+        if (s.otp) {
+          fetch(`${_serverUrl}/api/booth/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(s),
+          }).catch(() => {})
+        }
+      } else {
+        // Ensure camera is aligned with local settings
+        dslrManager.applyExposure(s.dslrIso, s.dslrShutterSpeed, s.dslrAperture)
       }
     } catch (err) {
       console.error('[IPC] Failed to restore camera settings', err)

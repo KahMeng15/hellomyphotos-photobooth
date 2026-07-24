@@ -852,6 +852,28 @@ export class DslrManager {
     }
   }
 
+  async getHardwareSettings(): Promise<{ iso: string, shutterspeed: string, aperture: string }> {
+    return this.enqueue(async () => {
+      const hw = { iso: 'auto', shutterspeed: 'auto', aperture: 'auto' }
+      if (this.isWindows || !this.connected) return hw
+      
+      const keys = ['iso', 'shutterspeed', 'aperture']
+      for (const key of keys) {
+        try {
+          const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+          const res = await this.execGphoto2(['--get-config', key, ...portArgs], 5000)
+          if (res.code === 0) {
+            const match = res.stdout.match(/Current:\s*(.+)/)
+            if (match && match[1]) {
+              (hw as any)[key] = match[1].trim()
+            }
+          }
+        } catch (err) {}
+      }
+      return hw
+    })
+  }
+
   setCameraPort(port: string): void {
     log.info(`[DslrManager] Setting preferred camera port: ${port}`)
     this.selectedPort = port

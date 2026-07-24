@@ -86,6 +86,7 @@ export class Settings {
   private panel!: HTMLDivElement
   private grid!: HTMLDivElement
   private col2!: HTMLDivElement
+  private dslrSliderRefs: Array<{ input: HTMLInputElement; display: HTMLSpanElement; choices: string[] }> = []
 
   constructor(container: HTMLElement, onChange: (settings: BoothSettings) => void) {
     this.onChange = onChange
@@ -213,6 +214,8 @@ export class Settings {
       const valDisplay = document.createElement('span')
       valDisplay.style.cssText = 'font-size: 0.875rem; font-weight: 600; color: #fff; min-width: 80px; text-align: right;'
       valDisplay.textContent = choices[parseInt(input.value)]
+
+      this.dslrSliderRefs.push({ input, display: valDisplay, choices })
 
       input.addEventListener('input', () => {
         const val = choices[parseInt(input.value)]
@@ -839,10 +842,13 @@ export class Settings {
       this.numInputs[i].value = String(numValues[i])
     }
 
-    if (this.strInputs.length === 3) {
-      this.strInputs[0].value = this.settings.dslrShutterSpeed || 'auto'
-      this.strInputs[1].value = this.settings.dslrIso || 'auto'
-      this.strInputs[2].value = this.settings.dslrAperture || 'auto'
+    const dslrVals = [this.settings.dslrShutterSpeed || 'auto', this.settings.dslrIso || 'auto', this.settings.dslrAperture || 'auto']
+    for (let i = 0; i < this.dslrSliderRefs.length; i++) {
+      const { input, display, choices } = this.dslrSliderRefs[i]
+      const val = dslrVals[i] || 'auto'
+      const idx = choices.indexOf(val)
+      input.value = String(idx >= 0 ? idx : 0)
+      display.textContent = choices[parseInt(input.value)]
     }
   }
 
