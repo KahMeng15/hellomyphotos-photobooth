@@ -77,8 +77,8 @@
     <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
       <div class="modal-page">
         <div class="modal-header">
+          <button class="back-btn" @click="$emit('close')"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
           <h2>Booth Controller</h2>
-          <button class="close-btn" @click="$emit('close')">✕</button>
         </div>
         <div class="modal-body" v-if="event">
           <div class="panel-section">
@@ -168,22 +168,25 @@
     <div v-if="showEventSettingsModal" class="modal-overlay" @click.self="showEventSettingsModal = false">
       <div class="modal-page">
         <div class="modal-header">
+          <button class="back-btn" @click="showEventSettingsModal = false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
           <h2>Event Settings</h2>
-          <button class="close-btn" @click="showEventSettingsModal = false">✕</button>
         </div>
         <div class="modal-body">
           <div class="settings-box">
-            <div class="field-row">
-              <label>Obfuscate Links</label>
-              <div style="display:flex;align-items:center;">
-                <input type="checkbox" id="obfuscateLinks" v-model="eventSettings.obfuscateLinks" style="width:1.5rem;height:1.5rem;cursor:pointer;" />
-                <label for="obfuscateLinks" style="margin-left:0.5rem;cursor:pointer;color:#fff;">Hide original filenames in shared links</label>
+            <div class="field-row" style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <label style="display:block;margin-bottom:0.25rem;">Obfuscate Links</label>
+                <span style="font-size:0.8rem;color:#888;">Hide original filenames in shared links</span>
+              </div>
+              <div class="focus-toggle">
+                <button :class="['focus-btn', eventSettings.obfuscateLinks ? 'focus-active' : '']" @click="eventSettings.obfuscateLinks = true">ON</button>
+                <button :class="['focus-btn', !eventSettings.obfuscateLinks ? 'focus-active' : '']" @click="eventSettings.obfuscateLinks = false">OFF</button>
               </div>
             </div>
             
             <div class="field-row" style="margin-top:1.5rem;">
               <label style="display:block;margin-bottom:0.5rem;">Link Expiry</label>
-              <select v-model="eventSettings.expiryType" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;">
+              <select v-model="eventSettings.expiryType" class="custom-select">
                 <option value="none">No Expiry</option>
                 <option value="relative">Relative Duration</option>
                 <option value="absolute">Specific Date & Time</option>
@@ -192,7 +195,7 @@
             
             <div class="field-row" v-if="eventSettings.expiryType === 'relative'" style="margin-top:1rem;">
               <label style="display:block;margin-bottom:0.5rem;">Expires In (from creation)</label>
-              <select v-model="eventSettings.expiryValue" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;">
+              <select v-model="eventSettings.expiryValue" class="custom-select">
                 <option value="1_day">1 Day</option>
                 <option value="3_days">3 Days</option>
                 <option value="1_week">1 Week</option>
@@ -210,7 +213,7 @@
           
           <div v-if="settingsMsg" :class="['settings-msg', settingsMsgType]" style="margin-top:1rem;">{{ settingsMsg }}</div>
           
-          <button @click="saveEventSettings" class="btn-primary" style="margin-top: 1rem; width: 100%;" :disabled="settingsSaving">
+          <button @click="saveEventSettings" class="btn-control btn-primary" style="margin-top: 1rem; width: 100%;" :disabled="settingsSaving">
             {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
           </button>
         </div>
@@ -222,8 +225,8 @@
     <div v-if="showSettingsModal" class="modal-overlay" @click.self="showSettingsModal = false">
       <div class="modal-page">
         <div class="modal-header">
+          <button class="back-btn" @click="showSettingsModal = false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
           <h2>Booth Settings</h2>
-          <button class="close-btn" @click="showSettingsModal = false">✕</button>
         </div>
         <div class="modal-body">
           <div class="settings-box">
@@ -465,13 +468,13 @@ async function saveEventSettings() {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  padding: 2rem;
 }
 
 .modal-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 1rem;
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid #2a2a2a;
 }
@@ -481,6 +484,18 @@ async function saveEventSettings() {
   font-weight: 600;
   margin: 0;
 }
+
+.back-btn {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.back-btn:hover { color: #fff; }
 
 .close-btn {
   background: none;
@@ -685,6 +700,27 @@ async function saveEventSettings() {
   color: #fff;
   min-width: 50px;
   text-align: right;
+}
+
+.custom-select {
+  width: 100%;
+  background: #2a2a2a;
+  color: #fff;
+  border: 1px solid #444;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  background-image: url('data:image/svg+xml;utf8,<svg fill="%23fff" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 1.5rem;
+  cursor: pointer;
+}
+.custom-select:focus {
+  border-color: #666;
 }
 
 .focus-toggle {

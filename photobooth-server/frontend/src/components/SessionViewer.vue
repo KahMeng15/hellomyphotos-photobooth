@@ -2,12 +2,14 @@
   <Teleport to="body">
     <div v-show="fullscreenPhotoIndex === null" class="overlay" @click.self="$emit('close')">
       <div class="viewer">
-        <button class="close-btn" @click="$emit('close')">✕</button>
-
         <div class="session-header">
-          <h2>{{ session.photoCount }} Photo{{ session.photoCount !== 1 ? 's' : '' }}</h2>
-          <span class="session-time">{{ formatTime(session.createdAt) }}</span>
+          <button class="back-btn" @click="$emit('close')"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+          <div>
+            <h2>{{ session.photoCount }} Photo{{ session.photoCount !== 1 ? 's' : '' }}</h2>
+            <span class="session-time">{{ formatTime(session.createdAt) }}</span>
+          </div>
         </div>
+        <div class="viewer-body">
 
         <div class="photo-grid">
           <img
@@ -30,6 +32,7 @@
         </div>
 
         <div v-if="shareError" class="share-error">{{ shareError }}</div>
+        </div>
       </div>
     </div>
 
@@ -167,12 +170,7 @@ async function copyShareLink() {
   shareError.value = ''
   linkCopied.value = false
   try {
-    if (props.eventId) {
-      const url = await photosStore.createShareLink(props.eventId)
-      shareUrl = url
-    } else {
-      shareUrl = `${window.location.origin}/share/${(props.session as any).share_id || props.session.sessionId}`
-    }
+    shareUrl = `${window.location.origin}/share/${(props.session as any).share_id || props.session.sessionId}`
     await navigator.clipboard.writeText(shareUrl)
     linkCopied.value = true
     setTimeout(() => { linkCopied.value = false }, 2000)
@@ -184,11 +182,7 @@ async function copyShareLink() {
 async function showQr() {
   if (!shareUrl) {
     try {
-      if (props.eventId) {
-        shareUrl = await photosStore.createShareLink(props.eventId)
-      } else {
         shareUrl = `${window.location.origin}/share/${(props.session as any).share_id || props.session.sessionId}`
-      }
     } catch {
       shareError.value = 'Failed to create share link'
       return
@@ -253,12 +247,13 @@ function formatTime(ts: string) {
 .viewer {
   background: #0f0f0f;
   border-radius: 0;
-  padding: 2rem;
   width: 100%;
   max-width: 800px;
   min-height: 100vh;
   margin: 0 auto;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .close-btn {
@@ -278,8 +273,28 @@ function formatTime(ts: string) {
 }
 
 .session-header {
-  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #2a2a2a;
 }
+.viewer-body {
+  padding: 1.5rem;
+  flex: 1;
+  overflow-y: auto;
+}
+.back-btn {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.back-btn:hover { color: #fff; }
 
 .session-header h2 {
   margin: 0;
