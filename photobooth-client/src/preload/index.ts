@@ -72,6 +72,7 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
     otp?: string
     cameraMode?: 'webcam' | 'dslr'
     liveviewMode?: 'mjpeg' | 'polling'
+    autoPreview?: boolean
   }) => ipcRenderer.invoke('save-settings', settings),
 
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),
@@ -142,4 +143,6 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
   onDslrDisconnected: (callback: (info: { model: string }) => void) => {
     ipcRenderer.on('dslr-disconnected', (_event, info) => callback(info))
   },
+
+  getLogs: () => ipcRenderer.invoke('get-logs'),
 })

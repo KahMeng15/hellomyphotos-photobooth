@@ -6,6 +6,25 @@ import path from 'path'
 import fs from 'fs'
 
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'booth-settings.json')
+
+// ---------------------------------------------------------------------------
+// In-memory log buffer (captures console output for the "View Logs" button)
+// ---------------------------------------------------------------------------
+const MAX_LOG_LINES = 1000
+const _logBuffer: string[] = []
+
+function _captureLog(level: string, args: any[]) {
+  const line = `[${new Date().toISOString().slice(11, 23)}][${level}] ${args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ')}`
+  _logBuffer.push(line)
+  if (_logBuffer.length > MAX_LOG_LINES) _logBuffer.shift()
+}
+
+const _origLog = console.log
+const _origWarn = console.warn
+const _origError = console.error
+console.log = (...args: any[]) => { _captureLog('LOG', args); _origLog.apply(console, args) }
+console.warn = (...args: any[]) => { _captureLog('WARN', args); _origWarn.apply(console, args) }
+console.error = (...args: any[]) => { _captureLog('ERR', args); _origError.apply(console, args) }
 const DEFAULT_SETTINGS = {
   photoCount: 4,
   countdown: 5,
@@ -19,6 +38,7 @@ const DEFAULT_SETTINGS = {
   dslrAperture: 'auto',
   dslrFocusMode: 'auto',
   liveviewMode: 'mjpeg',
+  autoPreview: false,
 }
 
 let _offlineQueue: OfflineQueue
@@ -71,12 +91,19 @@ export function initIpcHandlers(
         return { success: false, error: msg }
       }
 
+      const savedSettings = getSettingsSync()
+      const autoPreview = !!savedSettings.autoPreview
       if (dslrManager.getStatus().model) {
-        await syncCameraSettingsFromServer(dslrManager.getStatus().model)
+        await syncCameraSettingsFromServer(dslrManager.getStatus().model, !autoPreview)
+      }
+
+      // If autoPreview is on, reset camera to auto exposure before starting liveview
+      if (autoPreview) {
+        console.log('[IPC] autoPreview — resetting camera to auto exposure')
+        await dslrManager.applyAutoExposure()
       }
 
       console.log('[IPC] Camera detected — starting liveview stream (will kill PTPCamera on macOS, then wait for first frame)...')
-      const savedSettings = getSettingsSync()
       const liveviewMode: 'mjpeg' | 'polling' = savedSettings.liveviewMode || 'mjpeg'
       console.log(`[IPC] start-dslr-liveview — liveviewMode from settings: ${liveviewMode}`)
       let framesSent = 0
@@ -115,7 +142,7 @@ export function initIpcHandlers(
     return { success: true }
   })
 
-  async function syncCameraSettingsFromServer(model: string) {
+  async function syncCameraSettingsFromServer(model: string, applyToCamera = true) {
     try {
       const res = await fetch(`${_serverUrl}/api/booth/camera-settings?model=${encodeURIComponent(model)}`)
       const data = await res.json()
@@ -145,8 +172,10 @@ export function initIpcHandlers(
 
       if (changed) {
         fs.writeFileSync(SETTINGS_FILE, JSON.stringify(s, null, 2))
-        dslrManager.applyExposure(s.dslrIso, s.dslrShutterSpeed, s.dslrAperture)
-        dslrManager.setFocusMode(s.dslrFocusMode as any)
+        if (applyToCamera) {
+          dslrManager.applyExposure(s.dslrIso, s.dslrShutterSpeed, s.dslrAperture)
+          dslrManager.setFocusMode(s.dslrFocusMode as any)
+        }
         if (!mainWindow.isDestroyed()) {
           mainWindow.webContents.send('booth-command', { type: 'settings-update', settings: s })
         }
@@ -171,7 +200,7 @@ export function initIpcHandlers(
             body: JSON.stringify(s),
           }).catch(() => {})
         }
-      } else {
+      } else if (applyToCamera) {
         // Ensure camera is aligned with local settings
         dslrManager.applyExposure(s.dslrIso, s.dslrShutterSpeed, s.dslrAperture)
       }
@@ -254,7 +283,19 @@ export function initIpcHandlers(
   // ------------------------------------------------------------------
   ipcMain.handle('prep-dslr-capture', async (): Promise<{ success: boolean }> => {
     console.log('[IPC] prep-dslr-capture called')
+    const settings = getSettingsSync()
+    const autoPreview = !!settings.autoPreview
     await dslrManager.prepCapture()
+    if (autoPreview) {
+      // Liveview stopped, mirror down — USB is free. Apply user's saved settings
+      // so the actual photo uses their chosen exposure.
+      console.log('[IPC] autoPreview — applying manual exposure settings for capture')
+      dslrManager.applyExposure(
+        settings.dslrIso || 'auto',
+        settings.dslrShutterSpeed || 'auto',
+        settings.dslrAperture || 'auto'
+      )
+    }
     return { success: true }
   })
 
@@ -390,6 +431,7 @@ export function initIpcHandlers(
     dslrAperture?: string
     dslrFocusMode?: string
     liveviewMode?: 'mjpeg' | 'polling'
+    autoPreview?: boolean
   }) => {
     try {
       const existing = getSettingsSync()
@@ -514,6 +556,13 @@ export function initIpcHandlers(
     } catch (err: any) {
       return { success: false, error: err.message }
     }
+  })
+
+  // ------------------------------------------------------------------
+  // View logs
+  // ------------------------------------------------------------------
+  ipcMain.handle('get-logs', (): { lines: string[] } => {
+    return { lines: [..._logBuffer] }
   })
 }
 

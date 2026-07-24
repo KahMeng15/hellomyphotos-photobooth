@@ -71,9 +71,11 @@ declare global {
         otp?: string
         cameraMode?: 'webcam' | 'dslr'
         dslrFocusMode?: string
+        autoPreview?: boolean
       }) => Promise<any>
       getServerConfig: () => Promise<{ serverUrl: string }>
       killPtpDaemon: () => Promise<{ success: boolean; error?: string }>
+      getLogs: () => Promise<{ lines: string[] }>
 
       // ----------------------------------------------------------------
       // Push listeners (main → renderer)

@@ -53,6 +53,7 @@ interface BoothSettings {
   dslrAperture?: string
   dslrFocusMode?: string
   liveviewMode?: 'mjpeg' | 'polling'
+  autoPreview?: boolean
 }
 
 interface MediaDeviceInfo {
@@ -65,7 +66,7 @@ export class Settings {
   private visible = false
   private dirty = false
   private onChange: (settings: BoothSettings) => void
-  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', liveviewMode: 'mjpeg' }
+  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', liveviewMode: 'mjpeg', autoPreview: false }
   private serverInput!: HTMLInputElement
   private cameraSelect!: HTMLSelectElement
   private audioSelect!: HTMLSelectElement
@@ -91,6 +92,7 @@ export class Settings {
   private dslrModel = ''
   private mjpegBtn!: HTMLButtonElement
   private pollingBtn!: HTMLButtonElement
+  private autoPreviewCb!: HTMLInputElement
 
   constructor(container: HTMLElement, onChange: (settings: BoothSettings) => void) {
     this.onChange = onChange
@@ -160,6 +162,16 @@ export class Settings {
       this.hide()
     })
     header.appendChild(saveBtn)
+
+    const logsBtn = document.createElement('button')
+    logsBtn.textContent = 'Logs'
+    logsBtn.style.cssText = `
+      padding: 0.5rem 1rem;
+      background: transparent; color: #888; border: 1px solid #333; border-radius: 8px;
+      font-size: 0.8125rem; font-weight: 500; cursor: pointer;
+    `
+    logsBtn.addEventListener('click', () => this.showLogs())
+    header.appendChild(logsBtn)
     this.panel.appendChild(header)
 
     this.grid = document.createElement('div')
@@ -244,49 +256,6 @@ export class Settings {
     dslrFields[dslrFields.length - 1].style.borderBottom = 'none'
     this.dslrExposureSection.appendChild(dslrBox)
 
-    const liveviewTitle = document.createElement('h3')
-    liveviewTitle.textContent = 'Liveview Mode'
-    liveviewTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;'
-    this.dslrExposureSection.appendChild(liveviewTitle)
-
-    const lvDesc = document.createElement('p')
-    lvDesc.textContent = 'MJPEG: smooth 30fps preview (settings apply with brief pause). Polling: lower ~3fps (settings update without interruption).'
-    lvDesc.style.cssText = 'font-size: 0.6875rem; color: #555; margin: 0.25rem 0 0; line-height: 1.4;'
-    this.dslrExposureSection.appendChild(lvDesc)
-
-    const lvBox = document.createElement('div')
-    lvBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden;'
-
-    const lvRow = document.createElement('div')
-    lvRow.style.cssText = 'display: flex; padding: 0.75rem 1rem; background: #191919; align-items: center; justify-content: space-between;'
-
-    const lvLabel = document.createElement('label')
-    lvLabel.textContent = 'Liveview Mode'
-    lvLabel.style.cssText = 'font-size: 0.875rem; color: #ccc; font-weight: 500;'
-    lvRow.appendChild(lvLabel)
-
-    const lvToggle = document.createElement('div')
-    lvToggle.style.cssText = 'display: flex; border: 1px solid #333; border-radius: 6px; overflow: hidden;'
-
-    this.mjpegBtn = document.createElement('button')
-    this.mjpegBtn.textContent = 'MJPEG'
-    this.pollingBtn = document.createElement('button')
-    this.pollingBtn.textContent = 'Polling'
-
-    this.refreshLvToggle()
-
-    this.mjpegBtn.addEventListener('click', () => { this.settings.liveviewMode = 'mjpeg'; this.refreshLvToggle(); this.markDirty() })
-    this.pollingBtn.addEventListener('click', () => {
-      if (this.dslrModel.toLowerCase().includes('canon')) return
-      this.settings.liveviewMode = 'polling'; this.refreshLvToggle(); this.markDirty()
-    })
-
-    lvToggle.appendChild(this.mjpegBtn)
-    lvToggle.appendChild(this.pollingBtn)
-    lvRow.appendChild(lvToggle)
-    lvBox.appendChild(lvRow)
-    this.dslrExposureSection.appendChild(lvBox)
-
     const focusTitle = document.createElement('h3')
     focusTitle.textContent = 'Focus'
     focusTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;'
@@ -347,6 +316,72 @@ export class Settings {
     for (const f of fields) settingsBox.appendChild(f)
     fields[fields.length - 1].style.borderBottom = 'none'
     col3.appendChild(settingsBox)
+
+    const lvTitle = document.createElement('h3')
+    lvTitle.textContent = 'Liveview Mode'
+    lvTitle.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;'
+    col3.appendChild(lvTitle)
+
+    const lvDesc = document.createElement('p')
+    lvDesc.textContent = 'MJPEG: smooth 30fps preview (settings apply with brief pause). Polling: lower ~3fps (settings update without interruption).'
+    lvDesc.style.cssText = 'font-size: 0.6875rem; color: #555; margin: 0.25rem 0 0; line-height: 1.4;'
+    col3.appendChild(lvDesc)
+
+    const lvBox = document.createElement('div')
+    lvBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden;'
+
+    const lvRow = document.createElement('div')
+    lvRow.style.cssText = 'display: flex; padding: 0.75rem 1rem; background: #191919; align-items: center; justify-content: space-between;'
+
+    const lvLabel = document.createElement('label')
+    lvLabel.textContent = 'Liveview Mode'
+    lvLabel.style.cssText = 'font-size: 0.875rem; color: #ccc; font-weight: 500;'
+    lvRow.appendChild(lvLabel)
+
+    const lvToggle = document.createElement('div')
+    lvToggle.style.cssText = 'display: flex; border: 1px solid #333; border-radius: 6px; overflow: hidden;'
+
+    this.mjpegBtn = document.createElement('button')
+    this.mjpegBtn.textContent = 'MJPEG'
+    this.pollingBtn = document.createElement('button')
+    this.pollingBtn.textContent = 'Polling'
+
+    this.refreshLvToggle()
+
+    this.mjpegBtn.addEventListener('click', () => { this.settings.liveviewMode = 'mjpeg'; this.refreshLvToggle(); this.markDirty() })
+    this.pollingBtn.addEventListener('click', () => {
+      if (this.dslrModel.toLowerCase().includes('canon')) return
+      this.settings.liveviewMode = 'polling'; this.refreshLvToggle(); this.markDirty()
+    })
+
+    lvToggle.appendChild(this.mjpegBtn)
+    lvToggle.appendChild(this.pollingBtn)
+    lvRow.appendChild(lvToggle)
+    lvBox.appendChild(lvRow)
+    col3.appendChild(lvBox)
+
+    const autoPreviewBox = document.createElement('div')
+    autoPreviewBox.style.cssText = 'border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden;'
+
+    const autoPreviewRow = document.createElement('div')
+    autoPreviewRow.style.cssText = 'display: flex; padding: 0.75rem 1rem; background: #191919; align-items: center; justify-content: space-between;'
+
+    const autoPreviewLabel = document.createElement('label')
+    autoPreviewLabel.textContent = 'Auto exposure during preview'
+    autoPreviewLabel.style.cssText = 'font-size: 0.875rem; color: #ccc; font-weight: 500; cursor: pointer;'
+    autoPreviewRow.appendChild(autoPreviewLabel)
+
+    this.autoPreviewCb = document.createElement('input')
+    this.autoPreviewCb.type = 'checkbox'
+    this.autoPreviewCb.checked = !!this.settings.autoPreview
+    this.autoPreviewCb.style.cssText = 'width: 1.125rem; height: 1.125rem; cursor: pointer; accent-color: #fff;'
+    this.autoPreviewCb.addEventListener('change', () => {
+      this.settings.autoPreview = this.autoPreviewCb.checked
+      this.markDirty()
+    })
+    autoPreviewRow.appendChild(this.autoPreviewCb)
+    autoPreviewBox.appendChild(autoPreviewRow)
+    col3.appendChild(autoPreviewBox)
 
     this.grid.appendChild(col1)
     this.grid.appendChild(this.col2)
@@ -897,6 +932,7 @@ export class Settings {
 
   private refreshFields() {
     this.refreshLvToggle()
+    if (this.autoPreviewCb) this.autoPreviewCb.checked = !!this.settings.autoPreview
 
     const numValues = [this.settings.photoCount, this.settings.countdown, this.settings.captureInterval, this.settings.postCapturePreview]
     for (let i = 0; i < this.numInputs.length; i++) {
@@ -1050,6 +1086,39 @@ export class Settings {
         }
       }).catch(() => {})
     }
+  }
+
+  private logModal: HTMLDivElement | null = null
+
+  private async showLogs() {
+    if (!this.logModal) {
+      this.logModal = document.createElement('div')
+      this.logModal.style.cssText = `
+        position: fixed; inset: 0; z-index: 100;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+      `
+      this.logModal.addEventListener('click', (e) => {
+        if (e.target === this.logModal) this.logModal!.style.display = 'none'
+      })
+      document.body.appendChild(this.logModal)
+    }
+    const result = await window.hellomyphoto?.getLogs()
+    const lines = result?.lines || []
+    const content = lines.join('\n')
+    this.logModal.innerHTML = `
+      <div style="background:#111; border:1px solid #333; border-radius:12px; width:90%; max-width:800px; max-height:80vh; display:flex; flex-direction:column;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem 1.25rem; border-bottom:1px solid #222;">
+          <span style="font-size:1rem; font-weight:600; color:#fff;">Logs (${lines.length} lines)</span>
+          <button id="close-logs-btn" style="background:none; border:none; color:#888; cursor:pointer; font-size:1.25rem;">✕</button>
+        </div>
+        <pre style="flex:1; overflow:auto; padding:1rem 1.25rem; margin:0; font-size:0.6875rem; line-height:1.5; color:#aaa; font-family:ui-monospace,SFMono-Regular,monospace; white-space:pre-wrap;">${content || '(no logs yet)'}</pre>
+      </div>
+    `
+    this.logModal.querySelector('#close-logs-btn')!.addEventListener('click', () => {
+      this.logModal!.style.display = 'none'
+    })
+    this.logModal.style.display = 'flex'
   }
 
   hide() {

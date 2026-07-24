@@ -968,6 +968,31 @@ export class DslrManager {
     })
   }
 
+  async applyAutoExposure(): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.isWindows || !this.connected) return
+      log.info('[DslrManager] Resetting exposure to auto for live preview')
+      const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
+      const configArgs: string[] = []
+      for (const key of ['iso', 'shutterspeed', 'aperture'] as const) {
+        const choices = this.configChoices[key]
+        if (choices && choices.length > 0) {
+          const autoVal = choices.find(c => c.toLowerCase() === 'auto')
+          if (autoVal) {
+            configArgs.push('--set-config', `${key}=${autoVal}`)
+          } else {
+            configArgs.push('--set-config', `${key}=${choices[0]}`)
+          }
+        }
+      }
+      if (configArgs.length > 0) {
+        const res = await this.execGphoto2([...configArgs, ...portArgs], 15000)
+        if (res.code === 0) log.ok('[DslrManager] Auto exposure applied')
+        else log.warn(`[DslrManager] Auto exposure returned code=${res.code}: ${res.stderr.trim().slice(0, 100)}`)
+      }
+    })
+  }
+
   private async detectWindows(): Promise<{ connected: boolean; model: string; cameras: { model: string, port: string }[] }> {
     if (!this.dcc) this.dcc = new DigiCamControlAdapter()
     const { connected, model } = await this.dcc.detect()
