@@ -41,6 +41,7 @@ export class BoothApp {
 
   // DSLR disconnect error overlay
   private dslrErrorOverlay!: HTMLDivElement
+  private captureErrorOverlay!: HTMLDivElement
 
   private captureProgress!: HTMLDivElement
   private captureProgressText!: HTMLDivElement
@@ -288,6 +289,7 @@ export class BoothApp {
     // DSLR disconnect error overlay
     // ------------------------------------------------------------------
     this.dslrErrorOverlay = this.buildDslrErrorOverlay()
+    this.captureErrorOverlay = this.buildCaptureErrorOverlay()
     this.createCaptureProgress()
 
     const style = document.createElement('style')
@@ -302,6 +304,7 @@ export class BoothApp {
       this.statusBar,
       this.flashOverlay,
       this.dslrErrorOverlay,
+      this.captureErrorOverlay,
       this.captureProgress,
     )
 
@@ -372,6 +375,77 @@ export class BoothApp {
     })
 
     return overlay
+  }
+
+  private buildCaptureErrorOverlay(): HTMLDivElement {
+    const overlay = document.createElement('div')
+    Object.assign(overlay.style, {
+      position: 'absolute', inset: '0', zIndex: '60',
+      display: 'none', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0,0,0,0.85)',
+    })
+
+    const box = document.createElement('div')
+    Object.assign(box.style, {
+      background: '#1a1a1a', border: '1px solid #3a1a1a', borderRadius: '16px',
+      padding: '2rem', maxWidth: '400px', width: '90%', textAlign: 'center',
+    })
+
+    box.innerHTML = `
+      <div style="margin-bottom:1rem;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f44336" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      </div>
+      <h2 style="font-size:1.25rem;font-weight:700;margin:0 0 0.5rem;">Capture Failed</h2>
+      <p id="capture-error-msg" style="font-size:0.875rem;color:#888;margin:0 0 1.5rem;line-height:1.5;word-break:break-word;">
+        Unknown error occurred.
+      </p>
+      <div style="display:flex;gap:0.75rem;justify-content:center;">
+        <button id="capture-error-ok-btn" style="padding:0.75rem 2rem;background:#fff;color:#000;border:none;border-radius:100px;font-size:1rem;font-weight:700;cursor:pointer;">OK</button>
+      </div>
+    `
+
+    overlay.appendChild(box)
+
+    box.querySelector('#capture-error-ok-btn')!.addEventListener('click', () => {
+      overlay.style.display = 'none'
+    })
+
+    return overlay
+  }
+
+  private formatCaptureError(rawError: string): string {
+    if (!rawError) return 'Unknown error occurred.'
+    
+    const lines = rawError.split('\n').map(l => l.trim()).filter(Boolean)
+    const cleanedLines = lines.filter(l => {
+      const lower = l.toLowerCase()
+      if (lower === '*** error ***') return false
+      if (lower === 'error: could not capture image.') return false
+      if (lower === 'error: could not capture.') return false
+      return true
+    })
+    
+    const uniqueLines = [...new Set(cleanedLines)]
+    
+    if (uniqueLines.length === 0) {
+      return 'Camera failed to capture. Please check if the lens cap is on or if it failed to focus.'
+    }
+    
+    // Escape HTML to prevent XSS, then replace newlines with <br/>
+    const escapeHtml = (unsafe: string) => {
+      return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;")
+    }
+    
+    return uniqueLines.map(escapeHtml).join('<br/><br/>')
   }
 
   private createCaptureProgress() {
@@ -1054,7 +1128,13 @@ export class BoothApp {
 
         this.hideCaptureProgress()
         this.pauseBtn.style.display = 'none'
-        this.stateDisplay.innerHTML = `<span style="color: #ff4444; font-size: 1.5rem;">Capture failed</span><br/><span style="font-size: 1rem; color: #fff;">${errMsg}</span><br/><br/><span style="font-size: 1rem;">Tap to retry</span>`
+        
+        // Show popout box instead of inline state display
+        this.stateDisplay.innerHTML = ''
+        const msgEl = this.captureErrorOverlay.querySelector<HTMLParagraphElement>('#capture-error-msg')
+        if (msgEl) msgEl.innerHTML = this.formatCaptureError(errMsg)
+        this.captureErrorOverlay.style.display = 'flex'
+        
         this.isCapturing = false
         this.captureBtn.style.visibility = 'visible'
         audioCtx.close()
