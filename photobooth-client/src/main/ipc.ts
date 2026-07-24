@@ -83,7 +83,7 @@ export function initIpcHandlers(
     console.log('[IPC] start-dslr-liveview called')
     try {
       console.log('[IPC] Running detect before starting liveview...')
-      const { connected } = await dslrManager.detect()
+      const { connected } = await dslrManager.detect(true)
       console.log(`[IPC] detect() result: connected=${connected}, model="${dslrManager.getStatus().model}"`)
       if (!connected) {
         const msg = 'No DSLR camera detected. Check USB connection.'
@@ -93,8 +93,8 @@ export function initIpcHandlers(
 
       const savedSettings = getSettingsSync()
       const autoPreview = !!savedSettings.autoPreview
-      if (dslrManager.getStatus().model) {
-        await syncCameraSettingsFromServer(dslrManager.getStatus().model, !autoPreview)
+      if (!autoPreview && dslrManager.getStatus().model) {
+        await syncCameraSettingsFromServer(dslrManager.getStatus().model, true)
       }
 
       // If autoPreview is on, reset camera to auto exposure before starting liveview

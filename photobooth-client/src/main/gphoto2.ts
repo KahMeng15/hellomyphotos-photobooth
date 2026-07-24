@@ -780,6 +780,13 @@ export class DslrManager {
     return next
   }
 
+  // PTP kill cooldown to prevent redundant killPtpDaemon() + detectGphoto2()
+  // cycles during sequential startup calls (detect → applyExposure → startLiveview).
+  // Once killed+disabled via launchctl, PTPCamera cannot respawn, so subsequent
+  // calls within the cooldown window can safely skip the expensive re-detect.
+  private _lastPtpKill = 0
+  private static PTP_KILL_COOLDOWN = 3000 // ms
+
   // Disconnect poll
   private disconnectPollTimer: NodeJS.Timeout | null = null
 
@@ -893,6 +900,30 @@ export class DslrManager {
     }
   }
 
+  /**
+   * Ensure the USB interface is free for gphoto2 commands by killing the macOS
+   * PTPCamera daemon and re-detecting the camera. Uses a cooldown to avoid
+   * redundant kill+detect cycles during rapid sequential calls.
+   *
+   * @param force - Always execute, ignoring cooldown. Use when the USB state
+   *   is known to have changed (e.g. after killing an MJPEG stream).
+   */
+  private async _ensureUsbAccess(force = false): Promise<void> {
+    if (this.isWindows) return
+    const now = Date.now()
+    if (!force && (now - this._lastPtpKill < DslrManager.PTP_KILL_COOLDOWN)) {
+      log.info(`[DslrManager] PTP kill cooldown active (${now - this._lastPtpKill}ms ago) — skipping`)
+      return
+    }
+    await killPtpDaemon()
+    // Re-detect so the port is refreshed (USB state may have changed after
+    // PTPCamera eviction or MJPEG process death).
+    if (!this.isWindows) {
+      await this.detectGphoto2()
+    }
+    this._lastPtpKill = now
+  }
+
   async applyExposure(iso: string, shutterspeed: string, aperture: string) {
     return this.enqueue(async () => {
       if (this.isWindows || !this.connected) return
@@ -920,15 +951,7 @@ export class DslrManager {
         await new Promise(r => setTimeout(r, 500))
       }
 
-      try {
-        if (!this.isWindows) {
-           await killPtpDaemon()
-        }
-      } catch (e) {}
-
-      if (!this.isWindows) {
-        await this.detectGphoto2()
-      }
+      await this._ensureUsbAccess(wasLiveview)
 
       const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
 
@@ -1106,14 +1129,13 @@ export class DslrManager {
       log.warn('[DslrManager] startLiveview() called but connected=false — proceeding anyway')
     }
 
-    // On macOS: do an initial broad sweep to evict the PTP daemons from launchd
-    // before starting the frame loop. The frame loop then handles any respawns
-    // by racing pkill + immediate gphoto2 retry.
+    // Ensure USB is free before starting the frame loop. Uses a cooldown so
+    // that when startLiveview is called immediately after applyExposure (common
+    // in the startup path), the redundant PTP kill + detect cycle is skipped.
+    // The Gphoto2LiveviewStream has its own PTP racing mechanism as a fallback.
     if (!this.isWindows) {
-      log.info('[DslrManager] macOS: initial PTPCamera eviction before liveview...')
-      await killPtpDaemon()
-      log.info('[DslrManager] Re-detecting cameras to fetch new USB ports after eviction...')
-      await this.detectGphoto2()
+      log.info('[DslrManager] macOS: ensuring USB access before liveview...')
+      await this._ensureUsbAccess(false)
     }
 
     this.liveviewActive = true
