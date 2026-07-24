@@ -13,9 +13,9 @@ export class PhotoPreview {
 
     this.overlay = document.createElement('div')
     this.overlay.style.cssText = `
-      position: absolute; inset: 0; background: rgba(0,0,0,0.9);
+      position: absolute; inset: 0; background: #0f0f0f;
       display: none; flex-direction: column; align-items: center;
-      justify-content: center; z-index: 20; padding: 2rem;
+      justify-content: center; z-index: 50; padding: 2rem;
     `
     this.container.appendChild(this.overlay)
   }

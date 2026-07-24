@@ -787,6 +787,8 @@ export class BoothApp {
 
   private async goHome() {
     this.photoPreview.hide()
+    this.previewWindow.style.display = 'flex'
+    this.statusBar.style.display = 'flex'
 
     // Stop whichever preview source is active.
     // Always send the IPC stop — the camera may have liveview/mirror up even
@@ -1012,6 +1014,8 @@ export class BoothApp {
       this._state = 'preview'
       this.emitBoothState()
       this.photoPreview.show(paths)
+      this.previewWindow.style.display = 'none'
+      this.statusBar.style.display = 'none'
       this.camera.stop()
       this.webcamPreview.srcObject = null
     } else {
@@ -1111,6 +1115,8 @@ export class BoothApp {
     this.emitBoothState()
     this.captureBtn.style.visibility = 'visible'
     this.photoPreview.hide()
+    this.previewWindow.style.display = 'flex'
+    this.statusBar.style.display = 'flex'
     this.stateDisplay.textContent = ''
 
     if (this.cameraMode === 'dslr') {
