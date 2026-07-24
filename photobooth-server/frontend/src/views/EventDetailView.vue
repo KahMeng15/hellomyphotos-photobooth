@@ -72,8 +72,7 @@
             v-for="session in photoSessions"
             :key="session.sessionId"
             :class="['session-card', { selected: selectedSessions.has(session.sessionId) }]"
-            @click="toggleSelect(session.sessionId)"
-            @dblclick="selectSession(session)"
+            @click="selectSession(session)"
           >
             <div class="session-thumb">
               <img
@@ -81,7 +80,7 @@
                 :alt="'Session ' + session.sessionId"
                 class="thumb-img"
               />
-              <div class="session-check" :class="{ checked: selectedSessions.has(session.sessionId) }">
+              <div class="session-check" :class="{ checked: selectedSessions.has(session.sessionId) }" @click.stop="toggleSelect(session.sessionId)">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
