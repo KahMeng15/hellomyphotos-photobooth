@@ -18,11 +18,10 @@ function extractSessionId(filename: string): string | null {
   return match ? match[1] : null
 }
 
-function checkExpiry(event: any) {
+function getExpiryDate(event: any): Date | null {
   if (event.expiry_type !== 'none' && event.expiry_value) {
-    const now = Date.now()
     if (event.expiry_type === 'absolute') {
-      if (new Date(event.expiry_value).getTime() < now) return true
+      return new Date(event.expiry_value)
     } else if (event.expiry_type === 'relative') {
       const eventStart = new Date(event.created_at).getTime()
       let ms = 0
@@ -35,9 +34,15 @@ function checkExpiry(event: any) {
       else if (unit.startsWith('hour')) ms = val * 60 * 60 * 1000
       else if (unit.startsWith('minute')) ms = val * 60 * 1000
       
-      if (eventStart + ms < now) return true
+      return new Date(eventStart + ms)
     }
   }
+  return null
+}
+
+function checkExpiry(event: any) {
+  const expiryDate = getExpiryDate(event)
+  if (expiryDate && expiryDate.getTime() < Date.now()) return true
   return false
 }
 
@@ -133,11 +138,14 @@ router.get('/:token', async (req: Request, res: Response) => {
       })
     )
 
+    const expiryDate = getExpiryDate(event)
+
     res.json({
       eventId: event.id,
       eventName: event.name,
       eventDate: event.date,
       photoCount: photos.length,
+      expiresAt: expiryDate ? expiryDate.toISOString() : null,
       photos,
     })
   } catch (error: any) {

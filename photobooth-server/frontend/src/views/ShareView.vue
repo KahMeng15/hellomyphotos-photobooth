@@ -16,29 +16,61 @@
     </div>
 
     <template v-else-if="session">
-      <header class="share-header">
-        <h1>hellomyphoto</h1>
-        <p class="subtitle">{{ session.photoCount }} photo{{ session.photoCount > 1 ? 's' : '' }}</p>
-      </header>
+      <div class="share-content">
+        <header class="share-header">
+          <h1>{{ session.eventName || 'hellomyphotos' }}</h1>
+          <p class="subtitle">here are your photos</p>
+        </header>
 
-      <div class="photo-grid">
-        <div v-for="photo in session.photos" :key="photo.id" class="photo-card">
-          <img :src="photo.thumbnail || photo.url" :alt="'Photo'" loading="lazy" @click="openPhoto(photo)" />
-          <a :href="downloadUrl(photo.id)" class="download-btn" download>
+        <div v-if="session.photos.length > 2" class="hero-preview">
+          <img :src="session.photos[heroIndex].url" alt="Preview animation" />
+        </div>
+
+        <div class="photo-grid">
+          <div v-for="(photo, i) in session.photos" :key="photo.id" class="photo-card">
+            <img :src="photo.thumbnail || photo.url" :alt="'Photo'" loading="lazy" @click="openPhoto(i)" />
+            <a :href="downloadUrl(photo.id)" class="download-btn" download>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download JPEG
+            </a>
+          </div>
+        </div>
+
+        <div class="actions-wrapper">
+          <button @click="downloadAll" class="btn-download-all">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download JPEG
-          </a>
+            Download All
+          </button>
+          <p v-if="expiryText" class="expiry-text">{{ expiryText }}</p>
         </div>
       </div>
 
       <footer class="share-footer">
-        <p>Photos taken with hellomyphoto &mdash; self-hosted photo booth</p>
+        <p>
+          Photos taken with <a href="https://kahmeng15.github.io/hellomyphotos" target="_blank" rel="noopener noreferrer">hellomyphotos</a>, an app project by <a href="https://kahmeng15.github.io" target="_blank" rel="noopener noreferrer">kahmeng</a>.<br/>
+          Learn more about this app at <a href="https://kahmeng15.github.io/hellomyphotos" target="_blank" rel="noopener noreferrer">kahmeng15.github.io/hellomyphotos</a>.<br/>
+          Have some feedback? Submit it <a href="https://kahmeng15.github.io/feedback/" target="_blank" rel="noopener noreferrer">here</a>.
+        </p>
       </footer>
 
-      <div v-if="selectedPhoto" class="lightbox" @click.self="selectedPhoto = null">
-        <button class="lightbox-close" @click="selectedPhoto = null">✕</button>
-        <img :src="selectedPhoto.url" alt="Photo" class="lightbox-img" />
-        <a :href="downloadUrl(selectedPhoto.id)" class="lightbox-download" download>
+      <div v-if="selectedPhotoIndex !== null" class="lightbox" @click.self="selectedPhotoIndex = null">
+        <button class="lightbox-close" @click="selectedPhotoIndex = null">✕</button>
+        
+        <button v-if="selectedPhotoIndex > 0" class="lightbox-nav-btn lightbox-prev" @click.stop="prevPhoto">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+
+        <img :src="session.photos[selectedPhotoIndex].url" alt="Photo" class="lightbox-img" />
+
+        <button v-if="selectedPhotoIndex < session.photos.length - 1" class="lightbox-nav-btn lightbox-next" @click.stop="nextPhoto">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+
+        <a :href="downloadUrl(session.photos[selectedPhotoIndex].id)" class="lightbox-download" download @click.stop>
           Download JPEG
         </a>
       </div>
@@ -47,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 
@@ -63,6 +95,7 @@ interface SessionData {
   photoCount: number
   frameName: string | null
   createdAt: string
+  expiresAt?: string | null
   photos: SessionPhoto[]
 }
 
@@ -71,9 +104,46 @@ const loading = ref(true)
 const error = ref(false)
 const expired = ref(false)
 const session = ref<SessionData | null>(null)
-const selectedPhoto = ref<SessionPhoto | null>(null)
+const selectedPhotoIndex = ref<number | null>(null)
+const heroIndex = ref(0)
+let heroInterval: number | null = null
+
+const expiryText = computed(() => {
+  if (!session.value || !session.value.expiresAt) return null
+  const d = new Date(session.value.expiresAt)
+  const today = new Date()
+  
+  const opts: Intl.DateTimeFormatOptions = {
+    month: 'short',
+    day: 'numeric',
+    year: d.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  }
+  return `Link expires on ${d.toLocaleString(undefined, opts)}`
+})
+
+onUnmounted(() => {
+  if (heroInterval) window.clearInterval(heroInterval)
+  window.removeEventListener('keydown', handleKeydown)
+})
+
+function handleKeydown(e: KeyboardEvent) {
+  if (selectedPhotoIndex.value === null) return
+  if (e.key === 'ArrowRight') {
+    nextPhoto()
+  } else if (e.key === 'ArrowLeft') {
+    prevPhoto()
+  } else if (e.key === 'Escape') {
+    selectedPhotoIndex.value = null
+  }
+}
 
 onMounted(async () => {
+  document.title = 'hellomyphotos'
+  window.addEventListener('keydown', handleKeydown)
+  
   const token = route.params.token as string
   if (!token) {
     error.value = true
@@ -86,6 +156,13 @@ onMounted(async () => {
       expired.value = true
     } else {
       session.value = data
+      if (session.value.photos.length > 2) {
+        heroInterval = window.setInterval(() => {
+          if (session.value) {
+            heroIndex.value = (heroIndex.value + 1) % session.value.photos.length
+          }
+        }, 500)
+      }
     }
   } catch {
     error.value = true
@@ -94,13 +171,38 @@ onMounted(async () => {
   }
 })
 
-function openPhoto(photo: SessionPhoto) {
-  selectedPhoto.value = photo
+function openPhoto(index: number) {
+  selectedPhotoIndex.value = index
+}
+
+function nextPhoto() {
+  if (selectedPhotoIndex.value !== null && session.value && selectedPhotoIndex.value < session.value.photos.length - 1) {
+    selectedPhotoIndex.value++
+  }
+}
+
+function prevPhoto() {
+  if (selectedPhotoIndex.value !== null && selectedPhotoIndex.value > 0) {
+    selectedPhotoIndex.value--
+  }
 }
 
 function downloadUrl(photoId: string) {
   if (!route.params.token) return '#'
   return `/api/share/${route.params.token}/photo/${photoId}?download=1`
+}
+
+async function downloadAll() {
+  if (!session.value) return
+  for (const photo of session.value.photos) {
+    const link = document.createElement('a')
+    link.href = downloadUrl(photo.id)
+    link.download = ''
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    await new Promise((r) => setTimeout(r, 500))
+  }
 }
 </script>
 
@@ -110,6 +212,24 @@ function downloadUrl(photoId: string) {
   background: #0f0f0f;
   color: #fff;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+.share-content {
+  flex: 1;
+}
+
+.actions-wrapper {
+  text-align: center;
+  padding: 1rem;
+  margin-bottom: 2rem;
+}
+
+.expiry-text {
+  color: #888;
+  font-size: 0.75rem;
+  margin-top: 0.75rem;
 }
 
 .loading {
@@ -148,7 +268,7 @@ function downloadUrl(photoId: string) {
 
 .share-header {
   text-align: center;
-  padding: 2rem 1rem 1rem;
+  padding: 2rem 1rem;
   border-bottom: 1px solid #1a1a1a;
 }
 
@@ -162,7 +282,47 @@ function downloadUrl(photoId: string) {
 .subtitle {
   color: #666;
   font-size: 0.875rem;
+  margin: 0;
   margin-top: 0.25rem;
+}
+
+.hero-preview {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-preview img {
+  width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  border: 1px solid #333;
+}
+
+.btn-download-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0;
+  padding: 0.625rem 1.25rem;
+  background: #fff;
+  color: #000;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-download-all:hover {
+  opacity: 0.9;
 }
 
 .photo-grid {
@@ -188,8 +348,7 @@ function downloadUrl(photoId: string) {
 
 .photo-card img {
   width: 100%;
-  aspect-ratio: 3/4;
-  object-fit: cover;
+  height: auto;
   display: block;
   cursor: pointer;
 }
@@ -216,8 +375,22 @@ function downloadUrl(photoId: string) {
 .share-footer {
   text-align: center;
   padding: 2rem;
-  color: #444;
+  color: #666;
   font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.share-footer a {
+  color: #aaa;
+  text-decoration: underline;
+  text-decoration-color: #444;
+  text-underline-offset: 3px;
+  transition: color 0.2s, text-decoration-color 0.2s;
+}
+
+.share-footer a:hover {
+  color: #fff;
+  text-decoration-color: #fff;
 }
 
 .lightbox {
@@ -248,6 +421,41 @@ function downloadUrl(photoId: string) {
   opacity: 1;
 }
 
+.lightbox-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  color: white;
+  padding: 1rem;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  z-index: 1010;
+}
+.lightbox-nav-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+.lightbox-prev { left: 2rem; }
+.lightbox-next { right: 2rem; }
+
+@media (max-width: 640px) {
+  .photo-grid {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+    gap: 1rem;
+  }
+  .hero-preview {
+    padding: 0 1rem;
+  }
+  .lightbox-prev { left: 0.5rem; padding: 0.5rem; }
+  .lightbox-next { right: 0.5rem; padding: 0.5rem; }
+}
+
 .lightbox-img {
   max-width: 90vw;
   max-height: 80vh;
@@ -269,11 +477,4 @@ function downloadUrl(photoId: string) {
   color: #fff;
 }
 
-@media (max-width: 640px) {
-  .photo-grid {
-    grid-template-columns: 1fr;
-    padding: 1rem;
-    gap: 1rem;
-  }
-}
 </style>
