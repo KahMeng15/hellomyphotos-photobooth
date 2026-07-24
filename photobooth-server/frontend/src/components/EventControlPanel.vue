@@ -61,6 +61,9 @@
       <button @click="showSettingsModal = true" class="btn-control btn-secondary">
         Booth Settings
       </button>
+      <button @click="showEventSettingsModal = true" class="btn-control btn-secondary">
+        Event Settings
+      </button>
       <button @click="shareAll" class="btn-control btn-secondary">
         Share All
       </button>
@@ -145,6 +148,9 @@
             <button @click="showSettingsModal = true" class="btn-control btn-secondary">
               Booth Settings
             </button>
+            <button @click="showEventSettingsModal = true" class="btn-control btn-secondary">
+              Event Settings
+            </button>
             <button @click="shareAll" class="btn-control btn-secondary">
               Share All
             </button>
@@ -152,6 +158,61 @@
               End Event
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+
+  <Teleport to="body">
+    <div v-if="showEventSettingsModal" class="modal-overlay" @click.self="showEventSettingsModal = false">
+      <div class="modal-page">
+        <div class="modal-header">
+          <h2>Event Settings</h2>
+          <button class="close-btn" @click="showEventSettingsModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="settings-box">
+            <div class="field-row">
+              <label>Obfuscate Links</label>
+              <div style="display:flex;align-items:center;">
+                <input type="checkbox" id="obfuscateLinks" v-model="eventSettings.obfuscateLinks" style="width:1.5rem;height:1.5rem;cursor:pointer;" />
+                <label for="obfuscateLinks" style="margin-left:0.5rem;cursor:pointer;color:#fff;">Hide original filenames in shared links</label>
+              </div>
+            </div>
+            
+            <div class="field-row" style="margin-top:1.5rem;">
+              <label style="display:block;margin-bottom:0.5rem;">Link Expiry</label>
+              <select v-model="eventSettings.expiryType" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;">
+                <option value="none">No Expiry</option>
+                <option value="relative">Relative Duration</option>
+                <option value="absolute">Specific Date & Time</option>
+              </select>
+            </div>
+            
+            <div class="field-row" v-if="eventSettings.expiryType === 'relative'" style="margin-top:1rem;">
+              <label style="display:block;margin-bottom:0.5rem;">Expires In (from creation)</label>
+              <select v-model="eventSettings.expiryValue" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;">
+                <option value="1_day">1 Day</option>
+                <option value="3_days">3 Days</option>
+                <option value="1_week">1 Week</option>
+                <option value="1_month">1 Month</option>
+                <option value="6_months">6 Months</option>
+                <option value="1_year">1 Year</option>
+              </select>
+            </div>
+            
+            <div class="field-row" v-if="eventSettings.expiryType === 'absolute'" style="margin-top:1rem;">
+              <label style="display:block;margin-bottom:0.5rem;">Date & Time</label>
+              <input type="datetime-local" v-model="eventSettings.expiryValue" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;" />
+            </div>
+          </div>
+          
+          <div v-if="settingsMsg" :class="['settings-msg', settingsMsgType]" style="margin-top:1rem;">{{ settingsMsg }}</div>
+          
+          <button @click="saveEventSettings" class="btn-primary" style="margin-top: 1rem; width: 100%;" :disabled="settingsSaving">
+            {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
+          </button>
         </div>
       </div>
     </div>
@@ -255,7 +316,8 @@ const selectedFrame = ref('')
 const paused = ref(false)
 const otpCopied = ref(false)
 const showSettingsModal = ref(false)
-const eventSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto' })
+const showEventSettingsModal = ref(false)
+const eventSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', obfuscateLinks: false, expiryType: 'none', expiryValue: '1_year' })
 const settingsSaving = ref(false)
 const settingsMsg = ref('')
 const settingsMsgType = ref<'success' | 'error'>('success')
@@ -357,6 +419,9 @@ async function saveEventSettings() {
       dslrShutterSpeed: eventSettings.value.dslrShutterSpeed,
       dslrAperture: eventSettings.value.dslrAperture,
       dslrFocusMode: eventSettings.value.dslrFocusMode,
+      obfuscateLinks: eventSettings.value.obfuscateLinks ? 1 : 0,
+      expiryType: eventSettings.value.expiryType,
+      expiryValue: eventSettings.value.expiryValue,
     })
     settingsMsg.value = 'Settings saved'
     settingsMsgType.value = 'success'
@@ -383,22 +448,24 @@ async function saveEventSettings() {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: #0f0f0f;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  z-index: 200;
-  padding: 1rem;
+  z-index: 100;
+  overflow-y: auto;
 }
 
 .modal-page {
-  background: #1a1a1a;
-  border-radius: 12px;
+  background: #0f0f0f;
+  border-radius: 0;
   width: 100%;
-  max-width: 480px;
-  max-height: 90vh;
+  max-width: 800px;
+  min-height: 100vh;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
+  padding: 2rem;
 }
 
 .modal-header {

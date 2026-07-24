@@ -9,13 +9,13 @@
           <span class="session-time">{{ formatTime(session.createdAt) }}</span>
         </div>
 
-        <div class="photo-strip">
+        <div class="photo-grid">
           <img
             v-for="(photo, i) in session.photos"
             :key="photo.id"
             :src="photo.url"
             :alt="'Photo ' + (i + 1)"
-            class="strip-img"
+            class="grid-img"
             @click="openFullscreen(i)"
           />
         </div>
@@ -171,7 +171,7 @@ async function copyShareLink() {
       const url = await photosStore.createShareLink(props.eventId)
       shareUrl = url
     } else {
-      shareUrl = `${window.location.origin}/share/${props.session.sessionId}`
+      shareUrl = `${window.location.origin}/share/${(props.session as any).share_id || props.session.sessionId}`
     }
     await navigator.clipboard.writeText(shareUrl)
     linkCopied.value = true
@@ -187,7 +187,7 @@ async function showQr() {
       if (props.eventId) {
         shareUrl = await photosStore.createShareLink(props.eventId)
       } else {
-        shareUrl = `${window.location.origin}/share/${props.session.sessionId}`
+        shareUrl = `${window.location.origin}/share/${(props.session as any).share_id || props.session.sessionId}`
       }
     } catch {
       shareError.value = 'Failed to create share link'
@@ -242,22 +242,23 @@ function formatTime(ts: string) {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: #0f0f0f;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 100;
+  overflow-y: auto;
 }
 
 .viewer {
-  background: #1a1a1a;
-  border-radius: 12px;
-  padding: 1.5rem;
-  max-width: 90vw;
-  max-height: 90vh;
-  overflow-y: auto;
+  background: #0f0f0f;
+  border-radius: 0;
+  padding: 2rem;
+  width: 100%;
+  max-width: 800px;
+  min-height: 100vh;
+  margin: 0 auto;
   position: relative;
-  min-width: 320px;
 }
 
 .close-btn {
@@ -291,24 +292,26 @@ function formatTime(ts: string) {
   color: #888;
 }
 
-.photo-strip {
-  display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
-  margin-bottom: 1rem;
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
 }
 
-.strip-img {
-  height: 200px;
-  border-radius: 6px;
+.grid-img {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
   cursor: pointer;
-  flex-shrink: 0;
-  transition: opacity 0.2s;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  object-fit: cover;
 }
 
-.strip-img:hover {
-  opacity: 0.8;
+.grid-img:hover {
+  transform: scale(1.02);
+  opacity: 0.9;
 }
 
 .viewer-actions {

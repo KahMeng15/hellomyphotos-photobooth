@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { authMiddleware } from '../middleware/authMiddleware'
-import { getEvent } from '../db'
+import { getEvent, getPhotoSessionByShareId, getPhotoSession } from '../db'
 
 const router = Router()
 
@@ -16,6 +16,29 @@ const shareTokens = new Map<string, string>() // token → eventId
 function extractSessionId(filename: string): string | null {
   const match = filename.match(/^(.+)_(\d+)\.\w+$/)
   return match ? match[1] : null
+}
+
+function checkExpiry(event: any) {
+  if (event.expiry_type !== 'none' && event.expiry_value) {
+    const now = Date.now()
+    if (event.expiry_type === 'absolute') {
+      if (new Date(event.expiry_value).getTime() < now) return true
+    } else if (event.expiry_type === 'relative') {
+      const eventStart = new Date(event.created_at).getTime()
+      let ms = 0
+      const [valStr, unit] = event.expiry_value.split('_')
+      const val = parseInt(valStr) || 0
+      if (unit.startsWith('year')) ms = val * 365 * 24 * 60 * 60 * 1000
+      else if (unit.startsWith('month')) ms = val * 30 * 24 * 60 * 60 * 1000
+      else if (unit.startsWith('week')) ms = val * 7 * 24 * 60 * 60 * 1000
+      else if (unit.startsWith('day')) ms = val * 24 * 60 * 60 * 1000
+      else if (unit.startsWith('hour')) ms = val * 60 * 60 * 1000
+      else if (unit.startsWith('minute')) ms = val * 60 * 1000
+      
+      if (eventStart + ms < now) return true
+    }
+  }
+  return false
 }
 
 router.post('/create', authMiddleware, async (req: Request, res: Response) => {
@@ -52,14 +75,28 @@ router.post('/create', authMiddleware, async (req: Request, res: Response) => {
 
 router.get('/:token', async (req: Request, res: Response) => {
   try {
-    const eventId = shareTokens.get(req.params.token)
+    const token = req.params.token
+    let eventId = shareTokens.get(token)
+    let isSessionToken = false
+    let sessionFilter = ''
+
     if (!eventId) {
-      return res.status(404).json({ error: 'Share link not found' })
+      let sess = getPhotoSessionByShareId(token)
+      if (!sess) sess = getPhotoSession(token) as any
+      if (sess) {
+        eventId = sess.event_id
+        isSessionToken = true
+        sessionFilter = sess.id
+      }
     }
 
+    if (!eventId) return res.status(404).json({ error: 'Share link not found' })
+
     const event = getEvent(eventId)
-    if (!event) {
-      return res.status(404).json({ error: 'Event not found' })
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+
+    if (checkExpiry(event)) {
+      return res.json({ expired: true })
     }
 
     const eventDir = config.eventPhotosDir(eventId)
@@ -72,17 +109,23 @@ router.get('/:token', async (req: Request, res: Response) => {
 
     const sessionFiles = files
       .filter((f) => !f.includes('_thumb') && !f.includes('_strip'))
+      .filter((f) => isSessionToken ? f.startsWith(sessionFilter) : true)
       .sort()
 
     const photos = await Promise.all(
-      sessionFiles.map(async (name) => {
+      sessionFiles.map(async (name, i) => {
         const stat = await fs.stat(path.join(eventDir, name))
         const thumbName = name.replace(/(\.\w+)$/, '_thumb$1')
         const thumbExists = files.includes(thumbName)
+        
+        const isObfuscated = event.obfuscate_links === 1
+        const idToUse = isObfuscated ? `idx_${i}` : name
+        const thumbIdToUse = isObfuscated ? `idx_${i}_thumb` : thumbName
+
         return {
-          id: name,
-          url: `/api/share/${req.params.token}/photo/${name}`,
-          thumbnail: thumbExists ? `/api/share/${req.params.token}/photo/${thumbName}` : null,
+          id: idToUse,
+          url: `/api/share/${token}/photo/${idToUse}`,
+          thumbnail: thumbExists ? `/api/share/${token}/photo/${thumbIdToUse}` : null,
           size: stat.size,
           width: 0,
           height: 0,
@@ -105,14 +148,61 @@ router.get('/:token', async (req: Request, res: Response) => {
 
 router.get('/:token/photo/:filename', async (req: Request, res: Response) => {
   try {
-    const eventId = shareTokens.get(req.params.token)
+    const token = req.params.token
+    const filename = req.params.filename
+
+    let eventId = shareTokens.get(token)
+    let isSessionToken = false
+    let sessionFilter = ''
+
     if (!eventId) {
-      return res.status(404).json({ error: 'Share link not found' })
+      let sess = getPhotoSessionByShareId(token)
+      if (!sess) sess = getPhotoSession(token) as any
+      if (sess) {
+        eventId = sess.event_id
+        isSessionToken = true
+        sessionFilter = sess.id
+      }
     }
 
+    if (!eventId) return res.status(404).json({ error: 'Share link not found' })
+
+    const event = getEvent(eventId)
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+    if (checkExpiry(event)) return res.status(403).json({ error: 'Expired' })
+
     const eventDir = config.eventPhotosDir(eventId)
-    const filename = req.params.filename
-    const filePath = path.join(eventDir, filename)
+    let files: string[] = []
+    try { files = await fs.readdir(eventDir) } catch {}
+
+    let targetFilename = filename
+    const isObfuscated = event.obfuscate_links === 1
+
+    if (isObfuscated) {
+      if (!filename.startsWith('idx_')) {
+        return res.status(403).json({ error: 'Direct file access disabled' })
+      }
+      const match = filename.match(/^idx_(\d+)(_thumb)?$/)
+      if (!match) return res.status(404).json({ error: 'Not found' })
+      const idx = parseInt(match[1])
+      const isThumb = !!match[2]
+
+      const sessionFiles = files
+        .filter((f) => !f.includes('_thumb') && !f.includes('_strip'))
+        .filter((f) => isSessionToken ? f.startsWith(sessionFilter) : true)
+        .sort()
+
+      const baseFile = sessionFiles[idx]
+      if (!baseFile) return res.status(404).json({ error: 'Photo not found' })
+
+      if (isThumb) {
+        targetFilename = baseFile.replace(/(\.\w+)$/, '_thumb$1')
+      } else {
+        targetFilename = baseFile
+      }
+    }
+
+    const filePath = path.join(eventDir, targetFilename)
     const resolvedPath = path.resolve(filePath)
 
     if (!resolvedPath.startsWith(path.resolve(eventDir))) {
@@ -122,9 +212,9 @@ router.get('/:token/photo/:filename', async (req: Request, res: Response) => {
     const download = req.query.download !== undefined
 
     if (download) {
-      const ext = path.extname(filename).toLowerCase()
+      const ext = path.extname(targetFilename).toLowerCase()
       if (ext === '.webp') {
-        const index = filename.match(/_(\d+)\.webp$/)
+        const index = targetFilename.match(/_(\d+)\.webp$/)
         const photoNum = index ? index[1] : '1'
 
         const webpBuf = await fs.readFile(filePath)
@@ -132,8 +222,11 @@ router.get('/:token/photo/:filename', async (req: Request, res: Response) => {
 
         res.setHeader('Content-Type', 'image/jpeg')
         res.setHeader('Content-Disposition', `attachment; filename="photo-${photoNum}.jpg"`)
-        res.setHeader('Content-Length', jpegBuf.length)
+        res.setHeader('Content-Length', jpegBuf.length.toString())
         return res.send(jpegBuf)
+      } else {
+         // other formats
+         res.setHeader('Content-Disposition', `attachment; filename="photo.jpg"`)
       }
     }
 
@@ -143,7 +236,7 @@ router.get('/:token/photo/:filename', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Photo not found' })
     }
 
-    const ext = path.extname(filename).toLowerCase()
+    const ext = path.extname(targetFilename).toLowerCase()
     const mime: Record<string, string> = {
       '.webp': 'image/webp',
       '.jpg': 'image/jpeg',

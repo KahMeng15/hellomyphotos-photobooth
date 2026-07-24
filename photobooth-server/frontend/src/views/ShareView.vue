@@ -7,7 +7,12 @@
 
     <div v-else-if="error" class="error">
       <h2>Link not found</h2>
-      <p>This share link is invalid or has expired.</p>
+      <p>This share link is invalid or could not be found.</p>
+    </div>
+
+    <div v-else-if="expired" class="error expired-msg">
+      <h2>Link Expired</h2>
+      <p>This share link has expired and is no longer accessible.</p>
     </div>
 
     <template v-else-if="session">
@@ -64,6 +69,7 @@ interface SessionData {
 const route = useRoute()
 const loading = ref(true)
 const error = ref(false)
+const expired = ref(false)
 const session = ref<SessionData | null>(null)
 const selectedPhoto = ref<SessionPhoto | null>(null)
 
@@ -76,7 +82,11 @@ onMounted(async () => {
   }
   try {
     const { data } = await axios.get(`/api/share/${token}`)
-    session.value = data
+    if (data.expired) {
+      expired.value = true
+    } else {
+      session.value = data
+    }
   } catch {
     error.value = true
   } finally {

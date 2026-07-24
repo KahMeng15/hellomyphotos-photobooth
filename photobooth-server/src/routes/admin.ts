@@ -132,12 +132,12 @@ router.get('/events/:id', async (req: Request, res: Response) => {
     try {
       const event = getEvent(req.params.id)
       if (!event) return res.status(404).json({ error: 'Event not found' })
-      const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance } = req.body
+      const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, obfuscateLinks, expiryType, expiryValue } = req.body
       updateEventById(req.params.id,
         name ?? event.name,
         date ?? event.date,
         description ?? event.description,
-        { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance }
+        { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, obfuscateLinks, expiryType, expiryValue }
       )
 
       // If settings changed, push settings-update command to booth
@@ -239,18 +239,22 @@ router.get('/events/:id/photos', async (req: Request, res: Response) => {
 
     // Cross-reference with DB to get archived status
     const dbSessions = listEventPhotoSessions(req.params.id, true)
-    const archivedSet = new Set(dbSessions.filter(s => s.archived === 1).map(s => s.id))
+    const dbSessionMap = new Map(dbSessions.map(s => [s.id, s]))
 
     let sessions = Array.from(sessionMap.entries())
-      .map(([sessionId, data]) => ({
-        sessionId,
-        photoCount: data.photos.length,
-        firstPhoto: data.photos[0] || null,
-        photos: data.photos,
-        timestamps: data.timestamps,
-        createdAt: data.timestamps.sort().reverse()[0] || new Date().toISOString(),
-        archived: archivedSet.has(sessionId),
-      }))
+      .map(([sessionId, data]) => {
+        const dbSess = dbSessionMap.get(sessionId)
+        return {
+          sessionId,
+          photoCount: data.photos.length,
+          firstPhoto: data.photos[0] || null,
+          photos: data.photos,
+          timestamps: data.timestamps,
+          createdAt: data.timestamps.sort().reverse()[0] || new Date().toISOString(),
+          archived: dbSess ? dbSess.archived === 1 : false,
+          share_id: dbSess ? (dbSess as any).share_id : null,
+        }
+      })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
     if (!includeArchived) {
