@@ -1,0 +1,65 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '0 0 * * 0' # Automatically run once a week on Sundays
+  workflow_dispatch:
+
+jobs:
+  # 1. Scan for leaked secrets, API keys, and passwords
+  secret-scan:
+    name: Secret Scanning (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history to scan past commits for leaked secrets
+      - name: Check for hardcoded secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 2. Audit Node.js dependencies for vulnerabilities
+  dependency-audit:
+    name: Dependency Vulnerability Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Audit Server Dependencies
+        working-directory: ./photobooth-server
+        run: npm audit --audit-level=high
+
+      - name: Audit Client (Electron) Dependencies
+        working-directory: ./photobooth-client
+        run: npm audit --audit-level=high
+
+  # 3. Scan the Docker image for OS and Library vulnerabilities
+  docker-scan:
+    name: Docker Image Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build Docker Image
+        working-directory: ./photobooth-server
+        run: docker build -t photobooth-server:security-scan .
+        
+      - name: Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'photobooth-server:security-scan'
+          format: 'table'
+          exit-code: '1' # Fails the action if vulnerabilities are found
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'

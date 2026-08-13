@@ -1,0 +1,22 @@
+services:
+  photobooth-server-dev:
+    image: node:20-alpine
+    container_name: hellomyphoto-server-dev
+    working_dir: /app
+    # Runs both backend and frontend development servers concurrently
+    command: sh -c "npm install && npx concurrently \"npm run dev\" \"npm run dev:frontend\""
+    ports:
+      - "3000:3000"
+      - "5173:5173"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      JWT_SECRET: dev-secret
+      REFRESH_TOKEN_SECRET: dev-refresh-secret
+      OPERATOR_EMAIL: operator@hellomyphoto.local
+      OPERATOR_PASSWORD: admin123
+      ALLOWED_ORIGINS: "*"
+    volumes:
+      - ./photobooth-server:/app
+      - /app/node_modules # Anonymous volume to prevent host OS module conflicts
+    restart: always

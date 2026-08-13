@@ -1,0 +1,40 @@
+name: Build macOS Client
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch: # Allows you to manually trigger the build from GitHub UI
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    defaults:
+      run:
+        working-directory: ./photobooth-client
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+        cache-dependency-path: './photobooth-client/package-lock.json'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build and Package Electron App
+      run: npm run make
+
+    - name: Upload DMG Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: hellomyphoto-client-mac
+        path: photobooth-client/out/make/**/*.dmg
+        retention-days: 14

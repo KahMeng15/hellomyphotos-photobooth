@@ -21,7 +21,6 @@ RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/storage ./storage
 
 RUN mkdir -p storage/{photos,frames,logs}
 

@@ -21,3 +21,4 @@ photobooth-server/public/assets/
 
 # SQLite database (local runtime data)
 photobooth-server/storage/db/
+tmpfile*

@@ -1,5 +1,5 @@
 import {
-  regenerateSessionShareId, Router, Request, Response } from 'express'
+  Router, Request, Response } from 'express'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs/promises'
@@ -17,7 +17,7 @@ import {
   endEvent, deleteEvent, listEventPhotoSessions,
   updateEventSettingsById, getGlobalSettings, updateGlobalSettings,
   archiveSession, restoreSession, getEventAnalytics,
-  getAllUsers, insertUser, deleteUser, findUserByEmail
+  getAllUsers, insertUser, deleteUser, findUserByEmail, regenerateSessionShareId
 } from '../db'
 
 const router = Router()
