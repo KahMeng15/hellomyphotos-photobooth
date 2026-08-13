@@ -14,10 +14,7 @@ module.exports = {
   makers: [
     {
       name: '@electron-forge/maker-dmg',
-      config: {
-        background: './assets/icons/dmg-background.png',
-        icon: './assets/icons/icon.icns',
-      },
+      config: {},
     },
     {
       name: '@electron-forge/maker-squirrel',

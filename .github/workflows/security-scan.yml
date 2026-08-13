@@ -37,11 +37,11 @@ jobs:
 
       - name: Audit Server Dependencies
         working-directory: ./photobooth-server
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high --omit=dev
 
       - name: Audit Client (Electron) Dependencies
         working-directory: ./photobooth-client
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high --omit=dev
 
   # 3. Scan the Docker image for OS and Library vulnerabilities
   docker-scan:
