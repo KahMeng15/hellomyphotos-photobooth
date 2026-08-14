@@ -147,16 +147,16 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
                 thumbnail: `${outputBaseName}_thumb.webp`
               })
             }
-          } else if (files.length === frame.config.placeholders.length) {
+          } else if (rawPaths.length >= frame.config.placeholders.length) {
             const outputBaseName = `${sessionId}_${frame.id}`
-            await applyFrame(rawPaths, frame.config, frame.imagePath, outputBaseName, framedDir)
+            await applyFrame(rawPaths.slice(0, frame.config.placeholders.length), frame.config, frame.imagePath, outputBaseName, framedDir)
             framedResults.push({
               frameId: frame.id,
               output: `${outputBaseName}.webp`,
               thumbnail: `${outputBaseName}_thumb.webp`
             })
           } else {
-            logger.warn(`Skipping frame ${frame.id}: Photo count (${files.length}) does not match placeholder count (${frame.config.placeholders.length})`)
+            logger.warn(`Skipping frame ${frame.id}: Session has ${rawPaths.length} photos, but frame requires ${frame.config.placeholders.length}`)
           }
         } catch (err: any) {
           logger.error(`Failed to apply frame ${frame.id}: ${err.message}`)

@@ -40,8 +40,8 @@
           </button>
           <button @click="showQr" class="btn-action">QR Code</button>
           <button @click="downloadAll" class="btn-action">Download All</button>
-          <button v-if="selectedFrameId" @click="applyFrame" class="btn-action" :disabled="applyingFrame">
-            {{ applyingFrame ? 'Regenerating...' : 'Regenerate Frame' }}
+          <button v-if="activeFrames.length > 0" @click="applyAllActiveFrames" class="btn-action" :disabled="applyingFrame">
+            {{ applyingFrame ? 'Regenerating...' : 'Regenerate All Frames' }}
           </button>
           <button @click="deleteSession" class="btn-action btn-danger">Delete</button>
         </div>
@@ -156,14 +156,17 @@ async function fetchFramedPhotos() {
   }
 }
 
-async function applyFrame() {
-  if (!selectedFrameId.value) return
+async function applyAllActiveFrames() {
+  if (activeFrames.value.length === 0) return
   applyingFrame.value = true
+  shareError.value = ''
   try {
-    await axios.post(`/api/admin/events/${props.eventId}/sessions/${props.session.sessionId}/frames/${selectedFrameId.value}/apply`)
+    for (const frame of activeFrames.value) {
+      await axios.post(`/api/admin/events/${props.eventId}/sessions/${props.session.sessionId}/frames/${frame.id}/apply`)
+    }
     await fetchFramedPhotos()
   } catch (e: any) {
-    shareError.value = e.response?.data?.error || 'Failed to regenerate frame'
+    shareError.value = e.response?.data?.error || 'Failed to regenerate some frames'
   }
   applyingFrame.value = false
 }

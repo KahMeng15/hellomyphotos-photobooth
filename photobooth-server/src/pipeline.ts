@@ -91,11 +91,19 @@ export async function compileVerticalStrip(
     const stripHeight = photoHeight * photoCount + padding * (photoCount + 1)
     const stripWidth = photoWidth + padding * 2
 
-    const composites = imagePaths.map((imgPath, idx) => ({
-      input: imgPath,
-      top: padding + idx * (photoHeight + padding),
-      left: padding,
-    }))
+    const composites = await Promise.all(
+      imagePaths.map(async (imgPath, idx) => {
+        const resizedBuffer = await sharp(imgPath)
+          .resize(photoWidth, photoHeight, { fit: 'cover' })
+          .toBuffer()
+          
+        return {
+          input: resizedBuffer,
+          top: padding + idx * (photoHeight + padding),
+          left: padding,
+        }
+      })
+    )
 
     const strip = await sharp({
       create: {
