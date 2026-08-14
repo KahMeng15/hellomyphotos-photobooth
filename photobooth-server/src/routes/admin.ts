@@ -20,7 +20,7 @@ import {
   endEvent, deleteEvent, listEventPhotoSessions,
   updateEventSettingsById, getGlobalSettings, updateGlobalSettings,
   archiveSession, restoreSession, getEventAnalytics,
-  getAllUsers, insertUser, deleteUser, findUserByEmail, regenerateSessionShareId
+  getAllUsers, insertUser, deleteUser, findUserByEmail, regenerateSessionShareId, setEventShareOriginals
 } from '../db'
 
 const router = Router()
@@ -88,6 +88,9 @@ const tempUpload = multer({
 router.get('/events/:id/frames', async (req: Request, res: Response) => {
   try {
     const eventId = req.params.id
+    const event = getEvent(eventId)
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+
     const framesDir = config.eventFrames(eventId)
     
     let frameDirs: string[] = []
@@ -98,6 +101,18 @@ router.get('/events/:id/frames', async (req: Request, res: Response) => {
     }
 
     const frames = []
+    
+    // Inject the special 'Original Photos' frame
+    frames.push({
+      id: 'default_original',
+      name: 'Original Photos',
+      canvasWidth: 'RAW',
+      canvasHeight: 'RAW',
+      placeholders: [],
+      disabled: (event as any).share_originals === 0,
+      isSpecial: true
+    })
+
     for (const frameId of frameDirs) {
       const configPath = path.join(framesDir, frameId, 'config.json')
       try {
@@ -175,6 +190,15 @@ router.get('/events/:id/frames/:frameId', async (req: Request, res: Response) =>
 router.patch('/events/:id/frames/:frameId', async (req: Request, res: Response) => {
   try {
     const { id, frameId } = req.params
+
+    if (frameId === 'default_original') {
+      if (typeof req.body.disabled === 'boolean') {
+        const value = req.body.disabled ? 0 : 1;
+        setEventShareOriginals(id, value);
+      }
+      return res.json({ success: true });
+    }
+
     const configPath = path.join(config.eventFrames(id), frameId, 'config.json')
     
     const configData = await fs.readFile(configPath, 'utf8')

@@ -27,8 +27,8 @@
           </p>
         </header>
 
-        <div v-if="session.photos.length > 2" class="hero-preview">
-          <img :src="session.photos[heroIndex].url" alt="Preview animation" />
+        <div v-if="animationPhotos.length >= 2" class="hero-preview">
+          <img :src="animationPhotos[heroIndex]?.url" alt="Preview animation" />
         </div>
 
         <div class="photo-grid">
@@ -102,6 +102,8 @@ interface SessionPhoto {
   url: string
   thumbnail: string | null
   size: number
+  frameId?: string
+  frameName?: string
 }
 
 interface SessionData {
@@ -142,6 +144,22 @@ watch(selectedPhotoIndex, (newVal) => {
   } else {
     if (controlsTimeout !== null) window.clearTimeout(controlsTimeout)
   }
+})
+
+const animationPhotos = computed(() => {
+  if (!session.value || !session.value.photos) return []
+  const groups: Record<string, SessionPhoto[]> = {}
+  for (const photo of session.value.photos) {
+    const fid = photo.frameId || 'unframed'
+    if (!groups[fid]) groups[fid] = []
+    groups[fid].push(photo)
+  }
+  for (const fid in groups) {
+    if (groups[fid].length >= 2) {
+      return groups[fid]
+    }
+  }
+  return session.value.photos
 })
 
 const expiryText = computed(() => {
@@ -201,10 +219,10 @@ onMounted(async () => {
       const source = route.query.ref === 'qr' ? 'qr' : 'direct'
       axios.post(`/api/share/${token}/analytics`, { source }).catch(() => {})
 
-      if (session.value.photos.length > 2) {
+      if (animationPhotos.value.length >= 2) {
         heroInterval = window.setInterval(() => {
-          if (session.value) {
-            heroIndex.value = (heroIndex.value + 1) % session.value.photos.length
+          if (animationPhotos.value.length >= 2) {
+            heroIndex.value = (heroIndex.value + 1) % animationPhotos.value.length
           }
         }, 500)
       }

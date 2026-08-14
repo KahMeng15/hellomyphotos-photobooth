@@ -15,18 +15,19 @@
     <div v-else class="frame-grid">
       <div v-for="frame in frames" :key="frame.id" class="frame-card">
         <div class="frame-preview">
-          <img :src="`/api/admin/events/${eventId}/photo/framed/${frame.id}/frame.png`" :alt="frame.name" class="frame-img" @error="handleImgError" />
+          <img v-if="!frame.isSpecial" :src="`/api/admin/events/${eventId}/photo/framed/${frame.id}/frame.png`" :alt="frame.name" class="frame-img" @error="handleImgError" />
+          <div v-else class="special-frame-placeholder">No Overlay</div>
         </div>
         <div class="frame-info">
           <h3>{{ frame.name }}</h3>
           <p class="meta">{{ frame.canvasWidth }}x{{ frame.canvasHeight }} • {{ frame.placeholders.length }} slots</p>
           <div class="frame-actions">
-            <button @click="$emit('edit', frame)" class="btn-secondary">Edit</button>
+            <button v-if="!frame.isSpecial" @click="$emit('edit', frame)" class="btn-secondary">Edit</button>
             <button @click="toggleStatus(frame)" :class="frame.disabled ? 'btn-enable' : 'btn-disable'">
               {{ frame.disabled ? 'Enable' : 'Disable' }}
             </button>
-            <button @click="backfill(frame.id)" class="btn-secondary" title="Apply frame to existing photos">Backfill</button>
-            <button @click="deleteFrame(frame.id)" class="btn-danger">Delete</button>
+            <button v-if="!frame.isSpecial" @click="backfill(frame.id)" class="btn-secondary" title="Apply frame to existing photos">Backfill</button>
+            <button v-if="!frame.isSpecial" @click="deleteFrame(frame.id)" class="btn-danger">Delete</button>
           </div>
         </div>
       </div>
@@ -157,12 +158,19 @@ onMounted(() => {
   overflow: hidden;
 }
 .frame-preview {
-  background: #111;
   aspect-ratio: 1;
+  background: #111;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  overflow: hidden;
+}
+.special-frame-placeholder {
+  color: #666;
+  font-size: 1.2rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 .frame-img {
   max-width: 100%;

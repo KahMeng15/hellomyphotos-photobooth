@@ -127,21 +127,25 @@ router.get('/:token', async (req: Request, res: Response) => {
 
       photos = await Promise.all(
         sessionFiles.map(async (name, i) => {
+          let frameId = ''
+          let frameName = ''
+          let isActive = false
+          for (const f of activeFrames) {
+            if (name.includes(`_${f.id}`)) {
+              frameId = f.id
+              frameName = f.config.name
+              isActive = true
+              break
+            }
+          }
+
+          if (!isActive) return null
+
           const stat = await fs.stat(path.join(framedDir, name))
           const thumbName = name.replace(/(\.\w+)$/, '_thumb$1')
           const thumbExists = framedFiles.includes(thumbName)
           const jpegName = name.replace(/(\.webp)$/, '.jpg')
           const jpegExists = framedFiles.includes(jpegName)
-
-          let frameId = ''
-          let frameName = ''
-          for (const f of activeFrames) {
-            if (name.includes(`_${f.id}`)) {
-              frameId = f.id
-              frameName = f.config.name
-              break
-            }
-          }
 
           const isObfuscated = event.obfuscate_links === 1
           const idToUse = isObfuscated ? `framed_idx_${i}` : name
@@ -158,10 +162,14 @@ router.get('/:token', async (req: Request, res: Response) => {
             size: stat.size,
             width: 0,
             height: 0,
+            timestamp: stat.birthtime.toISOString(),
           }
         })
       )
-    } else {
+      photos = photos.filter((p) => p !== null)
+    }
+    
+    if ((event as any).share_originals !== 0) {
       const eventDir = config.eventPhotosDir(eventId)
       let files: string[] = []
       try {
@@ -175,7 +183,7 @@ router.get('/:token', async (req: Request, res: Response) => {
         .filter((f) => isSessionToken ? f.startsWith(sessionFilter) : true)
         .sort()
 
-      photos = await Promise.all(
+      const rawPhotos = await Promise.all(
         sessionFiles.map(async (name, i) => {
           const stat = await fs.stat(path.join(eventDir, name))
           const thumbName = name.replace(/(\.\w+)$/, '_thumb$1')
@@ -193,9 +201,13 @@ router.get('/:token', async (req: Request, res: Response) => {
             size: stat.size,
             width: 0,
             height: 0,
+            timestamp: stat.birthtime.toISOString(),
+            frameId: 'unframed',
+            frameName: 'Original Photos'
           }
         })
       )
+      photos = [...photos, ...rawPhotos]
     }
 
     const expiryDate = getExpiryDate(event)

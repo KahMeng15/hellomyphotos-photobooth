@@ -38,9 +38,16 @@ db.exec(`
     dslr_focus_mode TEXT NOT NULL DEFAULT 'auto',
     dslr_whitebalance TEXT NOT NULL DEFAULT 'auto',
     dslr_whitebalance_kelvin INTEGER NOT NULL DEFAULT 5200,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    share_originals INTEGER NOT NULL DEFAULT 1
   )
 `)
+
+try {
+  db.exec(`ALTER TABLE events ADD COLUMN share_originals INTEGER NOT NULL DEFAULT 1`)
+} catch (e: any) {
+  // Column already exists
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS global_settings (
@@ -276,7 +283,7 @@ export function getEventByOtp(otp: string) {
     dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string;
     dslr_focus_mode: string; dslr_whitebalance: string; dslr_whitebalance_kelvin: number;
     obfuscate_links: number; expiry_type: string; expiry_value: string; organizer: string; contact_info: string;
-    created_at: string
+    created_at: string; share_originals: number
   } | undefined
 }
 
@@ -289,7 +296,7 @@ export function listEvents(includeEnded = false) {
     dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string;
     dslr_focus_mode: string; dslr_whitebalance: string; dslr_whitebalance_kelvin: number;
     obfuscate_links: number; expiry_type: string; expiry_value: string; organizer: string; contact_info: string;
-    created_at: string
+    created_at: string; share_originals: number
   }>
 }
 
@@ -499,4 +506,12 @@ export function countUsers() {
 
 export function updateUserRole(id: string, role: string) {
   updateUserRoleStmt.run(role, id)
+}
+
+export function setEventShareOriginals(id: string, value: number) {
+  try {
+    db.prepare(`UPDATE events SET share_originals = ? WHERE id = ?`).run(value, id)
+  } catch (e: any) {
+    logger.error('Failed to update share_originals: ' + e.message)
+  }
 }
