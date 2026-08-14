@@ -1,14 +1,16 @@
 <template>
   <div class="frame-editor">
     <div class="editor-header">
-      <button @click="$emit('close')" class="btn-back">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 18 9 12 15 6"/>
-        </svg>
-      </button>
-      <h2>Edit Frame: <input v-model="draftFrame.name" class="name-input" /></h2>
+      <div class="header-left">
+        <button @click="$emit('close')" class="btn-icon-nav" title="Back">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <h2>Edit Frame: <input v-model="draftFrame.name" class="name-input" /></h2>
+      </div>
       <div class="actions">
-        <button @click="save" class="btn-primary" :disabled="saving">{{ saving ? 'Saving...' : 'Save' }}</button>
+        <button @click="save" class="btn-primary" :disabled="saving">{{ saving ? 'Saving...' : 'Save Changes' }}</button>
       </div>
     </div>
 
@@ -48,31 +50,44 @@
         </div>
 
         <div v-if="selectedPlaceholder" class="section">
-          <h3>Edit Placeholder {{ selectedIndex + 1 }}</h3>
+          <div class="ph-header">
+            <h3>Edit Placeholder {{ selectedIndex + 1 }}</h3>
+            <button @click="selectedPlaceholder.aspectRatioLocked = !selectedPlaceholder.aspectRatioLocked" class="btn-icon" :title="selectedPlaceholder.aspectRatioLocked ? 'Unlock Aspect Ratio' : 'Lock Aspect Ratio'">
+              {{ selectedPlaceholder.aspectRatioLocked ? '🔒' : '🔓' }}
+            </button>
+          </div>
           <div class="input-grid">
-            <label>X: <input type="number" v-model.number="selectedPlaceholder.x" class="number-input" /></label>
-            <label>Y: <input type="number" v-model.number="selectedPlaceholder.y" class="number-input" /></label>
-            <label>W: <input type="number" v-model.number="selectedPlaceholder.width" class="number-input" /></label>
-            <label>H: <input type="number" v-model.number="selectedPlaceholder.height" class="number-input" /></label>
+            <label>X (px): <input type="number" v-model.number="selectedPlaceholder.x" class="number-input" /></label>
+            <label>Y (px): <input type="number" v-model.number="selectedPlaceholder.y" class="number-input" /></label>
+            <label>W (px): <input type="number" :value="selectedPlaceholder.width" @input="updateW($event)" class="number-input" /></label>
+            <label>H (px): <input type="number" :value="selectedPlaceholder.height" @input="updateH($event)" class="number-input" /></label>
           </div>
           <h4>Style</h4>
           <label class="full-label">
-            Border Radius:
+            Border Radius (px):
             <input type="number" v-model.number="selectedPlaceholder.borderRadius" class="number-input" />
           </label>
         </div>
       </div>
 
-      <div class="canvas-container">
-        <div 
-          class="canvas-wrapper" 
-          :style="{ 
-            width: `${draftFrame.canvasWidth}px`, 
-            height: `${draftFrame.canvasHeight}px`,
-            transform: `scale(${scale})`,
-            transformOrigin: 'top left'
-          }"
-        >
+      <div class="canvas-area">
+        <div class="zoom-toolbar">
+          <button @click="zoomOut" class="btn-icon" title="Zoom Out">➖</button>
+          <span>{{ Math.round(userZoom * 100) }}%</span>
+          <button @click="zoomIn" class="btn-icon" title="Zoom In">➕</button>
+          <button @click="fitZoom" class="btn-secondary btn-sm" style="margin-left: 0.5rem;">Fit</button>
+        </div>
+        <div class="canvas-container" ref="canvasContainer" @mousedown="startPan" :class="{ 'is-panning': isPanning }">
+          <div class="outer-canvas-wrapper" :style="{ width: draftFrame.canvasWidth * userZoom + 'px', height: draftFrame.canvasHeight * userZoom + 'px' }">
+          <div 
+            class="canvas-wrapper" 
+            :style="{ 
+              width: `${draftFrame.canvasWidth}px`, 
+              height: `${draftFrame.canvasHeight}px`,
+              transform: `scale(${userZoom})`,
+              transformOrigin: 'top left'
+            }"
+          >
           <img :src="imageUrl" class="frame-bg" :style="{ zIndex: draftFrame.layering === 'background' ? 0 : 10 }" />
           <div 
             v-for="(p, i) in draftFrame.placeholders" 
@@ -89,6 +104,8 @@
           >
             <span>{{ i + 1 }}</span>
             <div class="resize-handle se" @mousedown.stop="startResize($event, i)"></div>
+          </div>
+          </div>
           </div>
         </div>
       </div>
@@ -117,18 +134,58 @@ const resizeTargetWidth = ref<number | null>(null)
 const selectedIndex = ref<number>(0)
 const selectedPlaceholder = computed(() => draftFrame.value.placeholders[selectedIndex.value])
 
+const canvasContainer = ref<HTMLElement | null>(null)
+
+// Panning logic
+const isPanning = ref(false)
+let panStartX = 0
+let panStartY = 0
+let panStartScrollLeft = 0
+let panStartScrollTop = 0
+
+function startPan(e: MouseEvent) {
+  if ((e.target as HTMLElement).closest('.placeholder-box') || (e.target as HTMLElement).closest('.zoom-toolbar')) return
+  isPanning.value = true
+  panStartX = e.clientX
+  panStartY = e.clientY
+  if (canvasContainer.value) {
+    panStartScrollLeft = canvasContainer.value.scrollLeft
+    panStartScrollTop = canvasContainer.value.scrollTop
+  }
+  window.addEventListener('mousemove', onPan)
+  window.addEventListener('mouseup', stopPan)
+}
+
+function onPan(e: MouseEvent) {
+  if (!isPanning.value || !canvasContainer.value) return
+  const dx = e.clientX - panStartX
+  const dy = e.clientY - panStartY
+  canvasContainer.value.scrollLeft = panStartScrollLeft - dx
+  canvasContainer.value.scrollTop = panStartScrollTop - dy
+}
+
+function stopPan() {
+  isPanning.value = false
+  window.removeEventListener('mousemove', onPan)
+  window.removeEventListener('mouseup', stopPan)
+}
+
 // Canvas scaling logic
-const scale = ref(1)
+const userZoom = ref(1)
 
 function updateScale() {
   const container = document.querySelector('.canvas-container') as HTMLElement
   if (!container) return
-  const availableWidth = container.clientWidth - 40
-  const availableHeight = container.clientHeight - 40
+  const availableWidth = container.clientWidth - 80
+  const availableHeight = container.clientHeight - 80
   const scaleX = availableWidth / draftFrame.value.canvasWidth
   const scaleY = availableHeight / draftFrame.value.canvasHeight
-  scale.value = Math.min(scaleX, scaleY, 1)
+  userZoom.value = Math.min(scaleX, scaleY, 1)
 }
+
+function zoomIn() { userZoom.value = Math.min(3, userZoom.value + 0.1) }
+function zoomOut() { userZoom.value = Math.max(0.1, userZoom.value - 0.1) }
+function fitZoom() { updateScale() }
 
 onMounted(() => {
   window.addEventListener('resize', updateScale)
@@ -142,11 +199,30 @@ onUnmounted(() => {
 function addPlaceholder() {
   if (draftFrame.value.placeholders.length >= 10) return
   draftFrame.value.placeholders.push({
-    x: 100, y: 100, width: 400, height: 400,
+    x: 100, y: 100, width: 500, height: 400, // 5:4 aspect ratio
+    aspectRatioLocked: true,
     cropTop: 0, cropBottom: 0, cropLeft: 0, cropRight: 0,
     borderRadius: 0
   })
   selectedIndex.value = draftFrame.value.placeholders.length - 1
+}
+
+function updateW(e: Event) {
+  const p = draftFrame.value.placeholders[selectedIndex.value]
+  const newW = parseInt((e.target as HTMLInputElement).value) || 0
+  if (p.aspectRatioLocked && p.height > 0) {
+    p.height = Math.round(newW / (p.width / p.height))
+  }
+  p.width = newW
+}
+
+function updateH(e: Event) {
+  const p = draftFrame.value.placeholders[selectedIndex.value]
+  const newH = parseInt((e.target as HTMLInputElement).value) || 0
+  if (p.aspectRatioLocked && p.width > 0) {
+    p.width = Math.round(newH * (p.width / p.height))
+  }
+  p.height = newH
 }
 
 function removePlaceholder(index: number) {
@@ -214,8 +290,8 @@ function startDrag(e: MouseEvent, index: number) {
 
 function onDrag(e: MouseEvent) {
   if (!isDragging) return
-  const dx = (e.clientX - startX) / scale.value
-  const dy = (e.clientY - startY) / scale.value
+  const dx = (e.clientX - startX) / userZoom.value
+  const dy = (e.clientY - startY) / userZoom.value
   const p = draftFrame.value.placeholders[selectedIndex.value]
   p.x = Math.round(startPx + dx)
   p.y = Math.round(startPy + dy)
@@ -227,6 +303,8 @@ function stopDrag() {
   window.removeEventListener('mouseup', stopDrag)
 }
 
+let startRatio = 1
+
 function startResize(e: MouseEvent, index: number) {
   selectedIndex.value = index
   isResizing = true
@@ -235,17 +313,26 @@ function startResize(e: MouseEvent, index: number) {
   const p = draftFrame.value.placeholders[index]
   startPw = p.width
   startPh = p.height
+  startRatio = p.width / p.height || 1
   window.addEventListener('mousemove', onResize)
   window.addEventListener('mouseup', stopResize)
 }
 
 function onResize(e: MouseEvent) {
   if (!isResizing) return
-  const dx = (e.clientX - startX) / scale.value
-  const dy = (e.clientY - startY) / scale.value
+  const dx = (e.clientX - startX) / userZoom.value
+  const dy = (e.clientY - startY) / userZoom.value
   const p = draftFrame.value.placeholders[selectedIndex.value]
-  p.width = Math.max(10, Math.round(startPw + dx))
-  p.height = Math.max(10, Math.round(startPh + dy))
+  
+  let newW = Math.max(10, Math.round(startPw + dx))
+  let newH = Math.max(10, Math.round(startPh + dy))
+  
+  if (p.aspectRatioLocked) {
+    newH = Math.round(newW / startRatio)
+  }
+  
+  p.width = newW
+  p.height = newH
 }
 
 function stopResize() {
@@ -268,19 +355,30 @@ function stopResize() {
 .editor-header {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background: #1a1a1a;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  background: #111;
   border-bottom: 1px solid #2a2a2a;
 }
-.btn-back {
-  background: none;
-  border: none;
-  color: #ccc;
-  cursor: pointer;
-  padding: 0.5rem;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
-.btn-back:hover { color: #fff; }
+.btn-icon-nav {
+  background: #2a2a2a;
+  border: none;
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-icon-nav:hover { background: #3a3a3a; }
 .name-input {
   background: transparent;
   border: none;
@@ -352,23 +450,59 @@ function stopResize() {
 .input-grid label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: #888; }
 .full-label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: #888; }
 
+.ph-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+.ph-header h3 { margin: 0; font-size: 1rem; color: #fff; }
+
+.canvas-area {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .canvas-container {
   flex: 1;
   overflow: auto;
   position: relative;
-  background: #111;
+  background: #0b0b0b;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  cursor: grab;
+}
+.canvas-container:active {
+  cursor: grabbing;
+}
+.canvas-container.is-panning * {
+  pointer-events: none;
+}
+
+.outer-canvas-wrapper {
+  margin: auto;
 }
 
 .canvas-wrapper {
-  position: absolute;
-  top: 20px;
-  left: 20px;
+  position: relative;
   background: transparent;
   box-shadow: 0 0 20px rgba(0,0,0,0.5);
 }
+
+.zoom-toolbar {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #222;
+  border: 1px solid #333;
+  padding: 0.5rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+.zoom-toolbar span { color: #fff; font-size: 0.875rem; min-width: 40px; text-align: center; }
+.btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 4px; }
 
 .frame-bg {
   position: absolute;
