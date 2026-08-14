@@ -136,18 +136,28 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
 
     if (activeFrames.length > 0) {
       for (const frame of activeFrames) {
-        if (files.length !== frame.config.placeholders.length) {
-          logger.warn(`Skipping frame ${frame.id}: Photo count (${files.length}) does not match placeholder count (${frame.config.placeholders.length})`)
-          continue
-        }
         try {
-          const outputBaseName = `${sessionId}_${frame.id}`
-          await applyFrame(rawPaths, frame.config, frame.imagePath, outputBaseName, framedDir)
-          framedResults.push({
-            frameId: frame.id,
-            output: `${outputBaseName}.webp`,
-            thumbnail: `${outputBaseName}_thumb.webp`
-          })
+          if (frame.config.placeholders.length === 1 && rawPaths.length > 1) {
+            for (let j = 0; j < rawPaths.length; j++) {
+              const outputBaseName = `${sessionId}_${frame.id}_${j + 1}`
+              await applyFrame([rawPaths[j]], frame.config, frame.imagePath, outputBaseName, framedDir)
+              framedResults.push({
+                frameId: frame.id,
+                output: `${outputBaseName}.webp`,
+                thumbnail: `${outputBaseName}_thumb.webp`
+              })
+            }
+          } else if (files.length === frame.config.placeholders.length) {
+            const outputBaseName = `${sessionId}_${frame.id}`
+            await applyFrame(rawPaths, frame.config, frame.imagePath, outputBaseName, framedDir)
+            framedResults.push({
+              frameId: frame.id,
+              output: `${outputBaseName}.webp`,
+              thumbnail: `${outputBaseName}_thumb.webp`
+            })
+          } else {
+            logger.warn(`Skipping frame ${frame.id}: Photo count (${files.length}) does not match placeholder count (${frame.config.placeholders.length})`)
+          }
         } catch (err: any) {
           logger.error(`Failed to apply frame ${frame.id}: ${err.message}`)
         }

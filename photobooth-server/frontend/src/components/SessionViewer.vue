@@ -71,7 +71,7 @@
       />
       
       <transition name="fade">
-        <button v-show="showControls && fullscreenPhotoIndex < session.photos.length - 1" class="fs-nav-btn fs-next" @click.stop="nextPhoto">
+        <button v-show="showControls && fullscreenPhotoIndex < displayPhotos.length - 1" class="fs-nav-btn fs-next" @click.stop="nextPhoto">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
@@ -91,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import QRCode from 'qrcode'
 import axios from 'axios'
 import { usePhotosStore } from '../stores/photos'
@@ -193,6 +193,14 @@ function handleFullscreenClick(e: MouseEvent | TouchEvent) {
   if (e.target === e.currentTarget) {
     closeFullscreen()
   } else {
+    if (e instanceof MouseEvent) {
+      const clickX = e.clientX
+      if (clickX > window.innerWidth / 2) {
+        nextPhoto()
+      } else {
+        prevPhoto()
+      }
+    }
     resetControlsTimer()
   }
 }
@@ -220,6 +228,30 @@ function nextPhoto() {
     resetControlsTimer()
   }
 }
+
+function handleKeydown(e: KeyboardEvent) {
+  if (fullscreenPhotoIndex.value !== null) {
+    if (e.key === 'ArrowRight') {
+      nextPhoto()
+    } else if (e.key === 'ArrowLeft') {
+      prevPhoto()
+    } else if (e.key === 'Escape') {
+      closeFullscreen()
+    }
+  } else {
+    if (e.key === 'Escape') {
+      emit('close')
+    }
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
 
 function handleTouchStart(e: TouchEvent) {
   touchStartX = e.changedTouches[0].screenX

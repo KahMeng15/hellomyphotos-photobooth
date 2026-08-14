@@ -179,7 +179,8 @@ async function save() {
   try {
     await axios.patch(`/api/admin/events/${props.eventId}/frames/${draftFrame.value.id}`, {
       name: draftFrame.value.name,
-      placeholders: draftFrame.value.placeholders
+      placeholders: draftFrame.value.placeholders,
+      layering: draftFrame.value.layering
     })
     emit('close')
   } catch (err) {

@@ -184,6 +184,7 @@ router.patch('/events/:id/frames/:frameId', async (req: Request, res: Response) 
     if (updates.name !== undefined) frameConfig.name = updates.name
     if (updates.disabled !== undefined) frameConfig.disabled = updates.disabled
     if (updates.placeholders !== undefined) frameConfig.placeholders = updates.placeholders
+    if (updates.layering !== undefined) frameConfig.layering = updates.layering
 
     await fs.writeFile(configPath, JSON.stringify(frameConfig, null, 2))
     
@@ -515,23 +516,30 @@ router.post('/events/:id/frames/:frameId/backfill', async (req: Request, res: Re
       let count = 0
       for (const session of sessions) {
         const rawPaths: string[] = []
-        for (let i = 0; i < frameConfig.placeholders.length; i++) {
-          const p = path.join(eventDir, `${session.id}_${i + 1}.webp`)
+        let pIndex = 1
+        while (true) {
+          const p = path.join(eventDir, `${session.id}_${pIndex}.webp`)
           try {
             await fs.access(p)
             rawPaths.push(p)
+            pIndex++
           } catch {
-            break // missing photo
+            break
           }
         }
         
-        if (rawPaths.length === frameConfig.placeholders.length) {
-          try {
-            await applyFrame(rawPaths, frameConfig, frameImagePath, `${session.id}_${frameId}`, framedDir)
+        try {
+          if (frameConfig.placeholders.length === 1 && rawPaths.length > 1) {
+            for (let j = 0; j < rawPaths.length; j++) {
+              await applyFrame([rawPaths[j]], frameConfig, frameImagePath, `${session.id}_${frameId}_${j + 1}`, framedDir)
+              count++
+            }
+          } else if (rawPaths.length >= frameConfig.placeholders.length) {
+            await applyFrame(rawPaths.slice(0, frameConfig.placeholders.length), frameConfig, frameImagePath, `${session.id}_${frameId}`, framedDir)
             count++
-          } catch (e: any) {
-            logger.error(`Backfill failed for session ${session.id}: ${e.message}`)
           }
+        } catch (e: any) {
+          logger.error(`Backfill failed for session ${session.id}: ${e.message}`)
         }
       }
       logger.info(`Completed frame backfill for event ${id}, frame ${frameId}. Processed ${count} sessions.`)
@@ -561,21 +569,32 @@ router.post('/events/:id/sessions/:sessionId/frames/:frameId/apply', async (req:
     const framedDir = config.eventFramedPhotos(id)
 
     const rawPaths: string[] = []
-    for (let i = 0; i < frameConfig.placeholders.length; i++) {
-      const p = path.join(eventDir, `${sessionId}_${i + 1}.webp`)
+    let pIndex = 1
+    while (true) {
+      const p = path.join(eventDir, `${sessionId}_${pIndex}.webp`)
       try {
         await fs.access(p)
         rawPaths.push(p)
+        pIndex++
       } catch {
-        return res.status(400).json({ error: `Missing photo ${i + 1} for this session` })
+        break
       }
     }
     
-    if (rawPaths.length === frameConfig.placeholders.length) {
-      await applyFrame(rawPaths, frameConfig, frameImagePath, `${sessionId}_${frameId}`, framedDir)
+    if (rawPaths.length === 0) {
+      return res.status(400).json({ error: 'No photos found for this session' })
+    }
+
+    if (frameConfig.placeholders.length === 1 && rawPaths.length > 1) {
+      for (let j = 0; j < rawPaths.length; j++) {
+        await applyFrame([rawPaths[j]], frameConfig, frameImagePath, `${sessionId}_${frameId}_${j + 1}`, framedDir)
+      }
+      res.json({ success: true })
+    } else if (rawPaths.length >= frameConfig.placeholders.length) {
+      await applyFrame(rawPaths.slice(0, frameConfig.placeholders.length), frameConfig, frameImagePath, `${sessionId}_${frameId}`, framedDir)
       res.json({ success: true })
     } else {
-      res.status(400).json({ error: 'Photo count mismatch' })
+      res.status(400).json({ error: `Not enough photos for frame. Frame requires ${frameConfig.placeholders.length}, session has ${rawPaths.length}.` })
     }
   } catch (error: any) {
     logger.error(`Failed to apply frame to session: ${error.message}`)
@@ -613,11 +632,12 @@ router.get('/events/:id/sessions/:sessionId/framed', async (req: Request, res: R
         const jpegName = `${baseName}.jpg`
         const jpegExists = files.includes(jpegName)
 
+        const v = stat.mtimeMs // Use modification time as cache buster
         return {
           id: name,
-          url: `/api/admin/events/${eventId}/photo/framed/${name}`,
-          thumbnail: thumbExists ? `/api/admin/events/${eventId}/photo/framed/${thumbName}` : `/api/admin/events/${eventId}/photo/framed/${name}`,
-          downloadUrl: jpegExists ? `/api/admin/events/${eventId}/photo/framed/${jpegName}` : `/api/admin/events/${eventId}/photo/framed/${name}`,
+          url: `/api/admin/events/${eventId}/photo/framed/${name}?v=${v}`,
+          thumbnail: thumbExists ? `/api/admin/events/${eventId}/photo/framed/${thumbName}?v=${v}` : `/api/admin/events/${eventId}/photo/framed/${name}?v=${v}`,
+          downloadUrl: jpegExists ? `/api/admin/events/${eventId}/photo/framed/${jpegName}?v=${v}` : `/api/admin/events/${eventId}/photo/framed/${name}?v=${v}`,
           size: stat.size,
           timestamp: stat.birthtime.toISOString(),
         }
