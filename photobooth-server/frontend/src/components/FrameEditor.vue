@@ -381,7 +381,7 @@ function stopResize() {
 
 .placeholder-box {
   position: absolute;
-  background: rgba(33, 150, 243, 0.3);
+  background: rgba(33, 150, 243, 0.7);
   border: 2px dashed #2196F3;
   z-index: 5;
   cursor: move;

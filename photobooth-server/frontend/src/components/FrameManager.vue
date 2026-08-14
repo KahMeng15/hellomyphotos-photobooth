@@ -15,7 +15,23 @@
     <div v-else class="frame-grid">
       <div v-for="frame in frames" :key="frame.id" class="frame-card">
         <div class="frame-preview">
-          <img v-if="!frame.isSpecial" :src="`/api/admin/events/${eventId}/photo/framed/${frame.id}/frame.png`" :alt="frame.name" class="frame-img" @error="handleImgError" />
+          <img v-if="!frame.isSpecial" :src="`/api/admin/events/${eventId}/frames/${frame.id}/image`" class="frame-preview-blur" />
+          <svg v-if="!frame.isSpecial" :viewBox="`0 0 ${frame.canvasWidth || 1000} ${frame.canvasHeight || 1000}`" class="frame-svg-preview">
+            <template v-if="frame.layering === 'background'">
+              <image :href="`/api/admin/events/${eventId}/frames/${frame.id}/image`" x="0" y="0" :width="frame.canvasWidth" :height="frame.canvasHeight" />
+              <g v-for="(ph, i) in frame.placeholders" :key="i">
+                <rect :x="ph.x" :y="ph.y" :width="ph.width" :height="ph.height" fill="rgba(33, 150, 243, 0.7)" stroke="#2196F3" :stroke-width="Math.max(4, Math.min(ph.width, ph.height) * 0.02)" />
+                <text :x="ph.x + ph.width/2" :y="ph.y + ph.height/2" fill="#fff" :font-size="Math.max(24, Math.min(ph.width, ph.height) * 0.3)" font-family="sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="middle">{{ i + 1 }}</text>
+              </g>
+            </template>
+            <template v-else>
+              <g v-for="(ph, i) in frame.placeholders" :key="i">
+                <rect :x="ph.x" :y="ph.y" :width="ph.width" :height="ph.height" fill="rgba(33, 150, 243, 0.7)" stroke="#2196F3" :stroke-width="Math.max(4, Math.min(ph.width, ph.height) * 0.02)" />
+                <text :x="ph.x + ph.width/2" :y="ph.y + ph.height/2" fill="#fff" :font-size="Math.max(24, Math.min(ph.width, ph.height) * 0.3)" font-family="sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="middle">{{ i + 1 }}</text>
+              </g>
+              <image :href="`/api/admin/events/${eventId}/frames/${frame.id}/image`" x="0" y="0" :width="frame.canvasWidth" :height="frame.canvasHeight" />
+            </template>
+          </svg>
           <div v-else class="special-frame-placeholder">No Overlay</div>
         </div>
         <div class="frame-info">
@@ -164,6 +180,26 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  position: relative;
+}
+.frame-preview-blur {
+  position: absolute;
+  top: -10%;
+  left: -10%;
+  width: 120%;
+  height: 120%;
+  object-fit: cover;
+  filter: blur(15px);
+  opacity: 0.6;
+  z-index: 0;
+}
+.frame-svg-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
 }
 .special-frame-placeholder {
   color: #666;
