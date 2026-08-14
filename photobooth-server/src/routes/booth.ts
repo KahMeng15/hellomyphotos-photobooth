@@ -132,6 +132,8 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
 
     // Apply active frames
     const activeFrames = await getActiveFrames(eventId)
+    const framedResults: { frameId: string; output: string; thumbnail: string }[] = []
+
     if (activeFrames.length > 0) {
       for (const frame of activeFrames) {
         if (files.length !== frame.config.placeholders.length) {
@@ -139,7 +141,13 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
           continue
         }
         try {
-          await applyFrame(rawPaths, frame.config, frame.imagePath, `${sessionId}_${frame.id}`, framedDir)
+          const outputBaseName = `${sessionId}_${frame.id}`
+          await applyFrame(rawPaths, frame.config, frame.imagePath, outputBaseName, framedDir)
+          framedResults.push({
+            frameId: frame.id,
+            output: `${outputBaseName}.webp`,
+            thumbnail: `${outputBaseName}_thumb.webp`
+          })
         } catch (err: any) {
           logger.error(`Failed to apply frame ${frame.id}: ${err.message}`)
         }
@@ -156,6 +164,7 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
         thumbnail: r.thumbnail,
         strip: r.strip,
       })),
+      framed: framedResults,
     }
     // Notify operator subscriptions for this event
     const subs = operatorSubscriptions.get(eventId)

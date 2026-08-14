@@ -17,7 +17,7 @@
         </div>
         <div class="viewer-body">
 
-        <div class="photo-grid">
+        <div v-if="displayPhotos.length > 0" class="photo-grid">
           <img
             v-for="(photo, i) in displayPhotos"
             :key="photo.id"
@@ -26,6 +26,9 @@
             class="grid-img"
             @click="openFullscreen(i)"
           />
+        </div>
+        <div v-else class="empty-state">
+          <p>No framed photos available. Please ensure you have run the Backfill process for this frame.</p>
         </div>
 
         <div class="viewer-actions">
@@ -37,6 +40,9 @@
           </button>
           <button @click="showQr" class="btn-action">QR Code</button>
           <button @click="downloadAll" class="btn-action">Download All</button>
+          <button v-if="selectedFrameId" @click="applyFrame" class="btn-action" :disabled="applyingFrame">
+            {{ applyingFrame ? 'Regenerating...' : 'Regenerate Frame' }}
+          </button>
           <button @click="deleteSession" class="btn-action btn-danger">Delete</button>
         </div>
 
@@ -102,6 +108,7 @@ const emit = defineEmits<{ close: [] }>()
 const photosStore = usePhotosStore()
 const linkCopied = ref(false)
 const resettingLink = ref(false)
+const applyingFrame = ref(false)
 const shareError = ref('')
 const showQrCode = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
@@ -112,7 +119,7 @@ const selectedFrameId = ref<string>('')
 const framedPhotos = ref<any[]>([])
 
 const displayPhotos = computed(() => {
-  if (selectedFrameId.value && framedPhotos.value.length > 0) {
+  if (selectedFrameId.value) {
     return framedPhotos.value
   }
   return props.session.photos
@@ -147,6 +154,18 @@ async function fetchFramedPhotos() {
     console.error('Failed to load framed photos', e)
     framedPhotos.value = []
   }
+}
+
+async function applyFrame() {
+  if (!selectedFrameId.value) return
+  applyingFrame.value = true
+  try {
+    await axios.post(`/api/admin/events/${props.eventId}/sessions/${props.session.sessionId}/frames/${selectedFrameId.value}/apply`)
+    await fetchFramedPhotos()
+  } catch (e: any) {
+    shareError.value = e.response?.data?.error || 'Failed to regenerate frame'
+  }
+  applyingFrame.value = false
 }
 
 const fullscreenPhotoIndex = ref<number | null>(null)
@@ -406,6 +425,16 @@ function formatTime(ts: string) {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1.5rem;
   margin-bottom: 2rem;
+}
+
+.empty-state {
+  color: #888;
+  text-align: center;
+  padding: 3rem 1rem;
+  margin-bottom: 2rem;
+  background: #1a1a1a;
+  border-radius: 8px;
+  border: 1px dashed #333;
 }
 
 .grid-img {

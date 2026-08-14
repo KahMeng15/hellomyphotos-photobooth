@@ -18,10 +18,6 @@ export interface FramePlaceholder {
   y: number
   width: number
   height: number
-  cropTop: number
-  cropBottom: number
-  cropLeft: number
-  cropRight: number
   borderRadius: number
 }
 
@@ -31,6 +27,7 @@ export interface FrameConfig {
   disabled: boolean
   canvasWidth: number
   canvasHeight: number
+  layering?: 'foreground' | 'background'
   placeholders: FramePlaceholder[]
 }
 
@@ -201,7 +198,9 @@ export async function applyFrame(
     throw new Error('Photo count does not match frame placeholder count')
   }
 
-  const { canvasWidth, canvasHeight, placeholders } = frameConfig
+  const canvasWidth = Math.round(frameConfig.canvasWidth)
+  const canvasHeight = Math.round(frameConfig.canvasHeight)
+  const placeholders = frameConfig.placeholders
 
   const composites: OverlayOptions[] = []
 
@@ -209,27 +208,20 @@ export async function applyFrame(
     const p = placeholders[i]
     const rawPath = rawPaths[i]
     
-    const rawMetadata = await sharp(rawPath).metadata()
-    const origWidth = rawMetadata.width || 1200
-    const origHeight = rawMetadata.height || 1800
-    
-    const extractTop = p.cropTop
-    const extractLeft = p.cropLeft
-    const extractWidth = origWidth - p.cropLeft - p.cropRight
-    const extractHeight = origHeight - p.cropTop - p.cropBottom
+    const pWidth = Math.round(p.width)
+    const pHeight = Math.round(p.height)
+    const pX = Math.round(p.x)
+    const pY = Math.round(p.y)
 
-    let img = sharp(rawPath).rotate().extract({
-      left: Math.max(0, extractLeft),
-      top: Math.max(0, extractTop),
-      width: Math.max(1, extractWidth),
-      height: Math.max(1, extractHeight)
-    }).resize(p.width, p.height, { fit: 'cover' })
+    let img = sharp(rawPath)
+      .rotate()
+      .resize(pWidth, pHeight, { fit: 'cover' })
 
     if (p.borderRadius > 0) {
       const rx = p.borderRadius
       const ry = p.borderRadius
       const svgMask = Buffer.from(
-        `<svg width="${p.width}" height="${p.height}"><rect x="0" y="0" width="${p.width}" height="${p.height}" rx="${rx}" ry="${ry}" fill="#fff" /></svg>`
+        `<svg width="${pWidth}" height="${pHeight}"><rect x="0" y="0" width="${pWidth}" height="${pHeight}" rx="${rx}" ry="${ry}" fill="#fff" /></svg>`
       )
       img = img.composite([{ input: svgMask, blend: 'dest-in' }])
     }
@@ -238,24 +230,43 @@ export async function applyFrame(
 
     composites.push({
       input: imgBuffer,
-      top: p.y,
-      left: p.x
+      top: pY,
+      left: pX
     })
   }
 
-  composites.push({
-    input: frameImagePath,
-    blend: 'over'
-  })
+  const resizedFrameBuffer = await sharp(frameImagePath)
+    .resize(canvasWidth, canvasHeight, { fit: 'fill' })
+    .toBuffer()
 
-  const pipeline = sharp({
+  const frameComposite = {
+    input: resizedFrameBuffer,
+    blend: 'over' as const
+  }
+  
+  if (frameConfig.layering === 'background') {
+    composites.unshift(frameComposite)
+  } else {
+    composites.push(frameComposite)
+  }
+
+  let maxW = canvasWidth
+  let maxH = canvasHeight
+  for (const p of placeholders) {
+    if (Math.round(p.width) > maxW) maxW = Math.round(p.width)
+    if (Math.round(p.height) > maxH) maxH = Math.round(p.height)
+  }
+
+  const compositedBuffer = await sharp({
     create: {
-      width: canvasWidth,
-      height: canvasHeight,
+      width: maxW,
+      height: maxH,
       channels: 4,
       background: { r: 0, g: 0, b: 0, alpha: 0 }
     }
-  }).composite(composites)
+  }).composite(composites).png().toBuffer()
+
+  const pipeline = sharp(compositedBuffer).extract({ left: 0, top: 0, width: canvasWidth, height: canvasHeight })
 
   const webpPath = path.join(outputDir, `${outputBaseName}.webp`)
   const jpegPath = path.join(outputDir, `${outputBaseName}.jpg`)

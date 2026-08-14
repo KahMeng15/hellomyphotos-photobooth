@@ -21,6 +21,11 @@
             <input type="number" v-model.number="resizeTargetWidth" placeholder="New Width" class="number-input" />
             <button @click="resizeCanvas" class="btn-secondary" :disabled="resizing">Resize</button>
           </div>
+          <h4>Layering</h4>
+          <select v-model="draftFrame.layering" class="number-input" style="margin-top: 0.5rem;">
+            <option value="foreground">Foreground (Over photos)</option>
+            <option value="background">Background (Under photos)</option>
+          </select>
         </div>
 
         <div class="section">
@@ -50,13 +55,6 @@
             <label>W: <input type="number" v-model.number="selectedPlaceholder.width" class="number-input" /></label>
             <label>H: <input type="number" v-model.number="selectedPlaceholder.height" class="number-input" /></label>
           </div>
-          <h4>Crop (from edges)</h4>
-          <div class="input-grid">
-            <label>Top: <input type="number" v-model.number="selectedPlaceholder.cropTop" class="number-input" /></label>
-            <label>Bottom: <input type="number" v-model.number="selectedPlaceholder.cropBottom" class="number-input" /></label>
-            <label>Left: <input type="number" v-model.number="selectedPlaceholder.cropLeft" class="number-input" /></label>
-            <label>Right: <input type="number" v-model.number="selectedPlaceholder.cropRight" class="number-input" /></label>
-          </div>
           <h4>Style</h4>
           <label class="full-label">
             Border Radius:
@@ -75,7 +73,7 @@
             transformOrigin: 'top left'
           }"
         >
-          <img :src="imageUrl" class="frame-bg" />
+          <img :src="imageUrl" class="frame-bg" :style="{ zIndex: draftFrame.layering === 'background' ? 0 : 10 }" />
           <div 
             v-for="(p, i) in draftFrame.placeholders" 
             :key="i"
@@ -106,6 +104,10 @@ const props = defineProps<{ eventId: string, frame: any }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const draftFrame = ref(JSON.parse(JSON.stringify(props.frame)))
+if (!draftFrame.value.layering) {
+  draftFrame.value.layering = 'foreground'
+}
+
 const imageUrl = computed(() => `/api/admin/events/${props.eventId}/frames/${draftFrame.value.id}/image?t=${Date.now()}`)
 
 const saving = ref(false)

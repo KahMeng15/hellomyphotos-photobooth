@@ -147,6 +147,7 @@ router.post('/events/:id/frames', tempUpload.single('frame'), async (req: Reques
       disabled: false,
       canvasWidth: metadata.width || 2400,
       canvasHeight: metadata.height || 2400,
+      layering: 'foreground',
       placeholders: []
     }
 
@@ -542,6 +543,46 @@ router.post('/events/:id/frames/:frameId/backfill', async (req: Request, res: Re
   }
 })
 
+router.post('/events/:id/sessions/:sessionId/frames/:frameId/apply', async (req: Request, res: Response) => {
+  try {
+    const { id, sessionId, frameId } = req.params
+    const configPath = path.join(config.eventFrames(id), frameId, 'config.json')
+    const frameImagePath = path.join(config.eventFrames(id), frameId, 'frame.png')
+    
+    let configData = ''
+    try {
+      configData = await fs.readFile(configPath, 'utf8')
+    } catch {
+      return res.status(404).json({ error: 'Frame not found' })
+    }
+    const frameConfig = JSON.parse(configData)
+
+    const eventDir = config.eventPhotosDir(id)
+    const framedDir = config.eventFramedPhotos(id)
+
+    const rawPaths: string[] = []
+    for (let i = 0; i < frameConfig.placeholders.length; i++) {
+      const p = path.join(eventDir, `${sessionId}_${i + 1}.webp`)
+      try {
+        await fs.access(p)
+        rawPaths.push(p)
+      } catch {
+        return res.status(400).json({ error: `Missing photo ${i + 1} for this session` })
+      }
+    }
+    
+    if (rawPaths.length === frameConfig.placeholders.length) {
+      await applyFrame(rawPaths, frameConfig, frameImagePath, `${sessionId}_${frameId}`, framedDir)
+      res.json({ success: true })
+    } else {
+      res.status(400).json({ error: 'Photo count mismatch' })
+    }
+  } catch (error: any) {
+    logger.error(`Failed to apply frame to session: ${error.message}`)
+    res.status(500).json({ error: error.message })
+  }
+})
+
 router.get('/events/:id/sessions/:sessionId/framed', async (req: Request, res: Response) => {
   try {
     const { id: eventId, sessionId } = req.params
@@ -557,9 +598,12 @@ router.get('/events/:id/sessions/:sessionId/framed', async (req: Request, res: R
     }
 
     const sessionFiles = files
-      .filter((f) => f.startsWith(`${sessionId}_${frameId}_`) && f.endsWith('.webp') && !f.includes('_thumb'))
+      .filter((f) => f.startsWith(`${sessionId}_${frameId}`))
+      .filter((f) => !f.includes('_thumb'))
+      .filter((f) => f.endsWith('.webp'))
       .sort()
 
+    logger.info(`GET /framed - files: ${files.length}, matched: ${sessionFiles.length}, sessionId: ${sessionId}, frameId: ${frameId}`)
     const photos = await Promise.all(
       sessionFiles.map(async (name) => {
         const stat = await fs.stat(path.join(framedDir, name))
