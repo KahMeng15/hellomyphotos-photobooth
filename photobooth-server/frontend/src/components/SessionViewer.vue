@@ -4,16 +4,22 @@
       <div class="viewer">
         <div class="session-header">
           <button class="back-btn" @click="$emit('close')"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
-          <div>
+          <div style="flex: 1">
             <h2>{{ session.photoCount }} Photo{{ session.photoCount !== 1 ? 's' : '' }}</h2>
             <span class="session-time">{{ formatTime(session.createdAt) }}</span>
+          </div>
+          <div v-if="activeFrames.length > 0" class="frame-toggle">
+            <select v-model="selectedFrameId" @change="fetchFramedPhotos" class="frame-select">
+              <option value="">Original Photos</option>
+              <option v-for="frame in activeFrames" :key="frame.id" :value="frame.id">{{ frame.name }}</option>
+            </select>
           </div>
         </div>
         <div class="viewer-body">
 
         <div class="photo-grid">
           <img
-            v-for="(photo, i) in session.photos"
+            v-for="(photo, i) in displayPhotos"
             :key="photo.id"
             :src="photo.url"
             :alt="'Photo ' + (i + 1)"
@@ -53,7 +59,7 @@
       </transition>
       
       <img
-        :src="session.photos[fullscreenPhotoIndex].url"
+        :src="displayPhotos[fullscreenPhotoIndex]?.url"
         class="fs-image"
         :alt="'Fullscreen Photo ' + (fullscreenPhotoIndex + 1)"
       />
@@ -79,8 +85,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import QRCode from 'qrcode'
+import axios from 'axios'
 import { usePhotosStore } from '../stores/photos'
 import type { PhotoSession } from '../stores/photos'
 
@@ -99,6 +106,48 @@ const shareError = ref('')
 const showQrCode = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 let shareUrl = ''
+
+const activeFrames = ref<any[]>([])
+const selectedFrameId = ref<string>('')
+const framedPhotos = ref<any[]>([])
+
+const displayPhotos = computed(() => {
+  if (selectedFrameId.value && framedPhotos.value.length > 0) {
+    return framedPhotos.value
+  }
+  return props.session.photos
+})
+
+onMounted(async () => {
+  if (props.eventId) {
+    try {
+      const res = await axios.get(`/api/admin/events/${props.eventId}/frames`)
+      activeFrames.value = res.data.frames.filter((f: any) => !f.disabled)
+      
+      // Auto-select first active frame if available
+      if (activeFrames.value.length > 0) {
+        selectedFrameId.value = activeFrames.value[0].id
+        await fetchFramedPhotos()
+      }
+    } catch (e) {
+      console.error('Failed to load frames for session viewer', e)
+    }
+  }
+})
+
+async function fetchFramedPhotos() {
+  if (!selectedFrameId.value) {
+    framedPhotos.value = []
+    return
+  }
+  try {
+    const res = await axios.get(`/api/admin/events/${props.eventId}/sessions/${props.session.sessionId}/framed?frameId=${selectedFrameId.value}`)
+    framedPhotos.value = res.data.photos || []
+  } catch (e) {
+    console.error('Failed to load framed photos', e)
+    framedPhotos.value = []
+  }
+}
 
 const fullscreenPhotoIndex = ref<number | null>(null)
 let touchStartX = 0
@@ -147,7 +196,7 @@ function prevPhoto() {
 }
 
 function nextPhoto() {
-  if (fullscreenPhotoIndex.value !== null && fullscreenPhotoIndex.value < props.session.photos.length - 1) {
+  if (fullscreenPhotoIndex.value !== null && fullscreenPhotoIndex.value < displayPhotos.value.length - 1) {
     fullscreenPhotoIndex.value++
     resetControlsTimer()
   }
@@ -227,9 +276,11 @@ async function showQr() {
 }
 
 async function downloadAll() {
-  for (const photo of props.session.photos) {
+  for (const photo of displayPhotos.value) {
     let href: string
-    if (props.eventId) {
+    if (photo.downloadUrl) {
+      href = photo.downloadUrl + '?download=1'
+    } else if (props.eventId) {
       href = `/api/admin/events/${props.eventId}/photo/${photo.id}?download=1`
     } else {
       href = `/api/admin/photos/${photo.id}/download`
@@ -304,6 +355,23 @@ function formatTime(ts: string) {
   gap: 1rem;
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid #2a2a2a;
+}
+.frame-toggle {
+  display: flex;
+  align-items: center;
+}
+.frame-select {
+  background: #1a1a1a;
+  color: #fff;
+  border: 1px solid #333;
+  padding: 0.5rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  outline: none;
+}
+.frame-select:focus {
+  border-color: #2196F3;
 }
 .viewer-body {
   padding: 1.5rem;

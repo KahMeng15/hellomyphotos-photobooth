@@ -3,12 +3,15 @@ import {
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs/promises'
+import os from 'os'
 import sharp from 'sharp'
+import type { Metadata } from 'sharp'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { jobQueue } from '../queue'
 import { pendingCommands } from './booth'
 import { v4 as uuidv4 } from 'uuid'
+import { applyFrame } from '../pipeline'
 import { io } from '../server'
 import bcrypt from 'bcryptjs'
 import { requireRole } from '../middleware/authMiddleware'
@@ -67,77 +70,232 @@ router.delete('/users/:id', requireRole('admin'), (req: Request, res: Response) 
 // --- END USER MANAGEMENT ---
 
 
-const frameStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, config.storage.frames),
-  filename: (req, file, cb) => {
-    const sanitized = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')
-    cb(null, `${Date.now()}_${sanitized}`)
-  },
-})
-
-const frameUpload = multer({
-  storage: frameStorage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+const tempUpload = multer({
+  dest: os.tmpdir(),
+  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase()
-    if (['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) {
+    if (['.png', '.jpg', '.jpeg', '.webp', '.svg'].includes(ext)) {
       cb(null, true)
     } else {
-      cb(new Error('Frame must be PNG, JPG, or WebP'))
+      cb(new Error('Frame must be PNG, JPG, WebP, or SVG'))
     }
   },
 })
 
 // ── Frames ──
 
-router.get('/frames', async (req: Request, res: Response) => {
+router.get('/events/:id/frames', async (req: Request, res: Response) => {
   try {
-    const files = await fs.readdir(config.storage.frames)
-    const frames = await Promise.all(
-      files
-        .filter((f) => /\.(png|jpg|jpeg|webp)$/i.test(f))
-        .map(async (name) => {
-          const stat = await fs.stat(path.join(config.storage.frames, name))
-          return { id: name, name, size: stat.size, createdAt: stat.birthtime }
-        })
-    )
-    frames.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    const eventId = req.params.id
+    const framesDir = config.eventFrames(eventId)
+    
+    let frameDirs: string[] = []
+    try {
+      frameDirs = await fs.readdir(framesDir)
+    } catch {
+      // Directory might not exist yet
+    }
+
+    const frames = []
+    for (const frameId of frameDirs) {
+      const configPath = path.join(framesDir, frameId, 'config.json')
+      try {
+        const configData = await fs.readFile(configPath, 'utf8')
+        frames.push(JSON.parse(configData))
+      } catch (err: any) {
+        logger.warn(`Could not load frame config for ${frameId}: ${err.message}`)
+      }
+    }
+    
     res.json({ frames })
   } catch (error: any) {
-    logger.error('Failed to list frames', { error: error.message })
+    logger.error(`Failed to list frames: ${error.message}`)
     res.status(500).json({ error: 'Failed to list frames' })
   }
 })
 
-router.post('/frames', frameUpload.single('frame'), async (req: Request, res: Response) => {
+router.post('/events/:id/frames', tempUpload.single('frame'), async (req: Request, res: Response) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No frame file provided' })
+    const eventId = req.params.id
+    if (!req.file) return res.status(400).json({ error: 'No frame file provided' })
+
+    const frameId = `frm_${Date.now()}_${uuidv4().split('-')[0]}`
+    const frameDir = path.join(config.eventFrames(eventId), frameId)
+    await fs.mkdir(frameDir, { recursive: true })
+
+    const framePath = path.join(frameDir, 'frame.png')
+    const configPath = path.join(frameDir, 'config.json')
+
+    const ext = path.extname(req.file.originalname).toLowerCase()
+    const isSvg = ext === '.svg'
+
+    let metadata: Metadata
+    if (isSvg) {
+      await sharp(req.file.path).png().toFile(framePath)
+      metadata = await sharp(framePath).metadata()
+    } else {
+      await sharp(req.file.path).png().toFile(framePath)
+      metadata = await sharp(framePath).metadata()
     }
-    logger.info(`Frame uploaded: ${req.file.filename}`)
-    res.json({
-      success: true,
-      frame: { id: req.file.filename, name: req.file.filename, size: req.file.size },
-    })
+
+    await fs.unlink(req.file.path).catch(() => {})
+
+    const frameConfig = {
+      id: frameId,
+      name: path.basename(req.file.originalname, ext),
+      disabled: false,
+      canvasWidth: metadata.width || 2400,
+      canvasHeight: metadata.height || 2400,
+      placeholders: []
+    }
+
+    await fs.writeFile(configPath, JSON.stringify(frameConfig, null, 2))
+
+    logger.info(`Frame created: ${frameId} for event ${eventId}`)
+    res.json({ success: true, frame: frameConfig })
   } catch (error: any) {
     logger.error(`Frame upload failed: ${error.message}`)
     res.status(500).json({ error: error.message })
   }
 })
 
-router.delete('/frames/:id', async (req: Request, res: Response) => {
+router.get('/events/:id/frames/:frameId', async (req: Request, res: Response) => {
   try {
-    const framePath = path.join(config.storage.frames, req.params.id)
-    const resolvedPath = path.resolve(framePath)
-    if (!resolvedPath.startsWith(path.resolve(config.storage.frames))) {
-      return res.status(400).json({ error: 'Invalid path' })
-    }
-    await fs.unlink(resolvedPath)
-    logger.info(`Frame deleted: ${req.params.id}`)
+    const { id, frameId } = req.params
+    const configPath = path.join(config.eventFrames(id), frameId, 'config.json')
+    const configData = await fs.readFile(configPath, 'utf8')
+    res.json({ frame: JSON.parse(configData) })
+  } catch (error: any) {
+    res.status(404).json({ error: 'Frame not found' })
+  }
+})
+
+router.patch('/events/:id/frames/:frameId', async (req: Request, res: Response) => {
+  try {
+    const { id, frameId } = req.params
+    const configPath = path.join(config.eventFrames(id), frameId, 'config.json')
+    
+    const configData = await fs.readFile(configPath, 'utf8')
+    const frameConfig = JSON.parse(configData)
+
+    const updates = req.body
+    if (updates.name !== undefined) frameConfig.name = updates.name
+    if (updates.disabled !== undefined) frameConfig.disabled = updates.disabled
+    if (updates.placeholders !== undefined) frameConfig.placeholders = updates.placeholders
+
+    await fs.writeFile(configPath, JSON.stringify(frameConfig, null, 2))
+    
+    res.json({ success: true, frame: frameConfig })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.delete('/events/:id/frames/:frameId', async (req: Request, res: Response) => {
+  try {
+    const { id, frameId } = req.params
+    const frameDir = path.join(config.eventFrames(id), frameId)
+    await fs.rm(frameDir, { recursive: true, force: true })
     res.json({ success: true })
   } catch (error: any) {
-    logger.error(`Failed to delete frame: ${error.message}`)
-    res.status(500).json({ error: 'Failed to delete frame' })
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.get('/events/:id/frames/:frameId/image', async (req: Request, res: Response) => {
+  try {
+    const { id, frameId } = req.params
+    const framePath = path.join(config.eventFrames(id), frameId, 'frame.png')
+    const resolvedPath = path.resolve(framePath)
+    if (!resolvedPath.startsWith(path.resolve(config.eventFrames(id)))) {
+      return res.status(400).json({ error: 'Invalid path' })
+    }
+    res.sendFile(framePath)
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.post('/events/:id/frames/:frameId/resize', async (req: Request, res: Response) => {
+  try {
+    const { id, frameId } = req.params
+    const { targetWidth } = req.body
+    if (!targetWidth || targetWidth <= 0) return res.status(400).json({ error: 'Valid targetWidth required' })
+
+    const frameDir = path.join(config.eventFrames(id), frameId)
+    const configPath = path.join(frameDir, 'config.json')
+    const framePath = path.join(frameDir, 'frame.png')
+
+    const configData = await fs.readFile(configPath, 'utf8')
+    const frameConfig = JSON.parse(configData)
+
+    const metadata = await sharp(framePath).metadata()
+    const origWidth = metadata.width || 2400
+    const origHeight = metadata.height || 2400
+
+    const scale = targetWidth / origWidth
+    const targetHeight = Math.round(origHeight * scale)
+
+    const tempPath = path.join(frameDir, 'frame_temp.png')
+    await sharp(framePath).resize(targetWidth, targetHeight).toFile(tempPath)
+    await fs.rename(tempPath, framePath)
+
+    frameConfig.canvasWidth = targetWidth
+    frameConfig.canvasHeight = targetHeight
+    for (const p of frameConfig.placeholders) {
+      p.x = Math.round(p.x * scale)
+      p.y = Math.round(p.y * scale)
+      p.width = Math.round(p.width * scale)
+      p.height = Math.round(p.height * scale)
+      p.cropTop = Math.round(p.cropTop * scale)
+      p.cropBottom = Math.round(p.cropBottom * scale)
+      p.cropLeft = Math.round(p.cropLeft * scale)
+      p.cropRight = Math.round(p.cropRight * scale)
+      p.borderRadius = Math.round(p.borderRadius * scale)
+    }
+
+    await fs.writeFile(configPath, JSON.stringify(frameConfig, null, 2))
+    
+    res.json({ success: true, frame: frameConfig })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.post('/events/:id/frames/:frameId/test', async (req: Request, res: Response) => {
+  try {
+    const { id, frameId } = req.params
+    const configPath = path.join(config.eventFrames(id), frameId, 'config.json')
+    const frameImagePath = path.join(config.eventFrames(id), frameId, 'frame.png')
+    
+    const configData = await fs.readFile(configPath, 'utf8')
+    const frameConfig = JSON.parse(configData)
+
+    const sessions = listEventPhotoSessions(id)
+    if (sessions.length === 0) return res.status(400).json({ error: 'No photo sessions available to test with' })
+
+    const latestSession = sessions[0]
+    const eventDir = config.eventPhotosDir(id)
+    const framedDir = config.eventFramedPhotos(id)
+
+    const rawPaths: string[] = []
+    for (let i = 0; i < frameConfig.placeholders.length; i++) {
+      const p = path.join(eventDir, `${latestSession.id}_${i + 1}.webp`)
+      try {
+        await fs.access(p)
+        rawPaths.push(p)
+      } catch {
+        return res.status(400).json({ error: `Latest session does not have enough photos (${frameConfig.placeholders.length} required)` })
+      }
+    }
+
+    const testBaseName = `test_${frameId}`
+    await applyFrame(rawPaths, frameConfig, frameImagePath, testBaseName, framedDir)
+
+    res.json({ success: true, testUrl: `/api/admin/events/${id}/photo/framed/${testBaseName}.webp` })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
   }
 })
 
@@ -331,6 +489,148 @@ router.get('/events/:id/photos', async (req: Request, res: Response) => {
     res.json({ sessions, event })
   } catch (error: any) {
     logger.error(`Failed to list event photos: ${error.message}`)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.post('/events/:id/frames/:frameId/backfill', async (req: Request, res: Response) => {
+  try {
+    const { id, frameId } = req.params
+    const configPath = path.join(config.eventFrames(id), frameId, 'config.json')
+    const frameImagePath = path.join(config.eventFrames(id), frameId, 'frame.png')
+    
+    const configData = await fs.readFile(configPath, 'utf8')
+    const frameConfig = JSON.parse(configData)
+
+    const sessions = listEventPhotoSessions(id)
+    if (sessions.length === 0) return res.json({ success: true, count: 0 })
+
+    const eventDir = config.eventPhotosDir(id)
+    const framedDir = config.eventFramedPhotos(id)
+
+    // Run this async without blocking response
+    setTimeout(async () => {
+      logger.info(`Starting frame backfill for event ${id}, frame ${frameId}`)
+      let count = 0
+      for (const session of sessions) {
+        const rawPaths: string[] = []
+        for (let i = 0; i < frameConfig.placeholders.length; i++) {
+          const p = path.join(eventDir, `${session.id}_${i + 1}.webp`)
+          try {
+            await fs.access(p)
+            rawPaths.push(p)
+          } catch {
+            break // missing photo
+          }
+        }
+        
+        if (rawPaths.length === frameConfig.placeholders.length) {
+          try {
+            await applyFrame(rawPaths, frameConfig, frameImagePath, `${session.id}_${frameId}`, framedDir)
+            count++
+          } catch (e: any) {
+            logger.error(`Backfill failed for session ${session.id}: ${e.message}`)
+          }
+        }
+      }
+      logger.info(`Completed frame backfill for event ${id}, frame ${frameId}. Processed ${count} sessions.`)
+    }, 0)
+
+    res.json({ success: true, message: 'Backfill started in background' })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.get('/events/:id/sessions/:sessionId/framed', async (req: Request, res: Response) => {
+  try {
+    const { id: eventId, sessionId } = req.params
+    const frameId = req.query.frameId as string
+    if (!frameId) return res.status(400).json({ error: 'frameId required' })
+
+    const framedDir = config.eventFramedPhotos(eventId)
+    let files: string[] = []
+    try {
+      files = await fs.readdir(framedDir)
+    } catch {
+      return res.json({ photos: [] })
+    }
+
+    const sessionFiles = files
+      .filter((f) => f.startsWith(`${sessionId}_${frameId}_`) && f.endsWith('.webp') && !f.includes('_thumb'))
+      .sort()
+
+    const photos = await Promise.all(
+      sessionFiles.map(async (name) => {
+        const stat = await fs.stat(path.join(framedDir, name))
+        const baseName = name.replace('.webp', '')
+        const thumbName = `${baseName}_thumb.webp`
+        const thumbExists = files.includes(thumbName)
+        const jpegName = `${baseName}.jpg`
+        const jpegExists = files.includes(jpegName)
+
+        return {
+          id: name,
+          url: `/api/admin/events/${eventId}/photo/framed/${name}`,
+          thumbnail: thumbExists ? `/api/admin/events/${eventId}/photo/framed/${thumbName}` : `/api/admin/events/${eventId}/photo/framed/${name}`,
+          downloadUrl: jpegExists ? `/api/admin/events/${eventId}/photo/framed/${jpegName}` : `/api/admin/events/${eventId}/photo/framed/${name}`,
+          size: stat.size,
+          timestamp: stat.birthtime.toISOString(),
+        }
+      })
+    )
+
+    res.json({ photos })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.get('/events/:id/photo/framed/:filename', async (req: Request, res: Response) => {
+  try {
+    const event = getEvent(req.params.id)
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+
+    const framedDir = config.eventFramedPhotos(req.params.id)
+    const filePath = path.join(framedDir, req.params.filename)
+    const resolvedPath = path.resolve(filePath)
+
+    if (!resolvedPath.startsWith(path.resolve(framedDir))) {
+      return res.status(400).json({ error: 'Invalid path' })
+    }
+
+    const download = req.query.download !== undefined
+    if (download && req.params.filename.endsWith('.webp')) {
+      const index = req.params.filename.match(/_(\d+)\.webp$/)
+      const photoNum = index ? index[1] : '1'
+      const webpBuf = await fs.readFile(filePath)
+      const jpegBuf = await sharp(webpBuf).jpeg({ quality: 95 }).toBuffer()
+      res.setHeader('Content-Type', 'image/jpeg')
+      res.setHeader('Content-Disposition', `attachment; filename="photo-${photoNum}.jpg"`)
+      res.setHeader('Content-Length', jpegBuf.length.toString())
+      return res.send(jpegBuf)
+    } else if (download) {
+      res.setHeader('Content-Disposition', `attachment; filename="${req.params.filename}"`)
+    }
+
+    try {
+      await fs.stat(filePath)
+    } catch {
+      return res.status(404).json({ error: 'Photo not found' })
+    }
+
+    const ext = path.extname(req.params.filename).toLowerCase()
+    const mime: Record<string, string> = {
+      '.webp': 'image/webp',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+    }
+    res.setHeader('Content-Type', mime[ext] || 'application/octet-stream')
+    res.setHeader('Cache-Control', 'public, max-age=86400')
+    res.sendFile(filePath)
+  } catch (error: any) {
+    logger.error(`Photo serve failed: ${error.message}`)
     res.status(500).json({ error: error.message })
   }
 })

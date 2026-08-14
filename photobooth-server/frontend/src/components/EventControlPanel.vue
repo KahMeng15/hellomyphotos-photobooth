@@ -58,12 +58,6 @@
 
     <div class="panel-section">
       <h3>Quick Actions</h3>
-      <button @click="showSettingsModal = true" class="btn-control btn-secondary">
-        Booth Settings
-      </button>
-      <button @click="showEventSettingsModal = true" class="btn-control btn-secondary">
-        Event Settings
-      </button>
       <button @click="shareAll" class="btn-control btn-secondary">
         Share All
       </button>
@@ -145,12 +139,6 @@
 
           <div class="panel-section">
             <h3>Quick Actions</h3>
-            <button @click="showSettingsModal = true" class="btn-control btn-secondary">
-              Booth Settings
-            </button>
-            <button @click="showEventSettingsModal = true" class="btn-control btn-secondary">
-              Event Settings
-            </button>
             <button @click="shareAll" class="btn-control btn-secondary">
               Share All
             </button>
@@ -162,145 +150,6 @@
       </div>
     </div>
   </Teleport>
-
-
-  <Teleport to="body">
-    <div v-if="showEventSettingsModal" class="modal-overlay" @click.self="showEventSettingsModal = false">
-      <div class="modal-page">
-        <div class="modal-header">
-          <button class="back-btn" @click="showEventSettingsModal = false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
-          <h2>Event Settings</h2>
-        </div>
-        <div class="modal-body">
-          <div class="settings-box">
-            <div class="field-row" style="margin-bottom:1rem; border-bottom: 1px solid #2a2a2a; padding-bottom: 1rem;">
-              <label style="display:block;margin-bottom:0.5rem;">Event Name</label>
-              <input type="text" v-model="eventSettings.name" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;" />
-            </div>
-            <div class="field-row" style="display:flex; justify-content:space-between; align-items:center;">
-              <div>
-                <label style="display:block;margin-bottom:0.25rem;">Obfuscate Links</label>
-                <span style="font-size:0.8rem;color:#888;">Hide original filenames in shared links</span>
-              </div>
-              <div class="focus-toggle">
-                <button :class="['focus-btn', eventSettings.obfuscateLinks ? 'focus-active' : '']" @click="eventSettings.obfuscateLinks = true">ON</button>
-                <button :class="['focus-btn', !eventSettings.obfuscateLinks ? 'focus-active' : '']" @click="eventSettings.obfuscateLinks = false">OFF</button>
-              </div>
-            </div>
-            
-            <div class="field-row" style="margin-top:1.5rem;">
-              <label style="display:block;margin-bottom:0.5rem;">Link Expiry</label>
-              <select v-model="eventSettings.expiryType" class="custom-select">
-                <option value="none">No Expiry</option>
-                <option value="relative">Relative Duration</option>
-                <option value="absolute">Specific Date & Time</option>
-              </select>
-            </div>
-            
-            <div class="field-row" v-if="eventSettings.expiryType === 'relative'" style="margin-top:1rem;">
-              <label style="display:block;margin-bottom:0.5rem;">Expires In (from creation)</label>
-              <select v-model="eventSettings.expiryValue" class="custom-select">
-                <option value="1_day">1 Day</option>
-                <option value="3_days">3 Days</option>
-                <option value="1_week">1 Week</option>
-                <option value="1_month">1 Month</option>
-                <option value="6_months">6 Months</option>
-                <option value="1_year">1 Year</option>
-              </select>
-            </div>
-            
-            <div class="field-row" v-if="eventSettings.expiryType === 'absolute'" style="margin-top:1rem;">
-              <label style="display:block;margin-bottom:0.5rem;">Date & Time</label>
-              <input type="datetime-local" v-model="eventSettings.expiryValue" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;" />
-            </div>
-
-            <div class="field-row" style="margin-top:1rem;">
-              <label style="display:block;margin-bottom:0.5rem;">Organizer</label>
-              <input type="text" v-model="eventSettings.organizer" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;" />
-            </div>
-
-            <div class="field-row" style="margin-top:1rem;">
-              <label style="display:block;margin-bottom:0.5rem;">Contact Info</label>
-              <textarea v-model="eventSettings.contactInfo" class="text-input" style="width:100%;height:100px;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;resize:vertical;"></textarea>
-            </div>
-          </div>
-          
-          <div v-if="settingsMsg" :class="['settings-msg', settingsMsgType]" style="margin-top:1rem;">{{ settingsMsg }}</div>
-          
-          <button @click="saveEventSettings" class="btn-control btn-primary" style="margin-top: 1rem; width: 100%;" :disabled="settingsSaving">
-            {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
-          </button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
-
-  <Teleport to="body">
-    <div v-if="showSettingsModal" class="modal-overlay" @click.self="showSettingsModal = false">
-      <div class="modal-page">
-        <div class="modal-header">
-          <button class="back-btn" @click="showSettingsModal = false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
-          <h2>Booth Settings</h2>
-        </div>
-        <div class="modal-body">
-          <div class="settings-box">
-            <div class="field-row">
-              <label>Photos per session</label>
-              <input type="number" min="1" max="4" v-model.number="eventSettings.photoCount" class="num-input" />
-            </div>
-            <div class="field-row">
-              <label>Countdown</label>
-              <input type="number" min="3" max="10" v-model.number="eventSettings.countdown" class="num-input" />
-            </div>
-            <div class="field-row">
-              <label>Interval</label>
-              <input type="number" min="0" max="5" v-model.number="eventSettings.captureInterval" class="num-input" />
-            </div>
-            <div class="field-row">
-              <label>Preview</label>
-              <input type="number" min="1" max="5" v-model.number="eventSettings.postCapturePreview" class="num-input" />
-            </div>
-          </div>
-          
-          <div class="settings-box" style="margin-top: 1rem;">
-            <div class="field-row">
-              <label>Shutter</label>
-              <div class="slider-wrapper">
-                <input type="range" min="0" :max="shutterChoices.length - 1" :value="shutterChoices.indexOf(eventSettings.dslrShutterSpeed) >= 0 ? shutterChoices.indexOf(eventSettings.dslrShutterSpeed) : 0" @input="eventSettings.dslrShutterSpeed = shutterChoices[parseInt(($event.target as HTMLInputElement).value)]" class="range-input" />
-                <span class="slider-val">{{ eventSettings.dslrShutterSpeed || 'auto' }}</span>
-              </div>
-            </div>
-            <div class="field-row">
-              <label>ISO</label>
-              <div class="slider-wrapper">
-                <input type="range" min="0" :max="isoChoices.length - 1" :value="isoChoices.indexOf(eventSettings.dslrIso) >= 0 ? isoChoices.indexOf(eventSettings.dslrIso) : 0" @input="eventSettings.dslrIso = isoChoices[parseInt(($event.target as HTMLInputElement).value)]" class="range-input" />
-                <span class="slider-val">{{ eventSettings.dslrIso || 'auto' }}</span>
-              </div>
-            </div>
-            <div class="field-row">
-              <label>Aperture</label>
-              <div class="slider-wrapper">
-                <input type="range" min="0" :max="apertureChoices.length - 1" :value="apertureChoices.indexOf(eventSettings.dslrAperture) >= 0 ? apertureChoices.indexOf(eventSettings.dslrAperture) : 0" @input="eventSettings.dslrAperture = apertureChoices[parseInt(($event.target as HTMLInputElement).value)]" class="range-input" />
-                <span class="slider-val">{{ eventSettings.dslrAperture || 'auto' }}</span>
-              </div>
-            </div>
-            <div class="field-row">
-              <label>Focus Mode</label>
-              <div class="focus-toggle">
-                <button :class="['focus-btn', eventSettings.dslrFocusMode === 'auto' ? 'focus-active' : '']" @click="eventSettings.dslrFocusMode = 'auto'">AF</button>
-                <button :class="['focus-btn', eventSettings.dslrFocusMode === 'manual' ? 'focus-active' : '']" @click="eventSettings.dslrFocusMode = 'manual'">MF</button>
-              </div>
-            </div>
-          </div>
-
-          <button @click="saveEventSettings" class="btn-control btn-primary" :disabled="settingsSaving" style="margin-top: 1rem;">
-            {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
-          </button>
-          <span v-if="settingsMsg" :class="settingsMsgType === 'success' ? 'msg-success' : 'msg-error'">{{ settingsMsg }}</span>
-        </div>
-      </div>
-    </div>
-  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -308,10 +157,6 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { usePhotosStore } from '../stores/photos'
 import axios from 'axios'
-
-const isoChoices = ['auto', '100', '200', '400', '800', '1600', '3200', '6400']
-const shutterChoices = ['auto', '1/30', '1/40', '1/50', '1/60', '1/80', '1/100', '1/125', '1/160', '1/200', '1/250', '1/320', '1/400', '1/500', '1/640', '1/800']
-const apertureChoices = ['auto', '2.8', '4', '4.5', '5', '5.6', '6.3', '7.1', '8', '9', '10', '11']
 
 const props = defineProps<{
   connected: boolean
@@ -333,25 +178,6 @@ const event = ref<any>(null)
 const selectedFrame = ref('')
 const paused = ref(false)
 const otpCopied = ref(false)
-const showSettingsModal = computed({
-  get: () => route.query.modal === 'booth',
-  set: (val) => {
-    const q = { ...route.query }; if(val) q.modal='booth'; else delete q.modal;
-    router.replace({ query: q })
-  }
-})
-const showEventSettingsModal = computed({
-  get: () => route.query.modal === 'event',
-  set: (val) => {
-    const q = { ...route.query }; if(val) q.modal='event'; else delete q.modal;
-    router.replace({ query: q })
-  }
-})
-const eventSettings = ref({ name: '', photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', obfuscateLinks: false, expiryType: 'none', expiryValue: '1_year', organizer: '', contactInfo: '' })
-const settingsSaving = ref(false)
-const settingsMsg = ref('')
-const settingsMsgType = ref<'success' | 'error'>('success')
-
 const connectionStatus = computed(() => props.connected ? 'connected' : 'disconnected')
 
 const queuePercent = computed(() => Math.min((photosStore.queueDepth / 10) * 100, 100))
@@ -375,22 +201,6 @@ onMounted(async () => {
   try {
     const { data } = await axios.get(`/api/admin/events/${props.eventId}`)
     event.value = data.event
-    eventSettings.value = {
-      name: event.value.name || '',
-      photoCount: event.value.photo_count,
-      countdown: event.value.countdown,
-      captureInterval: event.value.capture_interval,
-      postCapturePreview: event.value.post_capture_preview,
-      dslrIso: event.value.dslr_iso || 'auto',
-      dslrShutterSpeed: event.value.dslr_shutterspeed || 'auto',
-      dslrAperture: event.value.dslr_aperture || 'auto',
-      dslrFocusMode: event.value.dslr_focus_mode || 'auto',
-      obfuscateLinks: !!event.value.obfuscate_links,
-      expiryType: event.value.expiry_type || 'none',
-      expiryValue: event.value.expiry_value || '',
-      organizer: event.value.organizer || '',
-      contactInfo: event.value.contact_info || ''
-    }
   } catch (err) {
     console.error('Failed to fetch event', err)
   }
@@ -440,37 +250,6 @@ function copyOtp() {
   navigator.clipboard.writeText(event.value.otp)
   otpCopied.value = true
   setTimeout(() => { otpCopied.value = false }, 2000)
-}
-
-async function saveEventSettings() {
-  settingsSaving.value = true
-  settingsMsg.value = ''
-  try {
-    await axios.patch(`/api/admin/events/${props.eventId}`, {
-      name: eventSettings.value.name,
-      photoCount: eventSettings.value.photoCount,
-      countdown: eventSettings.value.countdown,
-      captureInterval: eventSettings.value.captureInterval,
-      postCapturePreview: eventSettings.value.postCapturePreview,
-      dslrIso: eventSettings.value.dslrIso,
-      dslrShutterSpeed: eventSettings.value.dslrShutterSpeed,
-      dslrAperture: eventSettings.value.dslrAperture,
-      dslrFocusMode: eventSettings.value.dslrFocusMode,
-      obfuscateLinks: eventSettings.value.obfuscateLinks ? 1 : 0,
-      expiryType: eventSettings.value.expiryType,
-      expiryValue: eventSettings.value.expiryValue,
-      organizer: eventSettings.value.organizer,
-      contactInfo: eventSettings.value.contactInfo,
-    })
-    event.value.name = eventSettings.value.name
-    settingsMsg.value = 'Settings saved'
-    settingsMsgType.value = 'success'
-  } catch {
-    settingsMsg.value = 'Failed to save'
-    settingsMsgType.value = 'error'
-  }
-  settingsSaving.value = false
-  setTimeout(() => { settingsMsg.value = '' }, 3000)
 }
 </script>
 

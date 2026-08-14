@@ -40,6 +40,8 @@ export const config = {
   },
 
   eventPhotosDir: (eventId: string) => path.join(projectRoot, 'storage/photos', eventId),
+  eventFrames: (eventId: string) => path.join(projectRoot, 'storage/frames', eventId),
+  eventFramedPhotos: (eventId: string) => path.join(projectRoot, 'storage/photos', eventId, 'framed'),
 
   upload: {
     maxFileSize: 10 * 1024 * 1024,
@@ -55,6 +57,7 @@ export const config = {
 
   imageProcessing: {
     webpQuality: 75,
+    framedJpegQuality: 95,
     avifQuality: 60,
     thumbnailQuality: 60,
     stripQuality: 78,

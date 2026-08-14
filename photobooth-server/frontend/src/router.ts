@@ -25,6 +25,30 @@ export const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/events/:id/analytics',
+      name: 'event-analytics',
+      component: () => import('./views/EventAnalyticsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/events/:id/frames',
+      name: 'event-frames',
+      component: () => import('./views/EventFramesView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/events/:id/settings/booth',
+      name: 'event-booth-settings',
+      component: () => import('./views/EventBoothSettingsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/events/:id/settings/event',
+      name: 'event-settings',
+      component: () => import('./views/EventSettingsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin',
       name: 'admin',
       component: () => import('./views/AdminView.vue'),

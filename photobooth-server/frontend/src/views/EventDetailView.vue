@@ -1,44 +1,6 @@
 <template>
   <div class="dashboard" v-if="event">
-    <header class="dashboard-header">
-      <div class="header-left">
-        <button @click="goBack" class="btn-back" title="Back to events">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
-        </button>
-        <h1>{{ event.name }}</h1>
-        <span class="event-status" :class="`status-${event.status}`">{{ event.status }}</span>
-        
-      </div>
-      <div class="header-right">
-        <button v-if="authStore.user?.role === 'admin'" @click="showAnalytics = true" class="btn-icon" title="Analytics">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
-          </svg>
-        </button>
-        <button @click="togglePanel" class="btn-icon btn-panel-toggle" title="Booth controller">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-        </button>
-        <span class="user-email">{{ authStore.user?.email }}</span>
-        <button @click="goToAdmin" class="btn-icon" title="Admin">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-            <circle cx="12" cy="7" r="4"/>
-          </svg>
-        </button>
-        <button @click="handleLogout" class="btn-icon" title="Logout">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-            <polyline points="16 17 21 12 16 7"/>
-            <line x1="21" y1="12" x2="9" y2="12"/>
-          </svg>
-        </button>
-      </div>
-    </header>
+    <EventTopNav :event="event" currentTitle="" @toggle-panel="togglePanel" />
 
     <div class="dashboard-grid">
       <section class="photo-feed">
@@ -136,12 +98,7 @@
       @close="photosStore.clearSelection()"
     />
 
-    <AnalyticsModal 
-      v-if="showAnalytics && event" 
-      :eventId="event.id" 
-      @close="showAnalytics = false" 
-    />
-
+  
     <Teleport to="body">
       <div v-if="confirmState" class="modal-overlay" @click.self="confirmState = null">
         <div class="confirm-modal">
@@ -166,7 +123,7 @@ import { useWebSocket } from '../composables/useWebSocket'
 import EventControlPanel from '../components/EventControlPanel.vue'
 import PhotoViewer from '../components/PhotoViewer.vue'
 import SessionViewer from '../components/SessionViewer.vue'
-import AnalyticsModal from '../components/AnalyticsModal.vue'
+import EventTopNav from '../components/EventTopNav.vue'
 import axios from 'axios'
 
 const route = useRoute()
@@ -175,6 +132,10 @@ const authStore = useAuthStore()
 const photosStore = usePhotosStore()
 const { ws, connect, disconnect, sendMessage, subscribe, unsubscribe } = useWebSocket()
 
+let confirmResolve: ((value: boolean) => void) | null = null
+const confirmState = ref<{ message: string; confirmLabel: string } | null>(null)
+const viewMode = ref<'grid-sm' | 'grid-lg' | 'list'>((localStorage.getItem('hellomyphoto_viewMode') as any) || 'grid-sm')
+const selectedSessions = ref<Set<string>>(new Set())
 
 watch(() => route.query.session, (sessionId) => {
   if (sessionId) {
@@ -207,12 +168,6 @@ const boothConnected = ref(false)
 const boothState = ref<string | null>(null)
 const showPanel = ref(false)
 const showArchive = ref(false)
-const showAnalytics = ref(false)
-const feedRef = ref<HTMLElement | null>(null)
-const viewMode = ref<'grid-sm' | 'grid-lg' | 'list'>((localStorage.getItem('hellomyphoto_viewMode') as any) || 'grid-lg')
-const selectedSessions = ref(new Set<string>())
-const confirmState = ref<{ message: string; confirmLabel: string } | null>(null)
-let confirmResolve: ((v: boolean) => void) | null = null
 
 function confirmAsync(message: string, confirmLabel = 'Confirm'): Promise<boolean> {
   return new Promise((resolve) => {
@@ -292,12 +247,11 @@ onMounted(async () => {
   })
 })
 
-// Poll fallback: refresh every 5s in case WebSocket events are missed
 const pollInterval = setInterval(() => { loadSessions() }, 5000)
 
-// Poll fallback for booth connection status every 10s
 const connPollInterval = setInterval(() => {
   if (!boothConnected.value && ws.value?.connected) {
+    const eventId = route.params.id as string
     subscribe(eventId)
   }
 }, 10000)
@@ -312,16 +266,13 @@ onUnmounted(() => {
 
 async function loadSessions() {
   const eventId = route.params.id as string
-  const { data } = await axios.get(`/api/admin/events/${eventId}/photos?includeArchived=${showArchive.value}`)
-  if (showArchive.value) {
-    photoSessions.value = data.sessions.filter((s: any) => s.archived)
-  } else {
+  try {
+    const { data } = await axios.get(`/api/admin/events/${eventId}/photos`, {
+      params: { includeArchived: showArchive.value }
+    })
     photoSessions.value = data.sessions
-  }
-  
-  if (route.query.session) {
-    const session = photoSessions.value.find((s: any) => s.sessionId === route.query.session)
-    if (session && !photosStore.selectedSession) photosStore.selectSession(session)
+  } catch (err) {
+    console.error('Failed to load sessions', err)
   }
 }
 
@@ -435,6 +386,31 @@ function formatTime(ts: string) {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
+}
+.frames-modal {
+  background: #0f0f0f;
+  border-radius: 12px;
+  width: 90vw;
+  height: 90vh;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+}
+.frames-modal .close-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1.5rem;
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.25rem;
+  cursor: pointer;
+  z-index: 100;
+}
+.frames-modal .close-btn:hover {
+  color: #fff;
 }
 .btn-confirm {
   padding: 0.5rem 1rem;

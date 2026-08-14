@@ -769,7 +769,7 @@ export class BoothApp {
     } else {
       console.warn('[BoothApp] mount() — getSettings() returned null/undefined, using defaults')
     }
-    await this.frameCarousel.loadFrames(this.serverUrl)
+    await this.frameCarousel.loadFrames(this.settingsData.serverUrl, this.settingsData.otp || '')
     this.updateStartBtn()
 
     document.addEventListener('booth-socket-connect', () => this.updateStartBtn())
@@ -835,6 +835,10 @@ export class BoothApp {
   private async goLive() {
     console.log(`[BoothApp] goLive() — cameraMode="${this.cameraMode}"`)
     this.landingEl.style.display = 'none'
+
+    if (this.settingsData.serverUrl) {
+      this.frameCarousel.loadFrames(this.settingsData.serverUrl, this.settingsData.otp || '')
+    }
 
     if (this.settingsData.audioDeviceId) {
       await this.audio.setSinkId(this.settingsData.audioDeviceId)
@@ -1181,7 +1185,8 @@ export class BoothApp {
       this.pauseBtn.style.display = 'none'
       this._state = 'preview'
       this.emitBoothState()
-      this.photoPreview.show(paths)
+      const selectedFrameConfig = this.selectedFrame ? this.frameCarousel.activeFrames.find(f => f.id === this.selectedFrame) : null
+      this.photoPreview.show(paths, selectedFrameConfig, this.settingsData.serverUrl, this.settingsData.otp)
       this.previewWindow.style.display = 'none'
       this.statusBar.style.display = 'none'
       this.camera.stop()

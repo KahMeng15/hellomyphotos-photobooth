@@ -3,6 +3,7 @@ export class FrameCarousel {
   private carouselEl: HTMLDivElement
   private frames: { id: string; name: string; url: string }[] = []
   private selectedId: string | null = null
+  public activeFrames: any[] = []
   private onChange: (frameId: string | null) => void
 
   constructor(container: HTMLElement, onChange: (frameId: string | null) => void) {
@@ -17,18 +18,24 @@ export class FrameCarousel {
     container.appendChild(this.carouselEl)
   }
 
-  async loadFrames(serverUrl: string) {
+  async loadFrames(serverUrl: string, otp: string) {
     try {
-      const response = await fetch(`${serverUrl}/api/booth/frames`)
+      const response = await fetch(`${serverUrl}/api/booth/frames`, {
+        headers: {
+          'Authorization': `Bearer ${otp}`
+        }
+      })
       const data = await response.json()
       this.frames = data.frames.map((f: any) => ({
         id: f.id,
         name: f.name,
-        url: `${serverUrl}/api/photos/${f.name}`,
+        url: `${serverUrl}${f.imageUrl}?otp=${otp}`,
       }))
+      this.activeFrames = data.frames
       this.render()
     } catch {
       this.frames = []
+      this.activeFrames = []
     }
   }
 

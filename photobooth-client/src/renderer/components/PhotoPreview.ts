@@ -1,3 +1,5 @@
+import { renderFrame, FrameConfig } from '../utils/frameRenderer.js'
+
 export class PhotoPreview {
   private container: HTMLElement
   private overlay: HTMLDivElement
@@ -20,7 +22,7 @@ export class PhotoPreview {
     this.container.appendChild(this.overlay)
   }
 
-  show(paths: string[]) {
+  async show(paths: string[], frameConfig?: FrameConfig | null, serverUrl?: string, otp?: string) {
     this.overlay.innerHTML = ''
     this.overlay.style.display = 'flex'
 
@@ -29,20 +31,35 @@ export class PhotoPreview {
     title.style.cssText = 'font-size: 2rem; font-weight: 700; margin-bottom: 2rem;'
     this.overlay.appendChild(title)
 
-    const grid = document.createElement('div')
-    grid.style.cssText = `
-      display: grid; grid-template-columns: repeat(${Math.min(paths.length, 2)}, 1fr);
-      gap: 1rem; max-width: 800px; width: 100%; margin-bottom: 2rem;
-    `
+    if (frameConfig && serverUrl && otp) {
+      const canvas = document.createElement('canvas')
+      canvas.style.cssText = 'max-width: 100%; max-height: 70vh; border-radius: 8px; object-fit: contain; margin-bottom: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.5);'
+      this.overlay.appendChild(canvas)
+      
+      const frameImageUrl = `${serverUrl}${frameConfig.imageUrl}?otp=${otp}`
+      const photoUrls = paths.map(p => p.startsWith('blob:') || p.startsWith('http') ? p : `file://${p}`)
+      
+      try {
+        await renderFrame(frameConfig, frameImageUrl, photoUrls, canvas)
+      } catch (err) {
+        console.error('Failed to render frame preview', err)
+      }
+    } else {
+      const grid = document.createElement('div')
+      grid.style.cssText = `
+        display: grid; grid-template-columns: repeat(${Math.min(paths.length, 2)}, 1fr);
+        gap: 1rem; max-width: 800px; width: 100%; margin-bottom: 2rem;
+      `
 
-    for (const p of paths) {
-      const img = document.createElement('img')
-      img.style.cssText = 'width: 100%; border-radius: 8px; object-fit: contain; max-height: 80vh;'
-      img.src = p.startsWith('blob:') || p.startsWith('http') ? p : `file://${p}`
-      grid.appendChild(img)
+      for (const p of paths) {
+        const img = document.createElement('img')
+        img.style.cssText = 'width: 100%; border-radius: 8px; object-fit: contain; max-height: 80vh;'
+        img.src = p.startsWith('blob:') || p.startsWith('http') ? p : `file://${p}`
+        grid.appendChild(img)
+      }
+
+      this.overlay.appendChild(grid)
     }
-
-    this.overlay.appendChild(grid)
 
     const actions = document.createElement('div')
     actions.style.cssText = 'display: flex; gap: 1rem;'

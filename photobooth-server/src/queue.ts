@@ -76,7 +76,6 @@ class AsyncJobQueue extends EventEmitter {
       case 'process-photo':
         return processSinglePhoto(
           job.data.rawPath,
-          job.data.frameName,
           job.data.outputName,
           job.data.eventDir,
           job.data.watermarkText

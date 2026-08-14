@@ -1,4 +1,5 @@
 import sharp from 'sharp'
+import type { OverlayOptions } from 'sharp'
 import path from 'path'
 import fs from 'fs/promises'
 import { config } from './config'
@@ -11,47 +12,47 @@ export interface ProcessedImage {
   height: number
 }
 
+export interface FramePlaceholder {
+  index: number
+  x: number
+  y: number
+  width: number
+  height: number
+  cropTop: number
+  cropBottom: number
+  cropLeft: number
+  cropRight: number
+  borderRadius: number
+}
+
+export interface FrameConfig {
+  id: string
+  name: string
+  disabled: boolean
+  canvasWidth: number
+  canvasHeight: number
+  placeholders: FramePlaceholder[]
+}
+
 function outputDir(eventDir?: string): string {
   return eventDir || config.storage.photos
 }
 
 export async function processSinglePhoto(
   rawPath: string,
-  frameName: string | null,
   outputName: string,
   eventDir?: string,
   watermarkText?: string
 ): Promise<ProcessedImage> {
   try {
     const dir = outputDir(eventDir)
-    const framePath = frameName
-      ? path.join(config.storage.frames, frameName)
-      : null
     const outputPath = path.join(dir, outputName)
 
     const rawMetadata = await sharp(rawPath).metadata()
     let frameWidth = rawMetadata.width || 1200
     let frameHeight = rawMetadata.height || 1800
 
-    if (framePath) {
-      try {
-        const frameMetadata = await sharp(framePath).metadata()
-        frameWidth = frameMetadata.width || 1200
-        frameHeight = frameMetadata.height || 1800
-      } catch {
-        logger.warn(`Frame not found: ${framePath}, using default dimensions`)
-      }
-    }
-
     let pipeline = sharp(rawPath).rotate()
-
-    if (framePath) {
-      try {
-        pipeline = pipeline.composite([{ input: framePath, blend: 'over' }])
-      } catch (err: any) {
-        logger.warn(`Frame composite failed: ${err.message}`)
-      }
-    }
 
     if (watermarkText) {
       const svgWatermark = Buffer.from(
@@ -188,3 +189,96 @@ function escapeXml(str: string): string {
     }
   })
 }
+
+export async function applyFrame(
+  rawPaths: string[],
+  frameConfig: FrameConfig,
+  frameImagePath: string,
+  outputBaseName: string,
+  outputDir: string
+): Promise<{ webp: ProcessedImage; jpeg: ProcessedImage; thumb: ProcessedImage }> {
+  if (rawPaths.length !== frameConfig.placeholders.length) {
+    throw new Error('Photo count does not match frame placeholder count')
+  }
+
+  const { canvasWidth, canvasHeight, placeholders } = frameConfig
+
+  const composites: OverlayOptions[] = []
+
+  for (let i = 0; i < placeholders.length; i++) {
+    const p = placeholders[i]
+    const rawPath = rawPaths[i]
+    
+    const rawMetadata = await sharp(rawPath).metadata()
+    const origWidth = rawMetadata.width || 1200
+    const origHeight = rawMetadata.height || 1800
+    
+    const extractTop = p.cropTop
+    const extractLeft = p.cropLeft
+    const extractWidth = origWidth - p.cropLeft - p.cropRight
+    const extractHeight = origHeight - p.cropTop - p.cropBottom
+
+    let img = sharp(rawPath).rotate().extract({
+      left: Math.max(0, extractLeft),
+      top: Math.max(0, extractTop),
+      width: Math.max(1, extractWidth),
+      height: Math.max(1, extractHeight)
+    }).resize(p.width, p.height, { fit: 'cover' })
+
+    if (p.borderRadius > 0) {
+      const rx = p.borderRadius
+      const ry = p.borderRadius
+      const svgMask = Buffer.from(
+        `<svg width="${p.width}" height="${p.height}"><rect x="0" y="0" width="${p.width}" height="${p.height}" rx="${rx}" ry="${ry}" fill="#fff" /></svg>`
+      )
+      img = img.composite([{ input: svgMask, blend: 'dest-in' }])
+    }
+
+    const imgBuffer = await img.toBuffer()
+
+    composites.push({
+      input: imgBuffer,
+      top: p.y,
+      left: p.x
+    })
+  }
+
+  composites.push({
+    input: frameImagePath,
+    blend: 'over'
+  })
+
+  const pipeline = sharp({
+    create: {
+      width: canvasWidth,
+      height: canvasHeight,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 }
+    }
+  }).composite(composites)
+
+  const webpPath = path.join(outputDir, `${outputBaseName}.webp`)
+  const jpegPath = path.join(outputDir, `${outputBaseName}.jpg`)
+  const thumbPath = path.join(outputDir, `${outputBaseName}_thumb.webp`)
+
+  await fs.mkdir(outputDir, { recursive: true })
+
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  const jpegQuality = config.imageProcessing.framedJpegQuality || 95
+
+  await pipeline.clone().webp({ quality: config.imageProcessing.webpQuality, effort: 4 }).toFile(webpPath)
+  await pipeline.clone().flatten({ background: { r: 255, g: 255, b: 255 } }).jpeg({ quality: jpegQuality }).toFile(jpegPath)
+  await pipeline.clone().resize(config.imageProcessing.thumbnailSize, config.imageProcessing.thumbnailSize, { fit: 'inside' }).webp({ quality: config.imageProcessing.thumbnailQuality, effort: 5 }).toFile(thumbPath)
+
+  const webpStats = await fs.stat(webpPath)
+  const jpegStats = await fs.stat(jpegPath)
+  const thumbStats = await fs.stat(thumbPath)
+
+  return {
+    webp: { path: webpPath, size: webpStats.size, width: canvasWidth, height: canvasHeight },
+    jpeg: { path: jpegPath, size: jpegStats.size, width: canvasWidth, height: canvasHeight },
+    thumb: { path: thumbPath, size: thumbStats.size, width: 0, height: 0 }
+  }
+}
+

@@ -7,7 +7,8 @@ import { config } from '../config'
 import { logger } from '../utils/logger'
 import { boothAuthMiddleware } from '../middleware/authMiddleware'
 import { io, operatorSubscriptions } from '../server'
-import { processSinglePhoto, generateThumbnail, compileVerticalStrip } from '../pipeline'
+import { processSinglePhoto, generateThumbnail, compileVerticalStrip, applyFrame } from '../pipeline'
+import { getActiveFrames } from '../utils/frames'
 import { ensurePhotoSession, getEventByOtp, updateEventSettingsById, getCameraSettings, updateCameraSettings } from '../db'
 
 const router = Router()
@@ -46,21 +47,36 @@ const upload = multer({
   },
 })
 
-router.get('/frames', async (req: Request, res: Response) => {
+router.get('/frames', boothAuthMiddleware, async (req: Request, res: Response) => {
   try {
-    const files = await fs.readdir(config.storage.frames)
-    const frames = await Promise.all(
-      files
-        .filter((f) => /\.(png|jpg|jpeg|webp)$/i.test(f))
-        .map(async (name) => {
-          const stat = await fs.stat(path.join(config.storage.frames, name))
-          return { id: name, name, size: stat.size, createdAt: stat.birthtime }
-        })
-    )
-    frames.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    const eventId = (req as any).eventId
+    const activeFrames = await getActiveFrames(eventId)
+    
+    const frames = activeFrames.map(f => ({
+      ...f.config,
+      imageUrl: `/api/booth/frames/${f.id}/image`
+    }))
+
     res.json({ frames })
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to list frames' })
+  }
+})
+
+router.get('/frames/:frameId/image', boothAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const eventId = (req as any).eventId
+    const frameId = req.params.frameId
+    
+    const framePath = path.join(config.eventFrames(eventId), frameId, 'frame.png')
+    const resolvedPath = path.resolve(framePath)
+    if (!resolvedPath.startsWith(path.resolve(config.eventFrames(eventId)))) {
+      return res.status(400).json({ error: 'Invalid path' })
+    }
+    
+    res.sendFile(framePath)
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to serve frame image' })
   }
 })
 
@@ -72,7 +88,7 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
     }
 
     const eventId = (req as any).eventId
-    const { frameName, photoCount } = req.body
+    const { photoCount } = req.body
     const sessionId = uuidv4()
     const count = parseInt(photoCount || String(files.length), 10)
 
@@ -82,14 +98,19 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
 
     const results: any[] = []
     const eventDir = config.eventPhotosDir(eventId)
+    const framedDir = config.eventFramedPhotos(eventId)
 
+    // Process original photos
+    const rawPaths: string[] = []
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
       const outputName = `${sessionId}_${i + 1}.webp`
       const thumbName = `${sessionId}_${i + 1}_thumb.webp`
 
-      await processSinglePhoto(file.path, frameName || null, outputName, eventDir)
+      await processSinglePhoto(file.path, outputName, eventDir)
       await generateThumbnail(file.path, thumbName, eventDir)
+
+      rawPaths.push(path.join(eventDir, outputName))
 
       results.push({
         raw: file.filename,
@@ -109,11 +130,26 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
       )
     }
 
+    // Apply active frames
+    const activeFrames = await getActiveFrames(eventId)
+    if (activeFrames.length > 0) {
+      for (const frame of activeFrames) {
+        if (files.length !== frame.config.placeholders.length) {
+          logger.warn(`Skipping frame ${frame.id}: Photo count (${files.length}) does not match placeholder count (${frame.config.placeholders.length})`)
+          continue
+        }
+        try {
+          await applyFrame(rawPaths, frame.config, frame.imagePath, `${sessionId}_${frame.id}`, framedDir)
+        } catch (err: any) {
+          logger.error(`Failed to apply frame ${frame.id}: ${err.message}`)
+        }
+      }
+    }
+
     const newMediaPayload = {
       eventId,
       sessionId,
       photoCount: files.length,
-      frameName: frameName || null,
       timestamp: new Date().toISOString(),
       results: results.map((r) => ({
         output: r.output,

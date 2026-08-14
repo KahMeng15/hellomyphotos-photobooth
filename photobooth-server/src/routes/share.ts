@@ -9,6 +9,7 @@ import { logger } from '../utils/logger'
 import { authMiddleware } from '../middleware/authMiddleware'
 import { getEvent, getPhotoSessionByShareId, getPhotoSession, logShareAnalytics } from '../db'
 import { UAParser } from 'ua-parser-js'
+import { getActiveFrames } from '../utils/frames'
 
 const router = Router()
 
@@ -106,39 +107,96 @@ router.get('/:token', async (req: Request, res: Response) => {
       return res.json({ expired: true })
     }
 
-    const eventDir = config.eventPhotosDir(eventId)
-    let files: string[] = []
-    try {
-      files = await fs.readdir(eventDir)
-    } catch {
-      files = []
+    const activeFrames = await getActiveFrames(eventId)
+
+    let photos: any[] = []
+
+    if (activeFrames.length > 0) {
+      const framedDir = config.eventFramedPhotos(eventId)
+      let framedFiles: string[] = []
+      try {
+        framedFiles = await fs.readdir(framedDir)
+      } catch {
+        framedFiles = []
+      }
+
+      const sessionFiles = framedFiles
+        .filter((f) => !f.includes('_thumb') && f.endsWith('.webp'))
+        .filter((f) => isSessionToken ? f.startsWith(sessionFilter) : true)
+        .sort()
+
+      photos = await Promise.all(
+        sessionFiles.map(async (name, i) => {
+          const stat = await fs.stat(path.join(framedDir, name))
+          const thumbName = name.replace(/(\.\w+)$/, '_thumb$1')
+          const thumbExists = framedFiles.includes(thumbName)
+          const jpegName = name.replace(/(\.webp)$/, '.jpg')
+          const jpegExists = framedFiles.includes(jpegName)
+
+          let frameId = ''
+          let frameName = ''
+          for (const f of activeFrames) {
+            if (name.includes(`_${f.id}`)) {
+              frameId = f.id
+              frameName = f.config.name
+              break
+            }
+          }
+
+          const isObfuscated = event.obfuscate_links === 1
+          const idToUse = isObfuscated ? `framed_idx_${i}` : name
+          const thumbIdToUse = isObfuscated ? `framed_idx_${i}_thumb` : thumbName
+          const jpegIdToUse = isObfuscated ? `framed_idx_${i}_jpeg` : jpegName
+
+          return {
+            id: idToUse,
+            frameId,
+            frameName,
+            url: `/api/share/${token}/photo/${idToUse}`,
+            thumbnail: thumbExists ? `/api/share/${token}/photo/${thumbIdToUse}` : null,
+            downloadUrl: jpegExists ? `/api/share/${token}/photo/${jpegIdToUse}` : `/api/share/${token}/photo/${idToUse}`,
+            size: stat.size,
+            width: 0,
+            height: 0,
+          }
+        })
+      )
+    } else {
+      const eventDir = config.eventPhotosDir(eventId)
+      let files: string[] = []
+      try {
+        files = await fs.readdir(eventDir)
+      } catch {
+        files = []
+      }
+
+      const sessionFiles = files
+        .filter((f) => !f.includes('_thumb') && !f.includes('_strip'))
+        .filter((f) => isSessionToken ? f.startsWith(sessionFilter) : true)
+        .sort()
+
+      photos = await Promise.all(
+        sessionFiles.map(async (name, i) => {
+          const stat = await fs.stat(path.join(eventDir, name))
+          const thumbName = name.replace(/(\.\w+)$/, '_thumb$1')
+          const thumbExists = files.includes(thumbName)
+          
+          const isObfuscated = event.obfuscate_links === 1
+          const idToUse = isObfuscated ? `idx_${i}` : name
+          const thumbIdToUse = isObfuscated ? `idx_${i}_thumb` : thumbName
+
+          return {
+            id: idToUse,
+            url: `/api/share/${token}/photo/${idToUse}`,
+            thumbnail: thumbExists ? `/api/share/${token}/photo/${thumbIdToUse}` : null,
+            downloadUrl: `/api/share/${token}/photo/${idToUse}`,
+            size: stat.size,
+            width: 0,
+            height: 0,
+          }
+        })
+      )
     }
-
-    const sessionFiles = files
-      .filter((f) => !f.includes('_thumb') && !f.includes('_strip'))
-      .filter((f) => isSessionToken ? f.startsWith(sessionFilter) : true)
-      .sort()
-
-    const photos = await Promise.all(
-      sessionFiles.map(async (name, i) => {
-        const stat = await fs.stat(path.join(eventDir, name))
-        const thumbName = name.replace(/(\.\w+)$/, '_thumb$1')
-        const thumbExists = files.includes(thumbName)
-        
-        const isObfuscated = event.obfuscate_links === 1
-        const idToUse = isObfuscated ? `idx_${i}` : name
-        const thumbIdToUse = isObfuscated ? `idx_${i}_thumb` : thumbName
-
-        return {
-          id: idToUse,
-          url: `/api/share/${token}/photo/${idToUse}`,
-          thumbnail: thumbExists ? `/api/share/${token}/photo/${thumbIdToUse}` : null,
-          size: stat.size,
-          width: 0,
-          height: 0,
-        }
-      })
-    )
 
     const expiryDate = getExpiryDate(event)
 
@@ -292,41 +350,46 @@ router.get('/:token/photo/:filename', async (req: Request, res: Response) => {
     if (!event) return res.status(404).json({ error: 'Event not found' })
     if (checkExpiry(event)) return res.status(403).json({ error: 'Expired' })
 
-    const eventDir = config.eventPhotosDir(eventId)
-    let files: string[] = []
-    try { files = await fs.readdir(eventDir) } catch {}
-
     let targetFilename = filename
     const isObfuscated = event.obfuscate_links === 1
+    const isFramedRequest = filename.includes('_frm_') || filename.startsWith('framed_idx_')
+
+    const baseDir = isFramedRequest ? config.eventFramedPhotos(eventId) : config.eventPhotosDir(eventId)
 
     if (isObfuscated) {
-      if (!filename.startsWith('idx_')) {
+      if (!filename.startsWith('idx_') && !filename.startsWith('framed_idx_')) {
         return res.status(403).json({ error: 'Direct file access disabled' })
       }
-      const match = filename.match(/^idx_(\d+)(_thumb)?$/)
+      
+      let files: string[] = []
+      try { files = await fs.readdir(baseDir) } catch {}
+
+      const match = filename.match(/^(framed_)?idx_(\d+)(_thumb|_jpeg)?$/)
       if (!match) return res.status(404).json({ error: 'Not found' })
-      const idx = parseInt(match[1])
-      const isThumb = !!match[2]
+      const idx = parseInt(match[2])
+      const modifier = match[3]
 
       const sessionFiles = files
-        .filter((f) => !f.includes('_thumb') && !f.includes('_strip'))
+        .filter((f) => !f.includes('_thumb') && !f.includes('_strip') && (!isFramedRequest || f.endsWith('.webp')))
         .filter((f) => isSessionToken ? f.startsWith(sessionFilter) : true)
         .sort()
 
       const baseFile = sessionFiles[idx]
       if (!baseFile) return res.status(404).json({ error: 'Photo not found' })
 
-      if (isThumb) {
+      if (modifier === '_thumb') {
         targetFilename = baseFile.replace(/(\.\w+)$/, '_thumb$1')
+      } else if (modifier === '_jpeg') {
+        targetFilename = baseFile.replace(/(\.\w+)$/, '.jpg')
       } else {
         targetFilename = baseFile
       }
     }
 
-    const filePath = path.join(eventDir, targetFilename)
+    const filePath = path.join(baseDir, targetFilename)
     const resolvedPath = path.resolve(filePath)
 
-    if (!resolvedPath.startsWith(path.resolve(eventDir))) {
+    if (!resolvedPath.startsWith(path.resolve(baseDir))) {
       return res.status(400).json({ error: 'Invalid path' })
     }
 
