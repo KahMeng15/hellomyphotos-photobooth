@@ -3,8 +3,11 @@
     <div class="header">
       <h2>Frames</h2>
       <div class="actions">
-        <label class="btn-primary">
-          Add Frame
+        <label class="btn-icon-primary" title="Add Frame">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
           <input type="file" @change="uploadFrame" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="display: none;" />
         </label>
       </div>
@@ -14,7 +17,7 @@
     
     <div v-else class="frame-grid">
       <div v-for="frame in frames" :key="frame.id" class="frame-card">
-        <div class="frame-preview">
+        <div class="frame-preview" :class="{ 'is-disabled': frame.disabled }">
           <img v-if="!frame.isSpecial" :src="`/api/admin/events/${eventId}/frames/${frame.id}/image`" class="frame-preview-blur" />
           <svg v-if="!frame.isSpecial" :viewBox="`0 0 ${frame.canvasWidth || 1000} ${frame.canvasHeight || 1000}`" class="frame-svg-preview">
             <template v-if="frame.layering === 'background'">
@@ -32,7 +35,10 @@
               <image :href="`/api/admin/events/${eventId}/frames/${frame.id}/image`" x="0" y="0" :width="frame.canvasWidth" :height="frame.canvasHeight" />
             </template>
           </svg>
-          <div v-else class="special-frame-placeholder">No Overlay</div>
+          <svg v-else viewBox="0 0 1000 1000" class="frame-svg-preview">
+            <rect x="0" y="0" width="1000" height="1000" fill="rgba(33, 150, 243, 0.7)" stroke="#2196F3" stroke-width="20" />
+            <text x="500" y="500" fill="#fff" font-size="300" font-family="sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="middle">1</text>
+          </svg>
         </div>
         <div class="frame-info">
           <h3>{{ frame.name }}</h3>
@@ -42,13 +48,36 @@
             <button @click="toggleStatus(frame)" :class="frame.disabled ? 'btn-enable' : 'btn-disable'">
               {{ frame.disabled ? 'Enable' : 'Disable' }}
             </button>
-            <button v-if="!frame.isSpecial" @click="backfill(frame.id)" class="btn-secondary" title="Apply frame to existing photos">Backfill</button>
-            <button v-if="!frame.isSpecial" @click="deleteFrame(frame.id)" class="btn-danger">Delete</button>
+            <div class="dropdown" v-if="!frame.isSpecial">
+              <button class="btn-more">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="1.5"></circle>
+                  <circle cx="12" cy="5" r="1.5"></circle>
+                  <circle cx="12" cy="19" r="1.5"></circle>
+                </svg>
+              </button>
+              <div class="dropdown-content">
+                <button @click="backfill(frame.id)" class="btn-dropdown" title="Apply frame to existing photos">Backfill</button>
+                <button @click="deleteFrame(frame.id)" class="btn-dropdown text-danger">Delete</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
       <div v-if="frames.length === 0" class="empty-state">
         <p>No frames added yet.</p>
+      </div>
+    </div>
+    <div v-if="confirmModal" class="modal-overlay" @click.self="!confirmModal.isInfo && (confirmModal = null)">
+      <div class="modal-content confirm-modal">
+        <h3>{{ confirmModal.title }}</h3>
+        <p>{{ confirmModal.message }}</p>
+        <div class="modal-actions">
+          <button v-if="!confirmModal.isInfo" @click="confirmModal = null" class="btn-secondary">Cancel</button>
+          <button @click="confirmModal.onConfirm()" :class="confirmModal.isDanger ? 'btn-danger' : 'btn-primary'">
+            {{ confirmModal.isInfo ? 'OK' : 'Confirm' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -63,6 +92,15 @@ const emit = defineEmits<{ (e: 'edit', frame: any): void }>()
 
 const frames = ref<any[]>([])
 const loading = ref(false)
+
+interface ModalOptions {
+  title: string
+  message: string
+  isDanger?: boolean
+  isInfo?: boolean
+  onConfirm: () => void
+}
+const confirmModal = ref<ModalOptions | null>(null)
 
 async function loadFrames() {
   loading.value = true
@@ -90,7 +128,7 @@ async function uploadFrame(e: Event) {
     await loadFrames()
   } catch (err) {
     console.error('Failed to upload frame', err)
-    alert('Failed to upload frame')
+    confirmModal.value = { title: 'Error', message: 'Failed to upload frame.', isInfo: true, isDanger: true, onConfirm: () => confirmModal.value = null }
   } finally {
     loading.value = false
     ;(e.target as HTMLInputElement).value = ''
@@ -98,23 +136,36 @@ async function uploadFrame(e: Event) {
 }
 
 async function backfill(frameId: string) {
-  if (!confirm('This will process all existing sessions for this event with this frame. Proceed?')) return
-  try {
-    await axios.post(`/api/admin/events/${props.eventId}/frames/${frameId}/backfill`)
-    alert('Backfill started in background.')
-  } catch (err) {
-    console.error('Failed to start backfill', err)
-    alert('Failed to start backfill')
+  confirmModal.value = {
+    title: 'Confirm Backfill',
+    message: 'This will process all existing sessions for this event with this frame. Proceed?',
+    onConfirm: async () => {
+      confirmModal.value = null
+      try {
+        await axios.post(`/api/admin/events/${props.eventId}/frames/${frameId}/backfill`)
+        confirmModal.value = { title: 'Success', message: 'Backfill started in background.', isInfo: true, onConfirm: () => confirmModal.value = null }
+      } catch (err) {
+        console.error('Failed to start backfill', err)
+        confirmModal.value = { title: 'Error', message: 'Failed to start backfill.', isInfo: true, isDanger: true, onConfirm: () => confirmModal.value = null }
+      }
+    }
   }
 }
 
 async function deleteFrame(frameId: string) {
-  if (!confirm('Are you sure you want to delete this frame?')) return
-  try {
-    await axios.delete(`/api/admin/events/${props.eventId}/frames/${frameId}`)
-    await loadFrames()
-  } catch (err) {
-    console.error('Failed to delete frame', err)
+  confirmModal.value = {
+    title: 'Delete Frame',
+    message: 'Are you sure you want to delete this frame?',
+    isDanger: true,
+    onConfirm: async () => {
+      confirmModal.value = null
+      try {
+        await axios.delete(`/api/admin/events/${props.eventId}/frames/${frameId}`)
+        await loadFrames()
+      } catch (err) {
+        console.error('Failed to delete frame', err)
+      }
+    }
   }
 }
 
@@ -142,6 +193,41 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-content.confirm-modal {
+  background: #1a1a1a;
+  padding: 1.5rem;
+  border-radius: 8px;
+  max-width: 400px;
+  width: 90%;
+  border: 1px solid #333;
+}
+.modal-content.confirm-modal h3 { margin: 0 0 1rem; }
+.modal-content.confirm-modal p { margin: 0 0 1.5rem; color: #aaa; line-height: 1.4; }
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+.modal-actions button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.modal-actions .btn-primary { background: #2196F3; color: #fff; }
+.modal-actions .btn-primary:hover { background: #1976D2; }
+
 .frame-manager {
   padding: 2rem;
 }
@@ -152,16 +238,23 @@ onMounted(() => {
   margin-bottom: 1.5rem;
 }
 .header h2 { margin: 0; font-size: 1.25rem; }
-.btn-primary {
+.btn-icon-primary {
   background: #2196F3;
   color: #fff;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  font-weight: 600;
-  display: inline-block;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.4);
+  transition: transform 0.2s, background 0.2s;
 }
-.btn-primary:hover { background: #1976D2; }
+.btn-icon-primary:hover {
+  background: #1976D2;
+  transform: scale(1.05);
+}
 .frame-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -182,6 +275,14 @@ onMounted(() => {
   overflow: hidden;
   position: relative;
 }
+.frame-preview.is-disabled::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 5;
+  pointer-events: none;
+}
 .frame-preview-blur {
   position: absolute;
   top: -10%;
@@ -201,13 +302,7 @@ onMounted(() => {
   z-index: 1;
   filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
 }
-.special-frame-placeholder {
-  color: #666;
-  font-size: 1.2rem;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
+
 .frame-img {
   max-width: 100%;
   max-height: 100%;
@@ -228,9 +323,9 @@ onMounted(() => {
 .frame-actions {
   display: flex;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  align-items: center;
 }
-.frame-actions button {
+.frame-actions > button {
   flex: 1;
   padding: 0.375rem;
   border: none;
@@ -239,14 +334,58 @@ onMounted(() => {
   cursor: pointer;
   font-weight: 500;
 }
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+.btn-more {
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0.375rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-more:hover { color: #fff; background: #2a2a2a; }
+.dropdown-content {
+  display: none;
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: 0.25rem;
+  background-color: #2a2a2a;
+  min-width: 120px;
+  box-shadow: 0px -4px 16px rgba(0,0,0,0.5);
+  z-index: 10;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.dropdown:hover .dropdown-content, .dropdown:focus-within .dropdown-content {
+  display: flex;
+  flex-direction: column;
+}
+.btn-dropdown {
+  background: none;
+  border: none;
+  color: #fff;
+  padding: 10px 16px;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  font-size: 0.8125rem;
+}
+.btn-dropdown:hover { background-color: #3a3a3a; }
+.text-danger { color: #f44336 !important; }
+
 .btn-secondary { background: #2a2a2a; color: #fff; }
 .btn-secondary:hover { background: #3a3a3a; }
 .btn-enable { background: #1a3a2a; color: #4caf50; }
 .btn-enable:hover { background: #2a4a3a; }
 .btn-disable { background: #3a2a1a; color: #ff9800; }
 .btn-disable:hover { background: #4a3a2a; }
-.btn-danger { background: #3a1a1a; color: #f44336; }
-.btn-danger:hover { background: #4a2a2a; }
 .empty-state {
   grid-column: 1 / -1;
   text-align: center;
