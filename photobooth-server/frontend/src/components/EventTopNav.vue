@@ -7,9 +7,10 @@
         </svg>
       </button>
       <h1>
-        {{ event.name || 'Untitled Event' }}
-        <span v-if="currentTitle" style="color: #888; font-weight: 400; margin-left: 0.5rem;">/ {{ currentTitle }}</span>
-        <span v-else class="event-status" :class="`status-${event.status}`">{{ event.status }}</span>
+        <span class="event-name">{{ event.name || 'Untitled Event' }}</span>
+        <span v-if="currentTitle" class="nav-divider">/</span>
+        <span v-if="currentTitle" class="nav-subtitle">{{ currentTitle }}</span>
+        <span v-if="!currentTitle && event.status" class="event-status" :class="`status-${event.status}`">{{ event.status }}</span>
       </h1>
     </div>
     <div class="header-right" style="display:flex; align-items:center; gap:0.5rem;">
@@ -127,6 +128,10 @@ const currentRoute = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+.nav-divider, .nav-subtitle {
+  color: #888;
+  font-weight: 400;
 }
 .btn-back {
   background: none;

@@ -20,31 +20,31 @@
         </div>
 
         <h3 style="margin: 0 0 1rem 0; color: #fff; font-size: 1.1rem;">Recent Activity</h3>
-        <div class="logs-container" style="background: #222; border: 1px solid #333; border-radius: 8px; overflow: hidden;">
+        <div class="logs-container" style="background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 12px; overflow: hidden;">
           <table class="logs-table" v-if="analytics.logs.length > 0" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem;">
             <thead>
               <tr>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #333; background: #2a2a2a; font-weight: 500; color: #fff;">Time</th>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #333; background: #2a2a2a; font-weight: 500; color: #fff;">Action</th>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #333; background: #2a2a2a; font-weight: 500; color: #fff;">Source</th>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #333; background: #2a2a2a; font-weight: 500; color: #fff;">Device</th>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #333; background: #2a2a2a; font-weight: 500; color: #fff;">Target</th>
+                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; background: #111; font-weight: 500; color: #fff;">Time</th>
+                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; background: #111; font-weight: 500; color: #fff;">Action</th>
+                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; background: #111; font-weight: 500; color: #fff;">Source</th>
+                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; background: #111; font-weight: 500; color: #fff;">Device</th>
+                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; background: #111; font-weight: 500; color: #fff;">Target</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="log in analytics.logs" :key="log.id">
-                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid #333; color: #ccc;">{{ formatTime(log.created_at) }}</td>
-                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid #333; color: #ccc;">
+                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; color: #ccc;">{{ formatTime(log.created_at) }}</td>
+                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; color: #ccc;">
                   <span class="badge" :class="log.action === 'download' ? 'badge-blue' : 'badge-gray'" style="padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500;">
                     {{ log.action }}
                   </span>
                 </td>
-                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid #333; color: #ccc;">
+                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; color: #ccc;">
                   <span class="badge badge-purple" v-if="log.source === 'qr'" style="padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500;">QR</span>
                   <span class="badge badge-gray" v-else style="padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500;">Direct</span>
                 </td>
-                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid #333; color: #ccc;">{{ log.device_type }} / {{ log.os }}</td>
-                <td class="target-col" :title="log.target_file || '-'" style="padding: 0.75rem 1rem; border-bottom: 1px solid #333; color: #ccc; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ log.target_file || '-' }}</td>
+                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; color: #ccc;">{{ log.device_type }} / {{ log.os }}</td>
+                <td class="target-col" :title="log.target_file || '-'" style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; color: #ccc; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ log.target_file || '-' }}</td>
               </tr>
             </tbody>
           </table>
@@ -95,7 +95,7 @@ onMounted(() => {
 
 <style scoped>
 .page-wrapper {
-  background: #1a1a1a;
+  background: #0f0f0f;
   min-height: 100vh;
   color: #fff;
   display: flex;
@@ -114,10 +114,10 @@ onMounted(() => {
   margin-bottom: 2rem;
 }
 .stat-card {
-  background: #222;
-  border: 1px solid #333;
+  background: #0f0f0f;
+  border: 1px solid #2a2a2a;
   padding: 1.5rem;
-  border-radius: 8px;
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
   align-items: center;

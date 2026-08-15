@@ -153,9 +153,10 @@ async function saveSettings() {
   width: 100%;
   max-width: 600px;
   background: #0f0f0f;
-  padding: 2rem;
+  padding: 1.5rem;
   border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  border-radius: 12px;
+  margin: 2rem auto;
 }
 .focus-btn {
   padding: 0.25rem 1rem;
