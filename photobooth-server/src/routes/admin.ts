@@ -20,7 +20,8 @@ import {
   endEvent, deleteEvent, listEventPhotoSessions,
   updateEventSettingsById, getGlobalSettings, updateGlobalSettings,
   archiveSession, restoreSession, getEventAnalytics,
-  getAllUsers, insertUser, deleteUser, findUserByEmail, regenerateSessionShareId, setEventShareOriginals
+  getAllUsers, insertUser, deleteUser, findUserByEmail, regenerateSessionShareId, setEventShareOriginals,
+  getSessionShares, createSessionShare, setSessionShareStatus, deleteSessionShare
 } from '../db'
 
 const router = Router()
@@ -413,6 +414,42 @@ router.get('/events/:id/analytics', async (req: Request, res: Response) => {
       res.status(500).json({ error: error.message })
     }
   })
+
+router.get('/events/:eventId/sessions/:sessionId/shares', async (req: Request, res: Response) => {
+  try {
+    const shares = getSessionShares(req.params.sessionId)
+    res.json({ shares })
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list shares' })
+  }
+})
+
+router.post('/events/:eventId/sessions/:sessionId/shares', async (req: Request, res: Response) => {
+  try {
+    const shareId = createSessionShare(req.params.sessionId)
+    res.json({ shareId })
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create share link' })
+  }
+})
+
+router.patch('/events/:eventId/sessions/:sessionId/shares/:shareId', async (req: Request, res: Response) => {
+  try {
+    setSessionShareStatus(req.params.shareId, req.body.isActive)
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update share status' })
+  }
+})
+
+router.delete('/events/:eventId/sessions/:sessionId/shares/:shareId', async (req: Request, res: Response) => {
+  try {
+    deleteSessionShare(req.params.shareId)
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete share link' })
+  }
+})
 
 router.post('/events/:eventId/sessions/:sessionId/reset-link', async (req: Request, res: Response) => {
     try {

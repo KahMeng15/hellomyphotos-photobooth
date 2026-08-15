@@ -86,6 +86,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import draggable from 'vuedraggable'
+import { toast } from 'vue3-toastify'
+import FrameEditor from './FrameEditor.vue'
 
 const props = defineProps<{ eventId: string }>()
 const emit = defineEmits<{ (e: 'edit', frame: any): void }>()
@@ -101,6 +104,17 @@ interface ModalOptions {
   onConfirm: () => void
 }
 const confirmModal = ref<ModalOptions | null>(null)
+
+async function saveFrameOrder() {
+  try {
+    const newOrder = frames.value.map((f: any) => f.id)
+    await axios.post(`/api/admin/events/${props.eventId}/frames/order`, { order: newOrder })
+    toast.success('Frame order saved')
+  } catch (err) {
+    console.error('Failed to save order', err)
+    toast.error('Failed to save frame order')
+  }
+}
 
 async function loadFrames() {
   loading.value = true
@@ -125,10 +139,11 @@ async function uploadFrame(e: Event) {
     await axios.post(`/api/admin/events/${props.eventId}/frames`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
+    toast.success('Frame uploaded successfully')
     await loadFrames()
   } catch (err) {
     console.error('Failed to upload frame', err)
-    confirmModal.value = { title: 'Error', message: 'Failed to upload frame.', isInfo: true, isDanger: true, onConfirm: () => confirmModal.value = null }
+    toast.error('Failed to upload frame')
   } finally {
     loading.value = false
     ;(e.target as HTMLInputElement).value = ''
@@ -143,10 +158,10 @@ async function backfill(frameId: string) {
       confirmModal.value = null
       try {
         await axios.post(`/api/admin/events/${props.eventId}/frames/${frameId}/backfill`)
-        confirmModal.value = { title: 'Success', message: 'Backfill started in background.', isInfo: true, onConfirm: () => confirmModal.value = null }
+        toast.info('Backfill started in background')
       } catch (err) {
         console.error('Failed to start backfill', err)
-        confirmModal.value = { title: 'Error', message: 'Failed to start backfill.', isInfo: true, isDanger: true, onConfirm: () => confirmModal.value = null }
+        toast.error('Failed to start backfill')
       }
     }
   }
@@ -161,9 +176,11 @@ async function deleteFrame(frameId: string) {
       confirmModal.value = null
       try {
         await axios.delete(`/api/admin/events/${props.eventId}/frames/${frameId}`)
+        toast.success('Frame deleted')
         await loadFrames()
       } catch (err) {
         console.error('Failed to delete frame', err)
+        toast.error('Failed to delete frame')
       }
     }
   }
@@ -171,12 +188,15 @@ async function deleteFrame(frameId: string) {
 
 async function toggleStatus(frame: any) {
   try {
+    const nextStatus = !frame.disabled
     await axios.patch(`/api/admin/events/${props.eventId}/frames/${frame.id}`, {
-      disabled: !frame.disabled
+      disabled: nextStatus
     })
-    frame.disabled = !frame.disabled
+    frame.disabled = nextStatus
+    toast.success(nextStatus ? 'Frame disabled' : 'Frame enabled')
   } catch (err) {
     console.error('Failed to toggle frame', err)
+    toast.error('Failed to toggle frame status')
   }
 }
 

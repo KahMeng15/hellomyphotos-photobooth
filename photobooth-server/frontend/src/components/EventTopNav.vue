@@ -107,9 +107,12 @@ const currentRoute = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1.5rem;
+  padding: 0.75rem 2rem;
   background: #1a1a1a;
   border-bottom: 1px solid #2a2a2a;
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 .header-left {
   display: flex;

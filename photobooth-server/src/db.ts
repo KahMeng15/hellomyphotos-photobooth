@@ -140,6 +140,30 @@ db.exec(`
 `)
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS session_shares (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES photo_sessions(id) ON DELETE CASCADE,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`)
+
+try {
+  const existingWithShareId = db.prepare('SELECT id, share_id, created_at FROM photo_sessions WHERE share_id IS NOT NULL').all() as any[]
+  const checkShare = db.prepare('SELECT 1 FROM session_shares WHERE id = ?')
+  const insertShare = db.prepare('INSERT INTO session_shares (id, session_id, is_active, created_at) VALUES (?, ?, 1, ?)')
+  db.transaction(() => {
+    for (const session of existingWithShareId) {
+      if (!checkShare.get(session.share_id)) {
+        insertShare.run(session.share_id, session.id, session.created_at)
+      }
+    }
+  })()
+} catch (e) {
+  logger.error('Migration failed for session_shares', e)
+}
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
@@ -313,15 +337,20 @@ export function deleteEvent(id: string) {
 export function ensurePhotoSession(sessionId: string, eventId: string) {
   const existing = findPhotoSession.get(sessionId)
   if (existing) {
-    // Backfill share_id if missing
-    if (!(existing as any).share_id) {
-      const shareId = randomBytes(4).toString('hex')
-      db.prepare('UPDATE photo_sessions SET share_id = ? WHERE id = ?').run(shareId, sessionId)
+    const hasShares = db.prepare('SELECT 1 FROM session_shares WHERE session_id = ?').get(sessionId)
+    if (!hasShares) {
+      let shareId = (existing as any).share_id
+      if (!shareId) {
+        shareId = randomBytes(4).toString('hex')
+        db.prepare('UPDATE photo_sessions SET share_id = ? WHERE id = ?').run(shareId, sessionId)
+      }
+      db.prepare('INSERT OR IGNORE INTO session_shares (id, session_id, is_active, created_at) VALUES (?, ?, 1, datetime("now"))').run(shareId, sessionId)
     }
     return
   }
   const shareId = randomBytes(4).toString('hex')
   insertPhotoSession.run(sessionId, eventId, shareId)
+  db.prepare('INSERT INTO session_shares (id, session_id, is_active, created_at) VALUES (?, ?, 1, datetime("now"))').run(shareId, sessionId)
 }
 
 export function getPhotoSession(sessionId: string) {
@@ -424,13 +453,37 @@ export function closeDb() {
 }
 
 export function regenerateSessionShareId(sessionId: string) {
+  // Legacy function: We now use createSessionShare
   const newShareId = randomBytes(4).toString('hex')
   db.prepare('UPDATE photo_sessions SET share_id = ? WHERE id = ?').run(newShareId, sessionId)
+  db.prepare('INSERT INTO session_shares (id, session_id, is_active, created_at) VALUES (?, ?, 1, datetime("now"))').run(newShareId, sessionId)
   return newShareId
 }
 
+export function createSessionShare(sessionId: string) {
+  const shareId = randomBytes(4).toString('hex')
+  db.prepare('INSERT INTO session_shares (id, session_id, is_active, created_at) VALUES (?, ?, 1, datetime("now"))').run(shareId, sessionId)
+  return shareId
+}
+
+export function getSessionShares(sessionId: string) {
+  return db.prepare('SELECT * FROM session_shares WHERE session_id = ? ORDER BY created_at DESC').all(sessionId) as Array<{
+    id: string; session_id: string; is_active: number; created_at: string
+  }>
+}
+
+export function setSessionShareStatus(shareId: string, isActive: boolean) {
+  db.prepare('UPDATE session_shares SET is_active = ? WHERE id = ?').run(isActive ? 1 : 0, shareId)
+}
+
+export function deleteSessionShare(shareId: string) {
+  db.prepare('DELETE FROM session_shares WHERE id = ?').run(shareId)
+}
+
 export function getPhotoSessionByShareId(shareId: string) {
-  return findPhotoSessionByShareId.get(shareId) as {
+  const share = db.prepare('SELECT * FROM session_shares WHERE id = ? AND is_active = 1').get(shareId) as { session_id: string } | undefined
+  if (!share) return undefined
+  return findPhotoSession.get(share.session_id) as {
     id: string; event_id: string; created_at: string; share_id: string; archived: number;
   } | undefined
 }

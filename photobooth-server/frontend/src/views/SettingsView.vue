@@ -78,7 +78,6 @@
       <div class="actions">
         <button @click="saveAndClose" class="btn-primary">Save</button>
         <button @click="cancelChanges" class="btn-cancel">Cancel</button>
-        <span v-if="saved" class="saved-msg">Saved</span>
       </div>
     </div>
   </div>
@@ -88,6 +87,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
 import axios from 'axios'
+import { toast } from 'vue3-toastify'
 
 const isoChoices = ['auto', '100', '200', '400', '800', '1600', '3200', '6400']
 const shutterChoices = ['auto', '1/30', '1/40', '1/50', '1/60', '1/80', '1/100', '1/125', '1/160', '1/200', '1/250', '1/320', '1/400', '1/500', '1/640', '1/800']
@@ -96,7 +96,6 @@ const apertureChoices = ['auto', '2.8', '4', '4.5', '5', '5.6', '6.3', '7.1', '8
 const router = useRouter()
 const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', organizer: '', contactInfo: '' })
 const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', organizer: '', contactInfo: '' })
-const saved = ref(false)
 
 const dirty = computed(() =>
   settings.value.photoCount !== originalSettings.value.photoCount ||
@@ -114,18 +113,20 @@ onMounted(async () => {
     const { data } = await axios.get('/api/admin/settings/defaults')
     settings.value = data.settings
     originalSettings.value = { ...data.settings }
-  } catch {}
+  } catch (err) {
+    toast.error('Failed to load settings')
+  }
 })
 
 async function saveAndClose() {
-  saved.value = false
   try {
     await axios.put('/api/admin/settings/defaults', settings.value)
     originalSettings.value = { ...settings.value }
-    saved.value = true
+    toast.success('Settings saved')
     router.back()
   } catch (err) {
     console.error('Failed to save defaults', err)
+    toast.error('Failed to save settings')
   }
 }
 
@@ -152,6 +153,9 @@ function cancelChanges() {
   padding: 0.75rem 1.5rem;
   background: #1a1a1a;
   border-bottom: 1px solid #2a2a2a;
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 
 .settings-header h1 {
@@ -167,7 +171,7 @@ function cancelChanges() {
 }
 
 .card {
-  background: #1a1a1a;
+  background: #0f0f0f;
   border: 1px solid #2a2a2a;
   border-radius: 12px;
   padding: 1.5rem;

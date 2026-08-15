@@ -133,6 +133,9 @@ function formatUptime(s: number) {
   padding: 0.75rem 1.5rem;
   background: #1a1a1a;
   border-bottom: 1px solid #2a2a2a;
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 
 .admin-header h1 {

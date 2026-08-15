@@ -46,7 +46,7 @@ function goBack() {
 
 <style scoped>
 .page-wrapper {
-  background: #1a1a1a;
+  background: #0f0f0f;
   min-height: 100vh;
   color: #fff;
   display: flex;
@@ -60,8 +60,8 @@ function goBack() {
 .frames-container {
   width: 100%;
   max-width: 1200px;
-  background: #222;
-  border: 1px solid #333;
+  background: #0f0f0f;
+  border: 1px solid #2a2a2a;
   border-radius: 8px;
   overflow: hidden;
 }

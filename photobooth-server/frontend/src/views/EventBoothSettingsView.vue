@@ -55,7 +55,7 @@
           </div>
         </div>
 
-        <div v-if="settingsMsg" :class="['settings-msg', settingsMsgType]" style="margin-top:1rem; padding: 0.75rem; border-radius: 6px; font-weight: 600;" :style="{ background: settingsMsgType === 'success' ? 'rgba(76, 175, 80, 0.2)' : 'rgba(244, 67, 54, 0.2)', color: settingsMsgType === 'success' ? '#4caf50' : '#f44336' }">{{ settingsMsg }}</div>
+
 
         <button @click="saveSettings" style="margin-top: 1rem; width: 100%; background: #fff; color: #000; border: none; padding: 0.75rem 1.5rem; font-weight: 600; border-radius: 6px; cursor: pointer;" :disabled="settingsSaving">
           {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
@@ -70,6 +70,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import EventTopNav from '../components/EventTopNav.vue'
 import axios from 'axios'
+import { toast } from 'vue3-toastify'
 
 const router = useRouter()
 const route = useRoute()
@@ -93,8 +94,6 @@ const eventSettings = ref({
 })
 
 const settingsSaving = ref(false)
-const settingsMsg = ref('')
-const settingsMsgType = ref<'success' | 'error'>('success')
 
 onMounted(async () => {
   try {
@@ -113,6 +112,7 @@ onMounted(async () => {
     }
   } catch (err) {
     console.error('Failed to load event', err)
+    toast.error('Failed to load event settings')
   }
 })
 
@@ -122,7 +122,6 @@ function goBack() {
 
 async function saveSettings() {
   settingsSaving.value = true
-  settingsMsg.value = ''
   try {
     await axios.patch(`/api/admin/events/${eventId.value}`, {
       photoCount: eventSettings.value.photoCount,
@@ -134,20 +133,17 @@ async function saveSettings() {
       dslrAperture: eventSettings.value.dslrAperture,
       dslrFocusMode: eventSettings.value.dslrFocusMode,
     })
-    settingsMsg.value = 'Settings saved'
-    settingsMsgType.value = 'success'
+    toast.success('Settings saved successfully')
   } catch {
-    settingsMsg.value = 'Failed to save'
-    settingsMsgType.value = 'error'
+    toast.error('Failed to save settings')
   }
   settingsSaving.value = false
-  setTimeout(() => { settingsMsg.value = '' }, 3000)
 }
 </script>
 
 <style scoped>
 .page-wrapper {
-  background: #1a1a1a;
+  background: #0f0f0f;
   min-height: 100vh;
   color: #fff;
   display: flex;
@@ -156,9 +152,9 @@ async function saveSettings() {
 .settings-container {
   width: 100%;
   max-width: 600px;
-  background: #222;
+  background: #0f0f0f;
   padding: 2rem;
-  border: 1px solid #333;
+  border: 1px solid #2a2a2a;
   border-radius: 8px;
 }
 .focus-btn {

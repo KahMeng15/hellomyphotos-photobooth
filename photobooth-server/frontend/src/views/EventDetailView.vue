@@ -544,7 +544,7 @@ function formatTime(ts: string) {
 
 .photo-feed {
   overflow-y: auto;
-  padding: 1.5rem;
+  padding: 2rem;
 }
 
 .feed-header {

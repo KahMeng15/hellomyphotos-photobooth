@@ -59,6 +59,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import { toast } from 'vue3-toastify'
 import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
@@ -85,9 +86,10 @@ async function addUser() {
     await axios.post('/api/admin/users', newUser.value)
     showAddModal.value = false
     newUser.value = { email: '', password: '', role: 'operator' }
+    toast.success('User added successfully')
     await fetchUsers()
   } catch (err: any) {
-    alert(err.response?.data?.error || 'Failed to add user')
+    toast.error(err.response?.data?.error || 'Failed to add user')
   } finally {
     loading.value = false
   }
@@ -97,9 +99,10 @@ async function deleteUser(id: string) {
   if (!confirm('Are you sure you want to delete this user?')) return
   try {
     await axios.delete(`/api/admin/users/${id}`)
+    toast.success('User deleted')
     await fetchUsers()
   } catch (err: any) {
-    alert(err.response?.data?.error || 'Failed to delete user')
+    toast.error(err.response?.data?.error || 'Failed to delete user')
   }
 }
 
@@ -121,6 +124,9 @@ onMounted(() => {
   padding: 0.75rem 1.5rem;
   background: #1a1a1a;
   border-bottom: 1px solid #2a2a2a;
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 .header-left {
   display: flex;

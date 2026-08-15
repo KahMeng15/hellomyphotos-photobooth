@@ -97,6 +97,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { usePhotosStore } from '../stores/photos'
+import { toast } from 'vue3-toastify'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -114,8 +115,12 @@ const showOtpModal = ref(false)
 const otpCopied = ref(false)
 
 onMounted(async () => {
-  const { data } = await (await import('axios')).default.get('/api/admin/events?includeEnded=true')
-  events.value = data.events
+  try {
+    const { data } = await (await import('axios')).default.get('/api/admin/events?includeEnded=true')
+    events.value = data.events
+  } catch (err) {
+    toast.error('Failed to load events')
+  }
 })
 
 async function handleCreate() {
@@ -128,10 +133,12 @@ async function handleCreate() {
     showCreateModal.value = false
     newEventName.value = ''
     newEventDesc.value = ''
+    toast.success('Event created successfully')
     const { data } = await (await import('axios')).default.get('/api/admin/events?includeEnded=true')
     events.value = data.events
   } catch (err: any) {
     createError.value = err.response?.data?.error || 'Failed to create event'
+    toast.error(createError.value)
   } finally {
     creating.value = false
   }
@@ -140,11 +147,13 @@ async function handleCreate() {
 function copyOtp() {
   navigator.clipboard.writeText(createdOtp.value)
   otpCopied.value = true
+  toast.success('OTP copied to clipboard')
   setTimeout(() => { otpCopied.value = false }, 2000)
 }
 
 async function handleLogout() {
   await authStore.logout()
+  toast.info('Logged out')
   router.push('/login')
 }
 </script>
@@ -165,6 +174,9 @@ async function handleLogout() {
   padding: 0.75rem 1.5rem;
   background: #1a1a1a;
   border-bottom: 1px solid #2a2a2a;
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 
 .header-left h1 {

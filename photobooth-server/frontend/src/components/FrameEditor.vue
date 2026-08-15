@@ -212,8 +212,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import axios from 'axios'
+import { toast } from 'vue3-toastify'
 
 const props = defineProps<{ eventId: string, frame: any }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -579,13 +580,16 @@ async function save() {
     await axios.patch(`/api/admin/events/${props.eventId}/frames/${draftFrame.value.id}`, {
       name: draftFrame.value.name,
       placeholders: draftFrame.value.placeholders,
+      texts: draftFrame.value.texts,
       layering: draftFrame.value.layering,
       canvasWidth: draftFrame.value.canvasWidth,
       canvasHeight: draftFrame.value.canvasHeight
     })
+    toast.success('Frame configuration saved')
     emit('close')
   } catch (err) {
-    alert('Failed to save frame')
+    console.error(err)
+    toast.error('Failed to save frame')
   } finally {
     saving.value = false
   }

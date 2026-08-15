@@ -47,6 +47,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { toast } from 'vue3-toastify'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -59,9 +60,11 @@ async function handleLogin() {
   error.value = ''
   try {
     await authStore.login(email.value, password.value)
+    toast.success('Logged in successfully')
     router.push('/events')
   } catch (err: any) {
     error.value = err.response?.data?.error || 'Login failed'
+    toast.error(error.value)
   }
 }
 </script>
