@@ -1,5 +1,28 @@
 <template>
-  <div class="dashboard" v-if="event">
+  <div class="dashboard page-wrapper" v-if="event">
+    <div v-if="activeBoothError" class="error-overlay">
+      <div class="error-modal">
+        <div style="margin-bottom:1rem;">
+          <svg v-if="activeBoothError.type === 'dslr'" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f44336" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="2" y1="2" x2="22" y2="22"/>
+            <path d="M7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16"/>
+            <path d="M9.5 4h5L17 7h3a2 2 0 0 1 2 2v7.5"/>
+            <path d="M14.12 15.12A3 3 0 1 1 9.88 10.88"/>
+          </svg>
+          <svg v-else width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f44336" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        </div>
+        <h2>{{ activeBoothError.type === 'dslr' ? 'Camera Disconnected' : 'Capture Failed' }}</h2>
+        <p v-html="activeBoothError.message"></p>
+        <div class="error-actions">
+          <button v-if="activeBoothError.type === 'dslr'" @click="resolveBoothError('retry')" class="btn-error-primary">Retry</button>
+          <button @click="resolveBoothError('dismiss')" class="btn-error-secondary">{{ activeBoothError.type === 'dslr' ? 'Exit' : 'OK' }}</button>
+        </div>
+      </div>
+    </div>
     <EventTopNav :event="event" currentTitle="" @toggle-panel="togglePanel" />
 
     <div class="dashboard-grid">
@@ -166,6 +189,7 @@ const event = ref<any>(null)
 const photoSessions = ref<any[]>([])
 const boothConnected = ref(false)
 const boothState = ref<string | null>(null)
+const activeBoothError = ref<{ errorId: string, message: string, type: string } | null>(null)
 const showPanel = ref(false)
 const showArchive = ref(false)
 
@@ -245,7 +269,38 @@ onMounted(async () => {
   socket.on('booth-status', (status: any) => {
     // not used per-event; booth-connected handles it
   })
+
+  socket.on('booth-error', (data: any) => {
+    if (data.eventId === eventId) {
+      activeBoothError.value = {
+        errorId: data.errorId,
+        message: data.message,
+        type: data.type
+      }
+    }
+  })
+
+  socket.on('booth-error-resolved', (data: any) => {
+    if (data.eventId === eventId && activeBoothError.value?.errorId === data.errorId) {
+      activeBoothError.value = null
+    }
+  })
 })
+
+function resolveBoothError(action: string) {
+  if (!activeBoothError.value) return
+  
+  const socket = ws.value
+  if (socket) {
+    socket.emit('resolve-booth-error', {
+      eventId: event.value.id,
+      errorId: activeBoothError.value.errorId,
+      action
+    })
+  }
+  
+  activeBoothError.value = null
+}
 
 const pollInterval = setInterval(() => { loadSessions() }, 5000)
 
@@ -470,20 +525,6 @@ function formatTime(ts: string) {
   margin: 0;
 }
 
-.btn-back {
-  background: none;
-  border: 1px solid #2a2a2a;
-  color: #ccc;
-  padding: 0.25rem;
-  border-radius: 6px;
-  cursor: pointer;
-  line-height: 0;
-}
-
-.btn-back:hover {
-  border-color: #555;
-  color: #fff;
-}
 
 .event-status {
   font-size: 0.6875rem;
@@ -777,5 +818,61 @@ function formatTime(ts: string) {
   .btn-panel-toggle {
     display: none;
   }
+}
+
+.error-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.error-modal {
+  background: #1a1a1a;
+  border: 1px solid #3a1a1a;
+  padding: 2rem;
+  border-radius: 16px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+}
+.error-modal h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  color: #fff;
+}
+.error-modal p {
+  font-size: 0.875rem;
+  color: #888;
+  margin: 0 0 1.5rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.error-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+.btn-error-primary {
+  padding: 0.75rem 2rem;
+  background: #fff;
+  color: #000;
+  border: none;
+  border-radius: 100px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-error-secondary {
+  padding: 0.75rem 2rem;
+  background: transparent;
+  color: #888;
+  border: 1px solid #333;
+  border-radius: 100px;
+  font-size: 1rem;
+  cursor: pointer;
 }
 </style>

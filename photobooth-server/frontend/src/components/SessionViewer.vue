@@ -4,7 +4,7 @@
       <div class="viewer">
         <div class="session-header">
           <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <button class="back-btn" @click="$emit('close')">
+            <button class="btn-back" @click="$emit('close')">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="15 18 9 12 15 6"></polyline>
               </svg>
@@ -593,19 +593,6 @@ function formatTime(ts: string) {
   flex-direction: column;
   overflow: hidden;
 }
-.back-btn {
-  background: none;
-  border: 1px solid #2a2a2a;
-  color: #ccc;
-  padding: 0.25rem;
-  border-radius: 6px;
-  cursor: pointer;
-  line-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.back-btn:hover { border-color: #555; color: #fff; }
 
 .session-header h2 {
   margin: 0;

@@ -138,6 +138,16 @@ io.on('connection', (socket) => {
       forwardToBooth(data.eventId, { type: 'go-home' })
     })
 
+    socket.on('resolve-booth-error', (data: { eventId: string; errorId: string; action: string }) => {
+      forwardToBooth(data.eventId, { type: 'resolve-error', errorId: data.errorId, action: data.action })
+      const subs = operatorSubscriptions.get(data.eventId)
+      if (subs) {
+        for (const sid of subs) {
+          if (sid !== socket.id) io.to(sid).emit('booth-error-resolved', { errorId: data.errorId, action: data.action })
+        }
+      }
+    })
+
     socket.on('disconnect', () => {
       logger.info(`Operator disconnected: ${socket.id}`)
       if (socket.data.subscribedEvents) {
@@ -174,6 +184,24 @@ io.on('connection', (socket) => {
       if (subs) {
         for (const sid of subs) {
           io.to(sid).emit('booth-state', { ...data, eventId })
+        }
+      }
+    })
+
+    socket.on('booth-error', (data: { errorId: string; message: string; type: string }) => {
+      const subs = operatorSubscriptions.get(eventId)
+      if (subs) {
+        for (const sid of subs) {
+          io.to(sid).emit('booth-error', { ...data, eventId })
+        }
+      }
+    })
+
+    socket.on('resolve-booth-error', (data: { errorId: string; action: string }) => {
+      const subs = operatorSubscriptions.get(eventId)
+      if (subs) {
+        for (const sid of subs) {
+          io.to(sid).emit('booth-error-resolved', { errorId: data.errorId, action: data.action, eventId })
         }
       }
     })

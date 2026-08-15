@@ -133,22 +133,7 @@ const currentRoute = computed(() => {
   color: #888;
   font-weight: 400;
 }
-.btn-back {
-  background: none;
-  border: 1px solid #2a2a2a;
-  color: #ccc;
-  padding: 0.25rem;
-  border-radius: 6px;
-  cursor: pointer;
-  line-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.btn-back:hover {
-  border-color: #555;
-  color: #fff;
-}
+
 .btn-icon {
   background: none;
   border: none;

@@ -1,7 +1,11 @@
 <template>
   <div class="settings-page">
     <header class="settings-header">
-      <button @click="router.back()" class="btn-ghost">&larr; Back</button>
+      <button @click="router.back()" class="btn-back" title="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
       <h1>Default Settings</h1>
       <div></div>
     </header>

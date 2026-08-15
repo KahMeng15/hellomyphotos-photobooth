@@ -412,6 +412,7 @@ export class BoothApp {
 
     box.querySelector('#capture-error-ok-btn')!.addEventListener('click', () => {
       overlay.style.display = 'none'
+      try { boothSocket?.emit('resolve-booth-error', { errorId: 'capture-error', action: 'dismiss' }) } catch {}
     })
 
     return overlay
@@ -505,6 +506,9 @@ export class BoothApp {
     if (msgEl && message) msgEl.textContent = message
 
     this.dslrErrorOverlay.style.display = 'flex'
+    try {
+      boothSocket?.emit('booth-error', { errorId: 'dslr-error', type: 'dslr', message: message || 'Unknown DSLR error' })
+    } catch {}
   }
 
   private hideDslrError() {
@@ -512,6 +516,8 @@ export class BoothApp {
   }
 
   private async retryDslrConnection() {
+    try { boothSocket?.emit('resolve-booth-error', { errorId: 'dslr-error', action: 'retry' }) } catch {}
+    
     const retryBtn = this.dslrErrorOverlay.querySelector<HTMLButtonElement>('#dslr-retry-btn')!
     retryBtn.textContent = 'Detecting...'
     retryBtn.disabled = true
@@ -677,6 +683,18 @@ export class BoothApp {
       this.selectedFrame = (cmd as any).frameId || null
     } else if (cmd.type === 'reshot') {
       if (this.isLive && !this.isCapturing) this.startCapture()
+    } else if (cmd.type === 'resolve-error') {
+      const errorId = (cmd as any).errorId
+      const action = (cmd as any).action
+      if (errorId === 'dslr-error') {
+        if (action === 'retry') {
+          this.retryDslrConnection()
+        } else {
+          this.hideDslrError()
+        }
+      } else if (errorId === 'capture-error') {
+        this.captureErrorOverlay.style.display = 'none'
+      }
     } else if (cmd.type === 'settings-update') {
       this.settingsData = { ...this.settingsData, ...cmd.settings }
       window.hellomyphoto?.saveSettings(this.settingsData)
@@ -1138,6 +1156,9 @@ export class BoothApp {
         const msgEl = this.captureErrorOverlay.querySelector<HTMLParagraphElement>('#capture-error-msg')
         if (msgEl) msgEl.innerHTML = this.formatCaptureError(errMsg)
         this.captureErrorOverlay.style.display = 'flex'
+        try {
+          boothSocket?.emit('booth-error', { errorId: 'capture-error', type: 'capture', message: errMsg })
+        } catch {}
         
         this.isCapturing = false
         this.captureBtn.style.visibility = 'visible'
