@@ -14,6 +14,11 @@ export class PhotoPreview {
   private lastOtp?: string
   private lastSessionId?: string
   private keydownHandler: (e: KeyboardEvent) => void
+  private keydownHandlers: {
+    toggle: (idx: number) => void,
+    confirm: () => void,
+    cancel: () => void
+  } | null = null
 
   constructor(container: HTMLElement, onRetake: (indices: number[]) => void, onConfirm: () => void) {
     this.container = container
@@ -37,12 +42,15 @@ export class PhotoPreview {
     this.container.appendChild(this.qrOverlay)
 
     this.keydownHandler = (e: KeyboardEvent) => {
-      // If we are showing the selection screen (retake mode)
-      if (this.overlay.dataset.mode === 'retake') {
+      if (this.overlay.dataset.mode === 'retake' && this.keydownHandlers) {
         const num = parseInt(e.key, 10)
         if (!isNaN(num) && num >= 1 && num <= this.currentPaths.length) {
-          this.hide()
-          this.onRetake([num - 1])
+          this.keydownHandlers.toggle(num - 1)
+        } else if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault()
+          this.keydownHandlers.confirm()
+        } else if (e.key === 'Escape') {
+          this.keydownHandlers.cancel()
         }
       }
     }
@@ -162,6 +170,7 @@ export class PhotoPreview {
     `
 
     const selectedIndices = new Set<number>()
+    const photoWrappers: HTMLDivElement[] = []
 
     const updateConfirmBtn = () => {
       confirmBtn.disabled = selectedIndices.size === 0
@@ -171,6 +180,7 @@ export class PhotoPreview {
 
     this.currentPaths.forEach((p, idx) => {
       const wrapper = document.createElement('div')
+      photoWrappers.push(wrapper)
       wrapper.style.cssText = 'position: relative; cursor: pointer; border-radius: 8px; overflow: hidden; border: 4px solid transparent; transition: border-color 0.2s;'
       wrapper.onmouseover = () => {
         if (!selectedIndices.has(idx)) wrapper.style.borderColor = '#555'
@@ -222,6 +232,7 @@ export class PhotoPreview {
       cursor: pointer;
     `
     cancelBtn.addEventListener('click', () => {
+      this.keydownHandlers = null
       this.show(this.currentPaths, this.lastFrameConfig, this.lastServerUrl, this.lastOtp, this.lastSessionId)
     })
 
@@ -234,6 +245,7 @@ export class PhotoPreview {
     `
     confirmBtn.addEventListener('click', () => {
       if (selectedIndices.size > 0) {
+        this.keydownHandlers = null
         this.hide()
         this.onRetake(Array.from(selectedIndices).sort((a, b) => a - b))
       }
@@ -244,6 +256,19 @@ export class PhotoPreview {
     actions.appendChild(cancelBtn)
     actions.appendChild(confirmBtn)
     this.overlay.appendChild(actions)
+
+    this.keydownHandlers = {
+      toggle: (idx: number) => {
+        const wrapper = photoWrappers[idx]
+        if (wrapper) wrapper.click()
+      },
+      confirm: () => {
+        if (!confirmBtn.disabled) confirmBtn.click()
+      },
+      cancel: () => {
+        cancelBtn.click()
+      }
+    }
   }
 
   private async showQR(url: string) {
@@ -289,6 +314,10 @@ export class PhotoPreview {
   hide() {
     this.overlay.style.display = 'none'
     this.qrOverlay.style.display = 'none'
+  }
+
+  isVisible(): boolean {
+    return this.overlay.style.display !== 'none'
   }
 
   destroy() {

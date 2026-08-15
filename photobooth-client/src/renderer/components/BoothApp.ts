@@ -218,7 +218,7 @@ export class BoothApp {
     this.landingEl.appendChild(subtitle)
 
     this.startBtn = document.createElement('button')
-    this.startBtn.textContent = 'Start Taking Photos'
+    this.startBtn.textContent = 'Start'
     Object.assign(this.startBtn.style, {
       padding: '1.25rem 4rem', fontSize: '1.5rem', fontWeight: '700',
       background: '#fff', color: '#000', border: 'none', borderRadius: '100px',
@@ -557,8 +557,15 @@ export class BoothApp {
 
   private setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
-      if ((e.key === ' ' || e.key === 'Enter') && this.isLive && !this.isCapturing) {
-        this.startCapture()
+      // Ignore if PhotoPreview or settings is open
+      if (this.photoPreview && this.photoPreview.isVisible()) return
+      
+      if (e.key === ' ' || e.key === 'Enter') {
+        if (this.isLive && !this.isCapturing) {
+          this.startCapture()
+        } else if (!this.isLive && this.landingEl.style.display !== 'none') {
+          this.startBtn.click()
+        }
       }
       if (e.key === 'Escape' && this.isLive) {
         this.goHome()
@@ -765,7 +772,7 @@ export class BoothApp {
 
   private updateStartBtn() {
     if (this.isEventConnected()) {
-      this.startBtn.textContent = 'Start Taking Photos'
+      this.startBtn.textContent = 'Start'
       Object.assign(this.startBtn.style, {
         background: '#fff', color: '#000', cursor: 'pointer',
       })
@@ -888,7 +895,7 @@ export class BoothApp {
     this.statusActions.style.display = 'flex'
     this.pauseBtn.style.display = 'none'
 
-    this.stateDisplay.textContent = 'Tap start'
+    this.stateDisplay.textContent = 'Start'
     this.stateDisplay.style.opacity = '1'
     this.showCaptureProgress(this.settingsData.photoCount, 0)
     this.captureProgressText.textContent = `Shot 1 of ${this.settingsData.photoCount}`
@@ -902,6 +909,7 @@ export class BoothApp {
 
     console.log('[BoothApp] startDslrPreview() — calling dslrPreview.start()...')
     const started = await this.dslrPreview.start()
+    this.dslrPreview.element.style.filter = 'none'
     console.log(`[BoothApp] startDslrPreview() — dslrPreview.start() returned: ${started}`)
 
     connectingOverlay.remove()
@@ -1138,6 +1146,7 @@ export class BoothApp {
           if (!this.dslrPreview.isActive()) {
             const resumeOverlay = this.showConnectingOverlay()
             await this.dslrPreview.start()
+            this.dslrPreview.element.style.filter = 'none'
             // Hide the frozen taken photo now that live preview is back
             this.postCaptureEl.style.display = 'none'
             this.postCaptureEl.src = ''
@@ -1166,6 +1175,7 @@ export class BoothApp {
           setTimeout(async () => {
             if (this.isLive) {
               await this.dslrPreview.start()
+              this.dslrPreview.element.style.filter = 'none'
             }
           }, 1500)
         }
@@ -1278,13 +1288,7 @@ export class BoothApp {
         if (prepPromise !== null) await prepPromise.catch(() => {})
         result = await this.captureDslrShot(prepDone)
       } else {
-        this.flashOverlay.style.transition = 'none'
-        this.flashOverlay.style.opacity = '1'
         result = await this.camera.captureStill()
-        setTimeout(() => {
-          this.flashOverlay.style.transition = 'opacity 1s'
-          this.flashOverlay.style.opacity = '0'
-        }, 50)
       }
 
       this.updateCaptureProgress(i + 1)
@@ -1318,9 +1322,29 @@ export class BoothApp {
 
       if (result.path) {
         this.currentPaths[targetIndex] = result.path
+        
+        if (this.cameraMode !== 'dslr') {
+          this.audio.playShutter()
+          this.flashWhite().catch(() => {})
+        }
+
+        if (this.settingsData.postCapturePreview > 0) {
+          await this.showPostCapture(result.path, this.settingsData.postCapturePreview)
+        }
       }
 
       if (i < totalRetakes - 1) {
+        if (this.cameraMode === 'dslr') {
+          if (!this.dslrPreview.isActive()) {
+            const resumeOverlay = this.showConnectingOverlay()
+            await this.dslrPreview.start()
+            this.dslrPreview.element.style.filter = 'none'
+            this.postCaptureEl.style.display = 'none'
+            this.postCaptureEl.src = ''
+            resumeOverlay.remove()
+          }
+        }
+        
         await new Promise((r) => setTimeout(r, this.settingsData.captureInterval * 1000))
         if (!this.isCapturing) { audioCtx.close(); return }
       }
@@ -1389,17 +1413,19 @@ export class BoothApp {
    */
   private async prepDslrCapture(): Promise<void> {
     console.log('[BoothApp] prepDslrCapture() — stopping liveview (keep last frame frozen) + camera liveview early')
+    this.dslrPreview.element.style.filter = 'blur(8px)'
+    this.dslrPreview.element.style.transition = 'filter 0.3s ease'
     await this.dslrPreview.stop(true)
     await window.hellomyphoto?.prepDslrCapture()
   }
 
   private async captureDslrShot(prepDone = false): Promise<{ success: boolean; path?: string; error?: string }> {
+    this.showProcessingOverlay()
+
     if (!prepDone) {
       console.log('[BoothApp] captureDslrShot() — stopping liveview renderer before capture')
-      await this.dslrPreview.stop()
+      await this.dslrPreview.stop(true)
     }
-
-    this.showProcessingOverlay()
 
     console.log('[BoothApp] captureDslrShot() — calling capture-photo IPC...')
     const capturePromise = window.hellomyphoto?.capture({ liveviewStopped: prepDone })
