@@ -334,23 +334,24 @@ export function deleteEvent(id: string) {
   logger.info(`Event deleted: ${id}`)
 }
 
-export function ensurePhotoSession(sessionId: string, eventId: string) {
+export function ensurePhotoSession(sessionId: string, eventId: string): string {
   const existing = findPhotoSession.get(sessionId)
   if (existing) {
     const hasShares = db.prepare('SELECT 1 FROM session_shares WHERE session_id = ?').get(sessionId)
-    if (!hasShares) {
-      let shareId = (existing as any).share_id
-      if (!shareId) {
-        shareId = randomBytes(4).toString('hex')
-        db.prepare('UPDATE photo_sessions SET share_id = ? WHERE id = ?').run(shareId, sessionId)
-      }
-      db.prepare('INSERT OR IGNORE INTO session_shares (id, session_id, is_active, created_at) VALUES (?, ?, 1, datetime("now"))').run(shareId, sessionId)
+    let shareId = (existing as any).share_id
+    if (!shareId) {
+      shareId = randomBytes(4).toString('hex')
+      db.prepare('UPDATE photo_sessions SET share_id = ? WHERE id = ?').run(shareId, sessionId)
     }
-    return
+    if (!hasShares) {
+      db.prepare("INSERT OR IGNORE INTO session_shares (id, session_id, is_active, created_at) VALUES (?, ?, 1, datetime('now'))").run(shareId, sessionId)
+    }
+    return shareId
   }
   const shareId = randomBytes(4).toString('hex')
   insertPhotoSession.run(sessionId, eventId, shareId)
-  db.prepare('INSERT INTO session_shares (id, session_id, is_active, created_at) VALUES (?, ?, 1, datetime("now"))').run(shareId, sessionId)
+  db.prepare("INSERT INTO session_shares (id, session_id, is_active, created_at) VALUES (?, ?, 1, datetime('now'))").run(shareId, sessionId)
+  return shareId
 }
 
 export function getPhotoSession(sessionId: string) {

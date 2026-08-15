@@ -77,6 +77,8 @@ export class BoothApp {
   private selectedFrame: string | null = null
   private serverUrl = 'http://localhost:3000'
   private _state: BoothState = 'idle'
+  private currentSessionId: string | null = null
+  private currentPaths: string[] = []
 
   constructor() {
     this.container = document.getElementById('app') || document.body
@@ -313,7 +315,13 @@ export class BoothApp {
     this.audio = new AudioManager()
     this.countdown = new CountdownUI(this.overlay)
     this.frameCarousel = new FrameCarousel(this.statusBar, (frameId) => { this.selectedFrame = frameId })
-    this.photoPreview = new PhotoPreview(this.container, () => this.reset(), () => this.goHome(), () => this.goHome())
+    this.photoPreview = new PhotoPreview(
+      this.container,
+      (indices) => {
+        this.retakePhotos(indices)
+      },
+      () => this.goHome()
+    )
     this.offlineIndicator = new OfflineIndicator(this.statusBar)
     this.settings = new Settings(this.container, (s) => {
       const prevMode = this.cameraMode
@@ -987,6 +995,7 @@ export class BoothApp {
 
     this.isLive = false
     this.isCapturing = false
+    this.pendingRetakes = null
     this._state = 'idle'
     this.emitBoothState()
     
@@ -1005,6 +1014,8 @@ export class BoothApp {
     this.confirmModal.style.display = 'none'
     this.hideDslrError()
     this.updateStartBtn()
+    this.currentSessionId = null
+    this.currentPaths = []
   }
 
   private togglePause() {
@@ -1036,6 +1047,15 @@ export class BoothApp {
 
   private async startCapture() {
     if (this.isCapturing || !this.isLive) return
+    
+    if (this.pendingRetakes && this.pendingRetakes.length > 0) {
+      const indices = this.pendingRetakes
+      this.pendingRetakes = null
+      this.captureBtn.textContent = 'Start'
+      await this.executeRetakePhotos(indices)
+      return
+    }
+
     this.isCapturing = true
     this._state = 'capturing'
     this.emitBoothState()
@@ -1045,6 +1065,8 @@ export class BoothApp {
 
     const photoCount = this.settingsData.photoCount
     const paths: string[] = []
+    this.currentSessionId = `session_${Date.now()}`
+    this.currentPaths = paths
     const audioCtx = new AudioContext()
 
     for (let i = 0; i < photoCount; i++) {
@@ -1170,48 +1192,7 @@ export class BoothApp {
     audioCtx.close()
 
     if (paths.length > 0) {
-      const sessionId = `session_${Date.now()}`
-      const filePaths = paths.filter((p) => !p.startsWith('blob:'))
-      const blobBuffers: ArrayBuffer[] = []
-      for (const p of paths) {
-        if (p.startsWith('blob:')) {
-          try {
-            const res = await fetch(p)
-            blobBuffers.push(await res.arrayBuffer())
-          } catch {}
-        }
-      }
-      const uploadResult = await window.hellomyphoto?.uploadPhotos({
-        sessionId,
-        imagePaths: filePaths,
-        imageBuffers: blobBuffers.length > 0 ? blobBuffers : undefined,
-        frameName: this.selectedFrame,
-        photoCount: paths.length,
-      })
-
-      if (uploadResult?.queued) {
-        this.offlineIndicator.setOnline(false)
-        this.offlineIndicator.setQueueDepth(1)
-      }
-
-      // Stop liveview before switching to preview screen.
-      // Always send the IPC stop — DslrManager.capture() restarts liveview on
-      // the camera after each shot, so the camera may still have the mirror up
-      // even though the renderer-side preview was not restarted for the last shot.
-      if (this.cameraMode === 'dslr') {
-        await this.dslrPreview.stop()
-      }
-
-      this.hideCaptureProgress()
-      this.pauseBtn.style.display = 'none'
-      this._state = 'preview'
-      this.emitBoothState()
-      const selectedFrameConfig = this.selectedFrame ? this.frameCarousel.activeFrames.find(f => f.id === this.selectedFrame) : null
-      this.photoPreview.show(paths, selectedFrameConfig, this.settingsData.serverUrl, this.settingsData.otp)
-      this.previewWindow.style.display = 'none'
-      this.statusBar.style.display = 'none'
-      this.camera.stop()
-      this.webcamPreview.srcObject = null
+      await this.uploadAndPreview()
     } else {
       this.hideCaptureProgress()
       this.pauseBtn.style.display = 'none'
@@ -1219,6 +1200,182 @@ export class BoothApp {
       this._state = 'live'
       this.emitBoothState()
     }
+  }
+
+  private pendingRetakes: number[] | null = null
+
+  private async retakePhotos(indices: number[]) {
+    if (this.isCapturing || indices.length === 0) return
+    this.pendingRetakes = indices
+    
+    this.postCaptureEl.style.display = 'none'
+    this.postCaptureEl.src = ''
+    
+    this.stateDisplay.textContent = ''
+    this.captureBtn.style.visibility = 'hidden'
+    
+    this.previewWindow.style.display = 'flex'
+    this.statusBar.style.display = 'flex'
+    
+    this.isLive = false
+
+    // Start camera preview (this shows the loading spinner on top of previewWindow)
+    if (this.cameraMode === 'dslr') {
+      await this.startDslrPreview()
+    } else {
+      await this.startWebcamPreview()
+    }
+
+    this.isLive = true
+    this._state = 'live'
+    this.emitBoothState()
+    
+    this.captureBtn.style.display = 'block'
+    this.captureBtn.style.visibility = 'visible'
+    this.captureBtn.textContent = 'Retake'
+    this.stateDisplay.textContent = 'Tap to Retake'
+    this.stateDisplay.style.opacity = '1'
+  }
+
+  private async executeRetakePhotos(indices: number[]) {
+    if (this.isCapturing || indices.length === 0) return
+    this.isCapturing = true
+    this._state = 'capturing'
+    this.emitBoothState()
+    this.captureBtn.style.visibility = 'hidden'
+    this.pauseBtn.style.display = 'flex'
+    this.stateDisplay.textContent = ''
+
+    const audioCtx = new AudioContext()
+    const totalRetakes = indices.length
+
+    for (let i = 0; i < totalRetakes; i++) {
+      const targetIndex = indices[i]
+      this.showCaptureProgress(i + 1, totalRetakes)
+      this.captureProgressText.textContent = `Retake Photo ${targetIndex + 1}`
+
+      let prepDone = false
+      let prepPromise: Promise<void> | null = null
+      const offset = this.settingsData.shutterOffsetDelay || 0
+      const onPrep = offset > 0 ? () => {
+        if (!prepDone) {
+          prepDone = true
+          prepPromise = this.prepDslrCapture()
+          prepPromise.catch(() => {})
+        }
+      } : undefined
+
+      await this.countdown.play(this.settingsData.countdown, audioCtx, onPrep, () => this.waitIfPaused(), offset)
+      if (!this.isCapturing) { audioCtx.close(); return }
+
+      let result: { success: boolean; path?: string; error?: string }
+
+      if (this.cameraMode === 'dslr') {
+        if (offset === 0) {
+          prepPromise = this.prepDslrCapture()
+          prepDone = true
+        }
+        if (prepPromise !== null) await prepPromise.catch(() => {})
+        result = await this.captureDslrShot(prepDone)
+      } else {
+        this.flashOverlay.style.transition = 'none'
+        this.flashOverlay.style.opacity = '1'
+        result = await this.camera.captureStill()
+        setTimeout(() => {
+          this.flashOverlay.style.transition = 'opacity 1s'
+          this.flashOverlay.style.opacity = '0'
+        }, 50)
+      }
+
+      this.updateCaptureProgress(i + 1)
+
+      if (!result.success) {
+        if (this.cameraMode === 'dslr' && (result.error?.includes('not found') || result.error?.includes('disconnect'))) {
+          this.showDslrError()
+          this.isCapturing = false
+          audioCtx.close()
+          return
+        } else {
+          const errMsg = result.error || 'Unknown error'
+          if (this.cameraMode === 'dslr') {
+            this.dslrPreview.stop().catch(() => {})
+            setTimeout(async () => {
+              if (this.isLive) await this.dslrPreview.start()
+            }, 1500)
+          }
+          this.hideCaptureProgress()
+          this.pauseBtn.style.display = 'none'
+          this.stateDisplay.innerHTML = ''
+          const msgEl = this.captureErrorOverlay.querySelector<HTMLParagraphElement>('#capture-error-msg')
+          if (msgEl) msgEl.innerHTML = this.formatCaptureError(errMsg)
+          this.captureErrorOverlay.style.display = 'flex'
+          try { boothSocket?.emit('booth-error', { errorId: 'capture-error', type: 'capture', message: errMsg }) } catch {}
+          this.isCapturing = false
+          audioCtx.close()
+          return
+        }
+      }
+
+      if (result.path) {
+        this.currentPaths[targetIndex] = result.path
+      }
+
+      if (i < totalRetakes - 1) {
+        await new Promise((r) => setTimeout(r, this.settingsData.captureInterval * 1000))
+        if (!this.isCapturing) { audioCtx.close(); return }
+      }
+    }
+
+    audioCtx.close()
+    await this.uploadAndPreview()
+  }
+
+  private async uploadAndPreview() {
+    const paths = this.currentPaths
+    if (!this.currentSessionId) this.currentSessionId = `session_${Date.now()}`
+    const sessionId = this.currentSessionId
+    
+    const filePaths = paths.filter((p) => !p.startsWith('blob:'))
+    const blobBuffers: ArrayBuffer[] = []
+    for (const p of paths) {
+      if (p.startsWith('blob:')) {
+        try {
+          const res = await fetch(p)
+          blobBuffers.push(await res.arrayBuffer())
+        } catch {}
+      }
+    }
+
+    const uploadResult = await window.hellomyphoto?.uploadPhotos({
+      sessionId,
+      imagePaths: filePaths,
+      imageBuffers: blobBuffers.length > 0 ? blobBuffers : undefined,
+      frameName: this.selectedFrame,
+      photoCount: paths.length,
+    })
+
+    if (uploadResult?.queued) {
+      this.offlineIndicator.setOnline(false)
+      this.offlineIndicator.setQueueDepth(1)
+    }
+
+    // Stop liveview before switching to preview screen.
+    if (this.cameraMode === 'dslr') {
+      await this.dslrPreview.stop()
+    }
+
+    this.hideCaptureProgress()
+    this.pauseBtn.style.display = 'none'
+    this.isCapturing = false
+    this._state = 'preview'
+    this.emitBoothState()
+    const selectedFrameConfig = this.selectedFrame ? this.frameCarousel.activeFrames.find(f => f.id === this.selectedFrame) : null
+    const shareId = uploadResult?.shareId || sessionId
+    this.photoPreview.show(paths, selectedFrameConfig, this.settingsData.serverUrl, this.settingsData.otp, shareId)
+    this.previewWindow.style.display = 'none'
+    this.statusBar.style.display = 'none'
+    this.camera.stop()
+    this.webcamPreview.srcObject = null
   }
 
   /**

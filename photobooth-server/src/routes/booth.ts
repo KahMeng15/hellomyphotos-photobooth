@@ -89,12 +89,12 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
 
     const eventId = (req as any).eventId
     const { photoCount } = req.body
-    const sessionId = uuidv4()
+    const sessionId = req.body.sessionId || uuidv4()
     const count = parseInt(photoCount || String(files.length), 10)
 
     logger.info(`Booth upload: ${files.length} photos, event=${eventId}, session=${sessionId}`)
 
-    ensurePhotoSession(sessionId, eventId)
+    const shareId = ensurePhotoSession(sessionId, eventId)
 
     const results: any[] = []
     const eventDir = config.eventPhotosDir(eventId)
@@ -167,6 +167,7 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
     const newMediaPayload = {
       eventId,
       sessionId,
+      shareId,
       photoCount: files.length,
       timestamp: new Date().toISOString(),
       results: results.map((r) => ({
@@ -190,8 +191,9 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
       await fs.unlink(file.path).catch(() => {})
     }
 
-    res.json({ success: true, eventId, sessionId, photoCount: files.length, results })
+    res.json({ success: true, eventId, sessionId, shareId, photoCount: files.length, results })
   } catch (error: any) {
+    logger.error(`Upload error: ${error.stack || error.message}`)
     res.status(500).json({ error: error.message })
   }
 })

@@ -378,8 +378,10 @@ export function initIpcHandlers(
       })
       if (!response.ok) throw new Error(`Upload failed: ${response.status}`)
 
+      const responseData = await response.json()
+
       mainWindow.webContents.send('upload-complete', { sessionId: data.sessionId, success: true })
-      return { success: true }
+      return { success: true, shareId: responseData.shareId }
     } catch (error: any) {
       const paths = data.imagePaths.filter((p) => fs.existsSync(p))
       if (paths.length > 0) {
