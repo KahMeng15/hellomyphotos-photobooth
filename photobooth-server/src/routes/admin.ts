@@ -209,6 +209,9 @@ router.patch('/events/:id/frames/:frameId', async (req: Request, res: Response) 
     if (updates.disabled !== undefined) frameConfig.disabled = updates.disabled
     if (updates.placeholders !== undefined) frameConfig.placeholders = updates.placeholders
     if (updates.layering !== undefined) frameConfig.layering = updates.layering
+    if (updates.canvasWidth !== undefined) frameConfig.canvasWidth = updates.canvasWidth
+    if (updates.canvasHeight !== undefined) frameConfig.canvasHeight = updates.canvasHeight
+    if (updates.texts !== undefined) frameConfig.texts = updates.texts
 
     await fs.writeFile(configPath, JSON.stringify(frameConfig, null, 2))
     

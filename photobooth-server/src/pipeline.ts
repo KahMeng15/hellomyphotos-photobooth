@@ -21,6 +21,19 @@ export interface FramePlaceholder {
   borderRadius: number
 }
 
+export interface FrameText {
+  text: string
+  anchorY: 'top' | 'bottom'
+  anchorX: 'left' | 'center' | 'right'
+  offsetY: number
+  offsetX: number
+  fontSize: number
+  color: string
+  align: 'left' | 'center' | 'right'
+  orientation: number
+  name?: string
+}
+
 export interface FrameConfig {
   id: string
   name: string
@@ -29,6 +42,7 @@ export interface FrameConfig {
   canvasHeight: number
   layering?: 'foreground' | 'background'
   placeholders: FramePlaceholder[]
+  texts?: FrameText[]
 }
 
 function outputDir(eventDir?: string): string {
@@ -263,6 +277,48 @@ export async function applyFrame(
   for (const p of placeholders) {
     if (Math.round(p.width) > maxW) maxW = Math.round(p.width)
     if (Math.round(p.height) > maxH) maxH = Math.round(p.height)
+  }
+
+  if (frameConfig.texts && frameConfig.texts.length > 0) {
+    let svgInner = ''
+    
+    for (const t of frameConfig.texts) {
+      const content = escapeXml(
+        t.text
+          .replace(/{{date}}/g, new Date().toLocaleDateString())
+          .replace(/{{time}}/g, new Date().toLocaleTimeString())
+          .replace(/{{filename}}/g, outputBaseName)
+      )
+      
+      let x = 0
+      let y = 0
+      
+      if (t.anchorX === 'center') x = canvasWidth / 2
+      else if (t.anchorX === 'right') x = canvasWidth - t.offsetX
+      else x = t.offsetX
+      
+      if (t.anchorY === 'bottom') y = canvasHeight - t.offsetY
+      else y = t.offsetY // Using dominant-baseline hanging
+      
+      let textAnchor = 'start'
+      if (t.align === 'center' || (t.anchorX === 'center' && !t.align)) textAnchor = 'middle'
+      else if (t.align === 'right') textAnchor = 'end'
+      else if (t.align === 'left') textAnchor = 'start'
+      
+      const baseline = t.anchorY === 'bottom' ? 'auto' : 'hanging'
+      const rotation = t.orientation ? `transform="rotate(${t.orientation}, ${x}, ${y})"` : ''
+      
+      svgInner += `<text x="${x}" y="${y}" font-size="${t.fontSize}" fill="${t.color}" font-family="sans-serif" text-anchor="${textAnchor}" dominant-baseline="${baseline}" ${rotation}>${content}</text>`
+    }
+    
+    const svgTextLayer = Buffer.from(
+      `<svg width="${canvasWidth}" height="${canvasHeight}">${svgInner}</svg>`
+    )
+    
+    composites.push({
+      input: svgTextLayer,
+      blend: 'over'
+    })
   }
 
   const compositedBuffer = await sharp({
