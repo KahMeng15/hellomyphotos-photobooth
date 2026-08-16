@@ -87,6 +87,7 @@ declare global {
       // Push listeners (main → renderer)
       // ----------------------------------------------------------------
       onUploadComplete: (callback: (data: { sessionId: string; success: boolean }) => void) => void
+      onUploadProgress: (callback: (data: { sessionId: string; percent: number; speed: string; elapsed?: number; eta?: number }) => void) => void
       onServerStatus: (callback: (status: { online: boolean }) => void) => void
       onServerConfig: (callback: (config: { serverUrl: string; dslrConnected: boolean }) => void) => void
       onQueueUpdate: (callback: (data: { offline: number }) => void) => void

@@ -19,6 +19,32 @@ cd photobooth-client && npm install && npm run make
 
 ## Development
 
+### Docker (recommended)
+
+Use `docker-compose.dev.yml` to run the server without installing Node locally. It mounts your source files for live-reload and runs both the Express API and the Vue 3 frontend concurrently inside the container.
+
+```bash
+# From the repo root
+docker compose -f docker-compose.dev.yml up --build
+```
+
+| Service | URL |
+|---|---|
+| Express API + WebSocket | `http://localhost:3000` |
+| Vue 3 operator dashboard (HMR) | `http://localhost:5173` |
+
+Default credentials: `operator@hellomyphoto.local` / `admin123`
+
+> **Note** — source files in `./photobooth-server` are bind-mounted into the container, so any edits are reflected immediately without rebuilding. `node_modules` lives in an anonymous volume to prevent host/container OS conflicts.
+
+To stop:
+
+```bash
+docker compose -f docker-compose.dev.yml down
+```
+
+---
+
 ### Server (2 terminals)
 
 ```bash

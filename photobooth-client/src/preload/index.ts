@@ -107,6 +107,9 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
   onUploadComplete: (callback: (data: { sessionId: string; success: boolean }) => void) => {
     ipcRenderer.on('upload-complete', (_event, data) => callback(data))
   },
+  onUploadProgress: (callback: (data: { sessionId: string; percent: number; speed: string; elapsed?: number; eta?: number }) => void) => {
+    ipcRenderer.on('upload-progress', (_event, data) => callback(data))
+  },
 
   onServerStatus: (callback: (status: { online: boolean }) => void) => {
     ipcRenderer.on('server-status', (_event, status) => callback(status))

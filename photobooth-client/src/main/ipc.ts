@@ -371,14 +371,49 @@ export function initIpcHandlers(
       const headers: Record<string, string> = {}
       if (settings.otp) headers['X-Booth-OTP'] = settings.otp
 
-      const response = await fetch(`${_serverUrl}/api/booth/upload`, {
-        method: 'POST',
-        body: formData,
-        headers,
-      })
-      if (!response.ok) throw new Error(`Upload failed: ${response.status}`)
+      const axios = require('axios')
+      const startTime = Date.now()
+      let lastTime = startTime
+      let lastLoaded = 0
 
-      const responseData = await response.json()
+      const response = await axios.post(`${_serverUrl}/api/booth/upload`, formData, {
+        headers,
+        onUploadProgress: (progressEvent: any) => {
+          const { loaded, total } = progressEvent
+          const now = Date.now()
+          const timeDiff = (now - lastTime) / 1000 // seconds
+          
+          if (timeDiff > 0.2 || loaded === total) {
+            const bytesDiff = loaded - lastLoaded
+            const speed = timeDiff > 0 ? bytesDiff / timeDiff : 0
+            lastTime = now
+            lastLoaded = loaded
+            
+            // Format speed to MB/s or KB/s
+            let speedStr = ''
+            if (speed > 1024 * 1024) {
+              speedStr = (speed / (1024 * 1024)).toFixed(1) + ' MB/s'
+            } else {
+              speedStr = (speed / 1024).toFixed(0) + ' KB/s'
+            }
+
+            const elapsedSeconds = Math.round((now - startTime) / 1000)
+            const remainingBytes = total ? total - loaded : 0
+            const etaSeconds = speed > 0 ? Math.round(remainingBytes / speed) : 0
+
+            const percent = total ? Math.round((loaded / total) * 100) : 0
+            mainWindow.webContents.send('upload-progress', { 
+              sessionId: data.sessionId, 
+              percent, 
+              speed: speedStr,
+              elapsed: elapsedSeconds,
+              eta: etaSeconds
+            })
+          }
+        }
+      })
+
+      const responseData = response.data
 
       mainWindow.webContents.send('upload-complete', { sessionId: data.sessionId, success: true })
       return { success: true, shareId: responseData.shareId }

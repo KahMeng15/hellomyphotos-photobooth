@@ -49,6 +49,7 @@ export class BoothApp {
 
   private isCapturing = false
   private isLive = false
+  private isTransitioning = false
   private isPaused = false
   private cameraMode: CameraMode = 'webcam'
   private settingsData: {
@@ -283,7 +284,7 @@ export class BoothApp {
     // ------------------------------------------------------------------
     this.flashOverlay = document.createElement('div')
     Object.assign(this.flashOverlay.style, {
-      position: 'absolute', inset: '0', zIndex: '45',
+      position: 'absolute', inset: '0', zIndex: '999',
       background: '#fff', pointerEvents: 'none', opacity: '0',
     })
 
@@ -570,6 +571,9 @@ export class BoothApp {
       if (e.key === 'Escape' && this.isLive) {
         this.goHome()
       }
+      if ((e.key === 'p' || e.key === 'P') && this.isCapturing) {
+        this.togglePause()
+      }
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 's' || e.key === 'S')) {
         e.preventDefault()
         this.openSettings()
@@ -739,6 +743,11 @@ export class BoothApp {
         this.offlineIndicator.setQueueDepth(1)
       }
     })
+    window.hellomyphoto?.onUploadProgress((data) => {
+      if (this.currentSessionId === data.sessionId) {
+        this.photoPreview.updateProgress(data.percent, data.speed, data.elapsed, data.eta)
+      }
+    })
     // IPC path: commands forwarded from Electron main process (via HTTP polling fallback)
     window.hellomyphoto?.onBoothCommand((cmd) => {
       this.handleBoothCommand(cmd)
@@ -864,41 +873,46 @@ export class BoothApp {
   // -------------------------------------------------------------------------
   // goLive
   // -------------------------------------------------------------------------
-
   private async goLive() {
-    console.log(`[BoothApp] goLive() — cameraMode="${this.cameraMode}"`)
-    this.landingEl.style.display = 'none'
+    if (this.isTransitioning) return
+    this.isTransitioning = true
+    try {
+      console.log(`[BoothApp] goLive() — cameraMode="${this.cameraMode}"`)
+      this.landingEl.style.display = 'none'
 
-    if (this.settingsData.serverUrl) {
-      this.frameCarousel.loadFrames(this.settingsData.serverUrl, this.settingsData.otp || '')
+      if (this.settingsData.serverUrl) {
+        this.frameCarousel.loadFrames(this.settingsData.serverUrl, this.settingsData.otp || '')
+      }
+
+      if (this.settingsData.audioDeviceId) {
+        await this.audio.setSinkId(this.settingsData.audioDeviceId)
+      }
+
+      if (this.cameraMode === 'dslr') {
+        console.log('[BoothApp] goLive() — branching to DSLR preview')
+        await this.startDslrPreview()
+      } else {
+        console.log('[BoothApp] goLive() — branching to webcam preview')
+        await this.startWebcamPreview()
+      }
+
+      this.isLive = true
+      this._state = 'live'
+      this.emitBoothState()
+      this.captureBtn.style.display = 'block'
+      this.captureBtn.style.visibility = 'visible'
+      this.statusBar.appendChild(this.captureBtn)
+      this.previewBox.style.background = '#000'
+      this.statusActions.style.display = 'flex'
+      this.pauseBtn.style.display = 'none'
+
+      this.stateDisplay.textContent = 'Start'
+      this.stateDisplay.style.opacity = '1'
+      this.showCaptureProgress(this.settingsData.photoCount, 0)
+      this.captureProgressText.textContent = `Shot 1 of ${this.settingsData.photoCount}`
+    } finally {
+      this.isTransitioning = false
     }
-
-    if (this.settingsData.audioDeviceId) {
-      await this.audio.setSinkId(this.settingsData.audioDeviceId)
-    }
-
-    if (this.cameraMode === 'dslr') {
-      console.log('[BoothApp] goLive() — branching to DSLR preview')
-      await this.startDslrPreview()
-    } else {
-      console.log('[BoothApp] goLive() — branching to webcam preview')
-      await this.startWebcamPreview()
-    }
-
-    this.isLive = true
-    this._state = 'live'
-    this.emitBoothState()
-    this.captureBtn.style.display = 'block'
-    this.captureBtn.style.visibility = 'visible'
-    this.statusBar.appendChild(this.captureBtn)
-    this.previewBox.style.background = '#000'
-    this.statusActions.style.display = 'flex'
-    this.pauseBtn.style.display = 'none'
-
-    this.stateDisplay.textContent = 'Start'
-    this.stateDisplay.style.opacity = '1'
-    this.showCaptureProgress(this.settingsData.photoCount, 0)
-    this.captureProgressText.textContent = `Shot 1 of ${this.settingsData.photoCount}`
   }
 
   private async startDslrPreview() {
@@ -986,44 +1000,48 @@ export class BoothApp {
   // -------------------------------------------------------------------------
 
   private async goHome() {
-    this.photoPreview.hide()
-    this.previewWindow.style.display = 'flex'
-    this.statusBar.style.display = 'flex'
+    if (this.isTransitioning) return
+    this.isTransitioning = true
+    try {
+      this.photoPreview.hide()
+      this.previewWindow.style.display = 'flex'
+      this.statusBar.style.display = 'flex'
+      this.landingEl.style.display = 'flex'
 
-    // Stop whichever preview source is active.
-    // Always send the IPC stop — the camera may have liveview/mirror up even
-    // if the renderer-side DslrPreviewManager is not active.
-    if (this.cameraMode === 'dslr') {
-      await this.dslrPreview.stop()
-    }
-    this.postCaptureEl.style.display = 'none'
-    this.postCaptureEl.src = ''
-    this.camera.stop()
-    this.hideCaptureProgress()
+      this.postCaptureEl.style.display = 'none'
+      this.postCaptureEl.src = ''
+      this.hideCaptureProgress()
 
-    this.isLive = false
-    this.isCapturing = false
-    this.pendingRetakes = null
-    this._state = 'idle'
-    this.emitBoothState()
-    
-    this.isPauseActive = false
-    if (this.pauseResume) {
-      this.pauseResume()
-      this.pauseResume = null
+      this.isLive = false
+      this.isCapturing = false
+      this.pendingRetakes = null
+      this._state = 'idle'
+      this.emitBoothState()
+      
+      this.isPauseActive = false
+      if (this.pauseResume) {
+        this.pauseResume()
+        this.pauseResume = null
+      }
+      this.statusActions.style.display = 'none'
+      this.captureBtn.style.display = 'none'
+      this.stateDisplay.textContent = ''
+      this.stateDisplay.style.opacity = '1'
+      this.webcamPreview.srcObject = null
+      this.previewBox.style.background = '#222'
+      this.confirmModal.style.display = 'none'
+      this.hideDslrError()
+      this.updateStartBtn()
+      this.currentSessionId = null
+      this.currentPaths = []
+
+      if (this.cameraMode === 'dslr') {
+        await this.dslrPreview.stop()
+      }
+      this.camera.stop()
+    } finally {
+      this.isTransitioning = false
     }
-    this.statusActions.style.display = 'none'
-    this.captureBtn.style.display = 'none'
-    this.stateDisplay.textContent = ''
-    this.stateDisplay.style.opacity = '1'
-    this.webcamPreview.srcObject = null
-    this.previewBox.style.background = '#222'
-    this.landingEl.style.display = 'flex'
-    this.confirmModal.style.display = 'none'
-    this.hideDslrError()
-    this.updateStartBtn()
-    this.currentSessionId = null
-    this.currentPaths = []
   }
 
   private togglePause() {
@@ -1370,6 +1388,27 @@ export class BoothApp {
       }
     }
 
+    // Stop liveview before switching to preview screen.
+    if (this.cameraMode === 'dslr') {
+      await this.dslrPreview.stop()
+    }
+
+    this.hideCaptureProgress()
+    this.pauseBtn.style.display = 'none'
+    this.isCapturing = false
+    this._state = 'preview'
+    this.emitBoothState()
+    const selectedFrameConfig = this.selectedFrame ? this.frameCarousel.activeFrames.find(f => f.id === this.selectedFrame) : null
+    
+    // Show preview UI immediately using sessionId as a fallback share ID
+    this.photoPreview.show(paths, selectedFrameConfig, this.settingsData.serverUrl, this.settingsData.otp, sessionId)
+    this.photoPreview.updateProgress(0, 'Preparing...')
+    this.previewWindow.style.display = 'none'
+    this.statusBar.style.display = 'none'
+    this.camera.stop()
+    this.webcamPreview.srcObject = null
+
+    // Background upload
     const uploadResult = await window.hellomyphoto?.uploadPhotos({
       sessionId,
       imagePaths: filePaths,
@@ -1382,24 +1421,6 @@ export class BoothApp {
       this.offlineIndicator.setOnline(false)
       this.offlineIndicator.setQueueDepth(1)
     }
-
-    // Stop liveview before switching to preview screen.
-    if (this.cameraMode === 'dslr') {
-      await this.dslrPreview.stop()
-    }
-
-    this.hideCaptureProgress()
-    this.pauseBtn.style.display = 'none'
-    this.isCapturing = false
-    this._state = 'preview'
-    this.emitBoothState()
-    const selectedFrameConfig = this.selectedFrame ? this.frameCarousel.activeFrames.find(f => f.id === this.selectedFrame) : null
-    const shareId = uploadResult?.shareId || sessionId
-    this.photoPreview.show(paths, selectedFrameConfig, this.settingsData.serverUrl, this.settingsData.otp, shareId)
-    this.previewWindow.style.display = 'none'
-    this.statusBar.style.display = 'none'
-    this.camera.stop()
-    this.webcamPreview.srcObject = null
   }
 
   /**
@@ -1519,7 +1540,7 @@ export class BoothApp {
   private async flashWhite() {
     this.flashOverlay.style.transition = 'none'
     this.flashOverlay.style.opacity = '1'
-    void this.flashOverlay.offsetHeight
+    await new Promise(r => requestAnimationFrame(r))
     this.flashOverlay.style.transition = 'opacity 200ms ease-out'
     this.flashOverlay.style.opacity = '0'
     await this.delay(250)

@@ -20,6 +20,11 @@ export class PhotoPreview {
     cancel: () => void
   } | null = null
 
+  private progressContainer?: HTMLDivElement
+  private progressBar?: HTMLDivElement
+  private progressFill?: HTMLDivElement
+  private progressText?: HTMLDivElement
+
   constructor(container: HTMLElement, onRetake: (indices: number[]) => void, onConfirm: () => void) {
     this.container = container
     this.onRetake = onRetake
@@ -42,6 +47,16 @@ export class PhotoPreview {
     this.container.appendChild(this.qrOverlay)
 
     this.keydownHandler = (e: KeyboardEvent) => {
+      if (!this.isVisible()) return
+
+      if (this.qrOverlay.style.display !== 'none') {
+        if (e.key === 'Escape' || e.key === 'q' || e.key === 'Q') {
+          e.preventDefault()
+          this.qrOverlay.style.display = 'none'
+        }
+        return
+      }
+
       if (this.overlay.dataset.mode === 'retake' && this.keydownHandlers) {
         const num = parseInt(e.key, 10)
         if (!isNaN(num) && num >= 1 && num <= this.currentPaths.length) {
@@ -51,6 +66,18 @@ export class PhotoPreview {
           this.keydownHandlers.confirm()
         } else if (e.key === 'Escape') {
           this.keydownHandlers.cancel()
+        }
+      } else if (this.overlay.dataset.mode === 'preview') {
+        const buttons = this.overlay.querySelectorAll('button')
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault()
+          if (buttons.length > 1) (buttons[1] as HTMLButtonElement).click()
+        } else if (e.key === 'r' || e.key === 'R') {
+          e.preventDefault()
+          this.showRetakeSelection()
+        } else if (e.key === 'q' || e.key === 'Q') {
+          e.preventDefault()
+          if (buttons.length > 2) (buttons[2] as HTMLButtonElement).click()
         }
       }
     }
@@ -91,12 +118,15 @@ export class PhotoPreview {
     } else {
       const grid = document.createElement('div')
       grid.style.cssText = `
-        display: grid; grid-template-columns: repeat(${Math.min(paths.length, 2)}, 1fr);
+        display: flex; flex-wrap: wrap; justify-content: center;
         gap: 1rem; max-width: 800px; width: 100%; margin-bottom: 2rem;
       `
       for (const p of paths) {
         const img = document.createElement('img')
-        img.style.cssText = 'width: 100%; border-radius: 8px; object-fit: contain; max-height: 80vh;'
+        img.style.cssText = `
+          width: calc(${paths.length === 1 ? '100%' : '50%'} - 0.5rem);
+          border-radius: 8px; object-fit: contain; max-height: 80vh;
+        `
         img.src = p.startsWith('blob:') || p.startsWith('http') ? p : `file://${p}`
         grid.appendChild(img)
       }
@@ -147,6 +177,38 @@ export class PhotoPreview {
     }
 
     this.overlay.appendChild(actions)
+
+    this.progressContainer = document.createElement('div')
+    this.progressContainer.style.cssText = 'margin-top: 1.5rem; width: 100%; max-width: 400px; display: none; flex-direction: column; align-items: center; gap: 0.5rem;'
+    
+    this.progressBar = document.createElement('div')
+    this.progressBar.style.cssText = 'width: 100%; height: 8px; background: #333; border-radius: 4px; overflow: hidden;'
+    
+    this.progressFill = document.createElement('div')
+    this.progressFill.style.cssText = 'width: 0%; height: 100%; background: #4caf50; transition: width 0.3s ease;'
+    this.progressBar.appendChild(this.progressFill)
+    
+    this.progressText = document.createElement('div')
+    this.progressText.style.cssText = 'font-size: 0.875rem; color: #aaa;'
+    
+    this.progressContainer.appendChild(this.progressBar)
+    this.progressContainer.appendChild(this.progressText)
+    this.overlay.appendChild(this.progressContainer)
+  }
+
+  updateProgress(percent: number, speed: string, elapsed?: number, eta?: number) {
+    if (!this.progressContainer) return
+    this.progressContainer.style.display = 'flex'
+    if (this.progressFill) this.progressFill.style.width = `${percent}%`
+    if (this.progressText) {
+      if (percent >= 100) {
+        const timeStr = elapsed ? ` in ${elapsed}s` : ''
+        this.progressText.textContent = `Upload complete${timeStr}!`
+      } else {
+        const etaStr = eta ? ` (ETA: ${eta}s)` : ''
+        this.progressText.textContent = `Uploading... ${percent}% at ${speed}${etaStr}`
+      }
+    }
   }
 
   private showRetakeSelection() {
@@ -181,29 +243,30 @@ export class PhotoPreview {
     this.currentPaths.forEach((p, idx) => {
       const wrapper = document.createElement('div')
       photoWrappers.push(wrapper)
-      wrapper.style.cssText = 'position: relative; cursor: pointer; border-radius: 8px; overflow: hidden; border: 4px solid transparent; transition: border-color 0.2s;'
+      wrapper.style.cssText = 'position: relative; cursor: pointer; display: flex; justify-content: center; align-items: center;'
+      
+      const img = document.createElement('img')
+      img.style.cssText = 'max-width: 100%; max-height: 50vh; width: auto; height: auto; display: block; border-radius: 8px; border: 4px solid transparent; transition: border-color 0.2s; box-sizing: border-box;'
+      img.src = p.startsWith('blob:') || p.startsWith('http') ? p : `file://${p}`
+
       wrapper.onmouseover = () => {
-        if (!selectedIndices.has(idx)) wrapper.style.borderColor = '#555'
+        if (!selectedIndices.has(idx)) img.style.borderColor = '#555'
       }
       wrapper.onmouseout = () => {
-        if (!selectedIndices.has(idx)) wrapper.style.borderColor = 'transparent'
+        if (!selectedIndices.has(idx)) img.style.borderColor = 'transparent'
       }
       wrapper.onclick = () => {
         if (selectedIndices.has(idx)) {
           selectedIndices.delete(idx)
-          wrapper.style.borderColor = 'transparent'
+          img.style.borderColor = 'transparent'
           checkMark.style.display = 'none'
         } else {
           selectedIndices.add(idx)
-          wrapper.style.borderColor = '#2196F3'
+          img.style.borderColor = '#2196F3'
           checkMark.style.display = 'flex'
         }
         updateConfirmBtn()
       }
-      
-      const img = document.createElement('img')
-      img.style.cssText = 'width: 100%; display: block; object-fit: contain; max-height: 50vh;'
-      img.src = p.startsWith('blob:') || p.startsWith('http') ? p : `file://${p}`
       
       const checkMark = document.createElement('div')
       checkMark.innerHTML = '✓'
@@ -213,9 +276,13 @@ export class PhotoPreview {
       numBadge.textContent = String(idx + 1)
       numBadge.style.cssText = 'position: absolute; top: 1rem; left: 1rem; background: rgba(0,0,0,0.7); color: #fff; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: bold; font-size: 1.25rem;'
       
-      wrapper.appendChild(img)
-      wrapper.appendChild(numBadge)
-      wrapper.appendChild(checkMark)
+      const innerWrapper = document.createElement('div')
+      innerWrapper.style.cssText = 'position: relative; display: inline-block; max-width: 100%;'
+      
+      innerWrapper.appendChild(img)
+      innerWrapper.appendChild(numBadge)
+      innerWrapper.appendChild(checkMark)
+      wrapper.appendChild(innerWrapper)
       grid.appendChild(wrapper)
     })
 
