@@ -18,6 +18,7 @@ export class BoothApp {
   private frameCarousel: FrameCarousel
   private photoPreview: PhotoPreview
   private offlineIndicator: OfflineIndicator
+  private uploadStatusBar!: HTMLDivElement
   private settings: Settings
 
   private webcamPreview: HTMLVideoElement
@@ -324,6 +325,28 @@ export class BoothApp {
       () => this.goHome()
     )
     this.offlineIndicator = new OfflineIndicator(this.statusBar)
+
+    // Upload status bar
+    this.uploadStatusBar = document.createElement('div')
+    Object.assign(this.uploadStatusBar.style, {
+      position: 'fixed',
+      bottom: '0',
+      left: '0',
+      right: '0',
+      background: 'rgba(15,15,15,0.96)',
+      borderTop: '1px solid #1f1f1f',
+      padding: '0.5rem 1.5rem',
+      display: 'none',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '0.78rem',
+      color: '#666',
+      zIndex: '300',
+      fontFamily: 'monospace',
+      letterSpacing: '0.02em',
+      gap: '0.5rem',
+    })
+    this.container.appendChild(this.uploadStatusBar)
     this.settings = new Settings(this.container, (s) => {
       const prevMode = this.cameraMode
       this.settingsData = s
@@ -751,6 +774,14 @@ export class BoothApp {
       if (this.currentSessionId === data.sessionId) {
         this.photoPreview.updateProgress(data.percent, data.speed, data.elapsed, data.eta)
       }
+    })
+    window.hellomyphoto?.onShareIdReady((data) => {
+      if (this.currentSessionId === data.sessionId) {
+        this.photoPreview.updateShareUrl(data.shareUrl)
+      }
+    })
+    window.hellomyphoto?.onUploadQueueUpdate((data) => {
+      this.updateUploadStatusBar(data)
     })
     // IPC path: commands forwarded from Electron main process (via HTTP polling fallback)
     window.hellomyphoto?.onBoothCommand((cmd) => {
@@ -1570,5 +1601,19 @@ export class BoothApp {
 
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  private updateUploadStatusBar(data: { pending: number; failed: number; jobs?: any[] }) {
+    if (!this.uploadStatusBar) return
+    const total = data.pending + data.failed
+    if (total === 0) {
+      this.uploadStatusBar.style.display = 'none'
+      return
+    }
+    this.uploadStatusBar.style.display = 'flex'
+    const parts: string[] = []
+    if (data.pending > 0) parts.push(`↑ ${data.pending} uploading`)
+    if (data.failed > 0) parts.push(`⚠ ${data.failed} failed — open Settings to retry`)
+    this.uploadStatusBar.textContent = parts.join('  ·  ')
   }
 }

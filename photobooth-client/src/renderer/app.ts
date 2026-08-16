@@ -35,6 +35,16 @@ declare global {
       }) => Promise<{ success: boolean; error?: string; queued?: boolean; shareId?: string }>
       uploadQueued: () => Promise<{ flushed: number }>
       getQueueDepth: () => Promise<number>
+      getUploadQueue: () => Promise<any[]>
+      resetFailedUploads: () => Promise<{ ok: boolean }>
+      clearUploadQueue: () => Promise<{ ok: boolean }>
+      removeUploadJob: (id: number) => Promise<{ ok: boolean }>
+      retryUploadJob: (id: number) => Promise<{ ok: boolean }>
+      pauseQueue: () => Promise<{ ok: boolean }>
+      resumeQueue: () => Promise<{ ok: boolean }>
+      isQueuePaused: () => Promise<boolean>
+      getRecentUploads: (limit?: number) => Promise<any[]>
+      cancelUploadJob: (id: number) => Promise<{ ok: boolean }>
 
       // ----------------------------------------------------------------
       // DSLR Focus Controls
@@ -88,6 +98,8 @@ declare global {
       // ----------------------------------------------------------------
       onUploadComplete: (callback: (data: { sessionId: string; success: boolean; elapsed?: number }) => void) => void
       onUploadProgress: (callback: (data: { sessionId: string; percent: number; speed: string; elapsed?: number; eta?: number }) => void) => void
+      onShareIdReady: (callback: (data: { sessionId: string; shareId: string; shareUrl: string }) => void) => void
+      onUploadQueueUpdate: (callback: (data: { pending: number; failed: number; jobs: any[] }) => void) => void
       onServerStatus: (callback: (status: { online: boolean }) => void) => void
       onServerConfig: (callback: (config: { serverUrl: string; dslrConnected: boolean }) => void) => void
       onQueueUpdate: (callback: (data: { offline: number }) => void) => void

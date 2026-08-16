@@ -350,81 +350,55 @@ export function initIpcHandlers(
     frameName?: string | null
     photoCount: number
   }) => {
+    // Step 1: Reserve a shareId before upload starts (for instant QR)
+    let reservedShareId: string | undefined
+    let reservedShareUrl: string | undefined
     try {
-      const formData = new FormData()
-      for (const imagePath of data.imagePaths) {
-        const buffer = await readFile(imagePath)
-        const blob = new Blob([buffer])
-        formData.append('photos', blob, path.basename(imagePath))
-      }
-      if (data.imageBuffers) {
-        for (let i = 0; i < data.imageBuffers.length; i++) {
-          const blob = new Blob([data.imageBuffers[i]])
-          formData.append('photos', blob, `photo_${i}.jpg`)
-        }
-      }
-      formData.append('sessionId', data.sessionId)
-      formData.append('photoCount', String(data.photoCount))
-      if (data.frameName) formData.append('frameName', data.frameName)
-
-      const settings = getSettingsSync()
-      const headers: Record<string, string> = {}
-      if (settings.otp) headers['X-Booth-OTP'] = settings.otp
-
-      const axios = require('axios')
-      const startTime = Date.now()
-      let lastTime = startTime
-      let lastLoaded = 0
-
-      const response = await axios.post(`${_serverUrl}/api/booth/upload`, formData, {
-        headers,
-        onUploadProgress: (progressEvent: any) => {
-          const { loaded, total } = progressEvent
-          const now = Date.now()
-          const timeDiff = (now - lastTime) / 1000 // seconds
-          
-          if (timeDiff > 0.2 || loaded === total) {
-            const bytesDiff = loaded - lastLoaded
-            const speed = timeDiff > 0 ? bytesDiff / timeDiff : 0
-            lastTime = now
-            lastLoaded = loaded
-            
-            // Format speed to MB/s or KB/s
-            let speedStr = ''
-            if (speed > 1024 * 1024) {
-              speedStr = (speed / (1024 * 1024)).toFixed(1) + ' MB/s'
-            } else {
-              speedStr = (speed / 1024).toFixed(0) + ' KB/s'
-            }
-
-            const elapsedSeconds = Math.round((now - startTime) / 1000)
-            const remainingBytes = total ? total - loaded : 0
-            const etaSeconds = speed > 0 ? Math.round(remainingBytes / speed) : 0
-
-            const percent = total ? Math.round((loaded / total) * 100) : 0
-            mainWindow.webContents.send('upload-progress', { 
-              sessionId: data.sessionId, 
-              percent, 
-              speed: speedStr,
-              elapsed: elapsedSeconds,
-              eta: etaSeconds
-            })
-          }
-        }
+      const reserveHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+      const s = getSettingsSync()
+      if (s.otp) reserveHeaders['X-Booth-OTP'] = s.otp
+      const reserveRes = await fetch(`${_serverUrl}/api/booth/session/reserve`, {
+        method: 'POST',
+        headers: reserveHeaders,
+        body: JSON.stringify({ sessionId: data.sessionId }),
+        signal: AbortSignal.timeout(5000),
       })
-
-      const responseData = response.data
-      const totalElapsedSeconds = Math.round((Date.now() - startTime) / 1000)
-
-      mainWindow.webContents.send('upload-complete', { sessionId: data.sessionId, success: true, elapsed: totalElapsedSeconds })
-      return { success: true, shareId: responseData.shareId }
-    } catch (error: any) {
-      const paths = data.imagePaths.filter((p) => fs.existsSync(p))
-      if (paths.length > 0) {
-        offlineQueue.enqueue(data.sessionId, { frameName: data.frameName, photoCount: data.photoCount }, paths)
+      if (reserveRes.ok) {
+        const rd = await reserveRes.json()
+        reservedShareId = rd.shareId
+        reservedShareUrl = rd.shareUrl
+        if (reservedShareId && mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('share-id-ready', {
+            sessionId: data.sessionId,
+            shareId: reservedShareId,
+            shareUrl: reservedShareUrl
+          })
+        }
       }
-      return { success: false, error: error.message, queued: true }
+    } catch {
+      // Server unreachable — QR will use sessionId fallback
     }
+
+    const finalPaths: string[] = [...data.imagePaths]
+
+    if (data.imageBuffers && data.imageBuffers.length > 0) {
+      const tempDir = path.join(app.getPath('userData'), 'temp_photos')
+      if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true })
+      
+      for (let i = 0; i < data.imageBuffers.length; i++) {
+        const tempPath = path.join(tempDir, `${data.sessionId}_${i}.jpg`)
+        await fs.promises.writeFile(tempPath, Buffer.from(data.imageBuffers[i]))
+        finalPaths.push(tempPath)
+      }
+    }
+
+    // Always queue the job first
+    offlineQueue.enqueue(data.sessionId, { frameName: data.frameName, photoCount: data.photoCount }, finalPaths, reservedShareId)
+    
+    // Kick off the queue processor asynchronously
+    flushQueuedUploads().catch(() => {})
+
+    return { success: true, shareId: reservedShareId, queued: true }
   })
 
   ipcMain.handle('upload-queued', async () => {
@@ -665,44 +639,174 @@ export function initIpcHandlers(
   ipcMain.handle('get-logs', (): { lines: string[] } => {
     return { lines: [..._logBuffer] }
   })
+  // ------------------------------------------------------------------
+  // Upload queue management
+  // ------------------------------------------------------------------
+  ipcMain.handle('get-upload-queue', () => {
+    return _offlineQueue.getAll()
+  })
+
+  ipcMain.handle('reset-failed-uploads', async () => {
+    _offlineQueue.resetFailed()
+    await flushQueuedUploads()
+    return { ok: true }
+  })
+
+  ipcMain.handle('clear-upload-queue', () => {
+    _offlineQueue.clearAll()
+    return { ok: true }
+  })
+
+  ipcMain.handle('remove-upload-job', (event, id: number) => {
+    _offlineQueue.remove(id)
+    cancelUploadJob(id)
+    return { ok: true }
+  })
+
+  ipcMain.handle('retry-upload-job', (event, id: number) => {
+    _offlineQueue.markRetrying(id)
+    flushQueuedUploads().catch(() => {})
+    return { ok: true }
+  })
+
+  ipcMain.handle('pause-queue', () => {
+    _offlineQueue.pause()
+    return { ok: true }
+  })
+
+  ipcMain.handle('resume-queue', () => {
+    _offlineQueue.resume()
+    flushQueuedUploads().catch(() => {})
+    return { ok: true }
+  })
+
+  ipcMain.handle('get-recent-uploads', (event, limit?: number) => {
+    return _offlineQueue.getRecentUploads(limit || 10)
+  })
+
+  ipcMain.handle('is-queue-paused', () => {
+    return _offlineQueue.isQueuePaused()
+  })
+
+  ipcMain.handle('cancel-upload-job', (event, id: number) => {
+    cancelUploadJob(id)
+    return { ok: true }
+  })
 }
 
+let activeCancelTokens: Record<number, any> = {}
+
 export async function flushQueuedUploads() {
+  if (_offlineQueue.isQueuePaused()) return { flushed: 0 }
+  
   const pending = _offlineQueue.getPending()
+  if (pending.length === 0) return { flushed: 0 }
+  
   const settings = getSettingsSync()
   const headers: Record<string, string> = {}
   if (settings.otp) headers['X-Booth-OTP'] = settings.otp
 
+  const axios = require('axios')
+
   for (const job of pending) {
+    if (_offlineQueue.isQueuePaused()) break
+
     try {
       const formData = new FormData()
       const imagePaths = JSON.parse(job.imagePaths) as string[]
+      let hasFiles = false
+      let totalFileSize = 0
       for (const imagePath of imagePaths) {
         if (fs.existsSync(imagePath)) {
           const buffer = await readFile(imagePath)
           const blob = new Blob([buffer])
+          totalFileSize += buffer.length
           formData.append('photos', blob, path.basename(imagePath))
+          hasFiles = true
         }
       }
+      if (!hasFiles) { _offlineQueue.markCompleted(job.id); continue }
+
       formData.append('sessionId', job.sessionId)
       const metadata = JSON.parse(job.metadata || '{}')
       formData.append('photoCount', String(metadata.photoCount || 1))
       if (metadata.frameName) formData.append('frameName', metadata.frameName)
+      if (job.shareId) formData.append('shareId', job.shareId)
 
-      const response = await fetch(`${_serverUrl}/api/booth/upload`, {
-        method: 'POST',
-        body: formData,
+      const startTime = Date.now()
+      _offlineQueue.markUploading(job.id, startTime)
+      
+      let lastTime = startTime
+      let lastLoaded = 0
+      let finalSpeed = 0
+
+      const source = axios.CancelToken.source()
+      activeCancelTokens[job.id] = source
+
+      const response = await axios.post(`${_serverUrl}/api/booth/upload`, formData, {
         headers,
+        cancelToken: source.token,
+        onUploadProgress: (progressEvent: any) => {
+          const { loaded, total } = progressEvent
+          const now = Date.now()
+          const timeDiff = (now - lastTime) / 1000
+          
+          if (timeDiff > 0.2 || loaded === total) {
+            const bytesDiff = loaded - lastLoaded
+            const speed = timeDiff > 0 ? bytesDiff / timeDiff : 0
+            finalSpeed = speed
+            lastTime = now
+            lastLoaded = loaded
+            
+            let speedStr = ''
+            if (speed > 1024 * 1024) speedStr = (speed / (1024 * 1024)).toFixed(1) + ' MB/s'
+            else speedStr = (speed / 1024).toFixed(0) + ' KB/s'
+
+            const elapsedSeconds = Math.round((now - startTime) / 1000)
+            const remainingBytes = total ? total - loaded : 0
+            const etaSeconds = speed > 0 ? Math.round(remainingBytes / speed) : 0
+            const percent = total ? Math.round((loaded / total) * 100) : 0
+            
+            _offlineQueue.updateStats(job.id, loaded, speed / 1024)
+            
+            if (_mainWindow && !_mainWindow.isDestroyed()) {
+              _mainWindow.webContents.send('upload-progress', { 
+                sessionId: job.sessionId, percent, speed: speedStr, elapsed: elapsedSeconds, eta: etaSeconds
+              })
+            }
+          }
+        }
       })
-      if (response.ok) {
+      
+      delete activeCancelTokens[job.id]
+
+      if (response.status === 200) {
+        _offlineQueue.updateStats(job.id, totalFileSize, finalSpeed / 1024)
         _offlineQueue.markCompleted(job.id)
+        const elapsed = Math.round((Date.now() - startTime) / 1000)
+        if (_mainWindow && !_mainWindow.isDestroyed()) {
+          _mainWindow.webContents.send('upload-complete', { sessionId: job.sessionId, success: true, elapsed })
+        }
       } else {
-        throw new Error('Upload failed')
+        throw new Error(`HTTP ${response.status}`)
       }
-    } catch {
-      _offlineQueue.markFailed(job.id)
-      _offlineQueue.scheduleRetry(job.id, job.retryCount + 1)
+    } catch (err: any) {
+      if (activeCancelTokens[job.id]) delete activeCancelTokens[job.id]
+      if (axios.isCancel(err)) {
+        _offlineQueue.markRetrying(job.id) // keep pending
+      } else {
+        _offlineQueue.markFailed(job.id)
+        _offlineQueue.scheduleRetry(job.id, job.retryCount + 1)
+        console.warn(`[Upload] Queue job ${job.id} failed:`, err.message)
+      }
     }
   }
   return { flushed: pending.length }
+}
+
+export function cancelUploadJob(id: number) {
+  if (activeCancelTokens[id]) {
+    activeCancelTokens[id].cancel('Cancelled by user')
+    delete activeCancelTokens[id]
+  }
 }

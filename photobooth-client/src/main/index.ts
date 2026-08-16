@@ -99,6 +99,9 @@ app.on('ready', async () => {
     try {
       const depth = offlineQueue.getDepth()
       sendIfAlive('queue-update', { offline: depth })
+      const all = offlineQueue.getAll()
+      const failed = all.filter((j: any) => j.status === 'failed').length
+      sendIfAlive('upload-queue-update', { pending: depth, failed, jobs: all })
     } catch {}
   }, 5000))
 
@@ -109,8 +112,13 @@ app.on('ready', async () => {
         const { flushQueuedUploads } = await import('./ipc')
         await flushQueuedUploads()
       }
+      // Push queue state to renderer
+      const all = offlineQueue.getAll()
+      const pending = all.filter((j: any) => j.status === 'pending').length
+      const failed = all.filter((j: any) => j.status === 'failed').length
+      sendIfAlive('upload-queue-update', { pending, failed, jobs: all })
     } catch {}
-  }, 15000))
+  }, 10000))
 })
 
 function sendIfAlive(channel: string, data: any) {

@@ -13,6 +13,7 @@ export class PhotoPreview {
   private lastServerUrl?: string
   private lastOtp?: string
   private lastSessionId?: string
+  private shareUrl?: string
   private keydownHandler: (e: KeyboardEvent) => void
   private keydownHandlers: {
     toggle: (idx: number) => void,
@@ -90,6 +91,7 @@ export class PhotoPreview {
     this.lastServerUrl = serverUrl
     this.lastOtp = otp
     this.lastSessionId = sessionId
+    this.shareUrl = sessionId && serverUrl ? `${serverUrl}/share/${sessionId}` : undefined
     this.overlay.dataset.mode = 'preview'
     this.overlay.innerHTML = ''
     this.overlay.style.display = 'flex'
@@ -171,7 +173,7 @@ export class PhotoPreview {
         cursor: pointer;
       `
       shareBtn.addEventListener('click', () => {
-        this.showQR(`${serverUrl}/share/${sessionId}`)
+        this.showQR(this.shareUrl || `${serverUrl}/share/${sessionId}`)
       })
       actions.appendChild(shareBtn)
     }
@@ -194,6 +196,10 @@ export class PhotoPreview {
     this.progressContainer.appendChild(this.progressBar)
     this.progressContainer.appendChild(this.progressText)
     this.overlay.appendChild(this.progressContainer)
+  }
+
+  updateShareUrl(url: string) {
+    this.shareUrl = url
   }
 
   updateProgress(percent: number, speed: string, elapsed?: number, eta?: number) {

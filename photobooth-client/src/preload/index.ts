@@ -51,6 +51,17 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
 
   getQueueDepth: () => ipcRenderer.invoke('get-queue-depth'),
 
+  getUploadQueue: () => ipcRenderer.invoke('get-upload-queue'),
+  resetFailedUploads: () => ipcRenderer.invoke('reset-failed-uploads'),
+  clearUploadQueue: () => ipcRenderer.invoke('clear-upload-queue'),
+  removeUploadJob: (id: number) => ipcRenderer.invoke('remove-upload-job', id),
+  retryUploadJob: (id: number) => ipcRenderer.invoke('retry-upload-job', id),
+  pauseQueue: () => ipcRenderer.invoke('pause-queue'),
+  resumeQueue: () => ipcRenderer.invoke('resume-queue'),
+  isQueuePaused: () => ipcRenderer.invoke('is-queue-paused'),
+  getRecentUploads: (limit?: number) => ipcRenderer.invoke('get-recent-uploads', limit),
+  cancelUploadJob: (id: number) => ipcRenderer.invoke('cancel-upload-job', id),
+
   // ------------------------------------------------------------------
   // Hardware / settings
   // ------------------------------------------------------------------
@@ -109,6 +120,13 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
   },
   onUploadProgress: (callback: (data: { sessionId: string; percent: number; speed: string; elapsed?: number; eta?: number }) => void) => {
     ipcRenderer.on('upload-progress', (_event, data) => callback(data))
+  },
+
+  onShareIdReady: (callback: (data: { sessionId: string; shareId: string; shareUrl: string }) => void) => {
+    ipcRenderer.on('share-id-ready', (_event, data) => callback(data))
+  },
+  onUploadQueueUpdate: (callback: (data: { pending: number; failed: number; jobs: any[] }) => void) => {
+    ipcRenderer.on('upload-queue-update', (_event, data) => callback(data))
   },
 
   onServerStatus: (callback: (status: { online: boolean }) => void) => {

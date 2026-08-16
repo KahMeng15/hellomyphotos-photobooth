@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { authMiddleware } from '../middleware/authMiddleware'
-import { getEvent, getPhotoSessionByShareId, getPhotoSession, logShareAnalytics } from '../db'
+import { getEvent, getPhotoSessionByShareId, getPhotoSession, logShareAnalytics, getSessionUploadStatus } from '../db'
 import { UAParser } from 'ua-parser-js'
 import { getActiveFrames } from '../utils/frames'
 
@@ -77,6 +77,39 @@ router.post('/create', authMiddleware, async (req: Request, res: Response) => {
     res.json({ success: true, token, url: shareUrl })
   } catch (error: any) {
     logger.error(`Share link creation failed: ${error.message}`)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.get('/:token/status', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params
+    const row = getSessionUploadStatus(token)
+    if (!row) return res.status(404).json({ error: 'not found' })
+    // Count photos: look up session to get event_id
+    let photosReady = 0
+    try {
+      // Try framed photos dir first, then raw
+      let sess = getPhotoSessionByShareId(token)
+      if (!sess) sess = getPhotoSession(token) as any
+      if (sess?.event_id) {
+        const eventDir = config.eventPhotosDir(sess.event_id)
+        const files = await fs.readdir(eventDir).catch(() => [])
+        const sessionFiles = (files as string[]).filter(f => f.startsWith(sess!.id) && !f.includes('_thumb') && !f.includes('_strip'))
+        photosReady = sessionFiles.length
+      }
+    } catch {}
+    res.json({
+      status: row.upload_status || 'reserved',
+      photosReady,
+      shareId: row.share_id,
+      uploadStartedAt: row.upload_started_at,
+      uploadCompletedAt: row.upload_completed_at,
+      sizeBytes: row.upload_size_bytes,
+      avgSpeedKbps: row.upload_avg_speed_kbps,
+    })
+  } catch (error: any) {
+    logger.error(`Status endpoint error: ${error.message}`)
     res.status(500).json({ error: error.message })
   }
 })

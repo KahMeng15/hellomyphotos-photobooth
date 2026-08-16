@@ -9,7 +9,7 @@ import { boothAuthMiddleware } from '../middleware/authMiddleware'
 import { io, operatorSubscriptions } from '../server'
 import { processSinglePhoto, generateThumbnail, compileVerticalStrip, applyFrame } from '../pipeline'
 import { getActiveFrames } from '../utils/frames'
-import { ensurePhotoSession, getEventByOtp, updateEventSettingsById, getCameraSettings, updateCameraSettings } from '../db'
+import { ensurePhotoSession, getEventByOtp, updateEventSettingsById, getCameraSettings, updateCameraSettings, reservePhotoSession, updateUploadStatus } from '../db'
 
 const router = Router()
 
@@ -45,6 +45,20 @@ const upload = multer({
     const ext = path.extname(file.originalname).toLowerCase()
     cb(null, allowed.includes(ext))
   },
+})
+
+router.post('/session/reserve', boothAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const sessionId = req.body.sessionId as string
+    if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
+    const eventId = (req as any).eventId
+    const shareId = reservePhotoSession(sessionId, eventId)
+    const shareUrl = `${req.protocol}://${req.get('host')}/share/${shareId}`
+    res.json({ shareId, shareUrl, sessionId })
+  } catch (error: any) {
+    logger.error(`Session reserve error: ${error.message}`)
+    res.status(500).json({ error: error.message })
+  }
 })
 
 router.get('/frames', boothAuthMiddleware, async (req: Request, res: Response) => {
@@ -95,6 +109,10 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
     logger.info(`Booth upload: ${files.length} photos, event=${eventId}, session=${sessionId}`)
 
     const shareId = ensurePhotoSession(sessionId, eventId)
+
+    const uploadStartTime = Date.now()
+    const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0)
+    updateUploadStatus(sessionId, 'uploading', { upload_started_at: uploadStartTime })
 
     const results: any[] = []
     const eventDir = config.eventPhotosDir(eventId)
@@ -191,9 +209,18 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
       await fs.unlink(file.path).catch(() => {})
     }
 
+    const uploadElapsedMs = Date.now() - uploadStartTime
+    const avgSpeedKbps = uploadElapsedMs > 0 ? (totalBytes / uploadElapsedMs) : 0
+    updateUploadStatus(sessionId, 'complete', {
+      upload_completed_at: Date.now(),
+      upload_size_bytes: totalBytes,
+      upload_avg_speed_kbps: avgSpeedKbps
+    })
+
     res.json({ success: true, eventId, sessionId, shareId, photoCount: files.length, results })
   } catch (error: any) {
     logger.error(`Upload error: ${error.stack || error.message}`)
+    try { updateUploadStatus(req.body.sessionId, 'failed') } catch {}
     res.status(500).json({ error: error.message })
   }
 })

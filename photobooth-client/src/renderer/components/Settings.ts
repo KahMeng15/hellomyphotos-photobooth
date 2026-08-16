@@ -199,6 +199,8 @@ export class Settings {
     col1.appendChild(otpSection)
     const passcodeSection = this.createPasscodeSection()
     col1.appendChild(passcodeSection)
+    
+    col1.appendChild(this.createQueueSection())
 
     // Column 2 — Camera Source, Devices, DSLR Exposure, Focus
     this.col2 = document.createElement('div')
@@ -510,6 +512,157 @@ export class Settings {
 
     this.overlay.appendChild(this.panel)
     container.appendChild(this.overlay)
+  }
+
+  private createQueueSection(): HTMLDivElement {
+    const section = document.createElement('div')
+    section.style.cssText = ''
+
+    const headerRow = document.createElement('div')
+    headerRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;'
+
+    const title = document.createElement('h3')
+    title.textContent = 'Upload Queue & Diagnostics'
+    title.style.cssText = 'font-size: 0.8125rem; font-weight: 600; color: #888; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;'
+    headerRow.appendChild(title)
+
+    const controls = document.createElement('div')
+    controls.style.cssText = 'display: flex; gap: 0.5rem;'
+
+    const pauseBtn = document.createElement('button')
+    pauseBtn.textContent = 'Pause Uploads'
+    pauseBtn.style.cssText = 'padding: 0.375rem 0.75rem; border: 1px solid #555; border-radius: 4px; background: #222; color: #fff; font-size: 0.75rem; cursor: pointer;'
+    
+    const isPausedCheck = async () => {
+      const paused = await window.hellomyphoto?.isQueuePaused()
+      if (paused) {
+        pauseBtn.textContent = 'Resume Uploads'
+        pauseBtn.style.background = '#4CAF50'
+      } else {
+        pauseBtn.textContent = 'Pause Uploads'
+        pauseBtn.style.background = '#222'
+      }
+    }
+    isPausedCheck()
+    
+    pauseBtn.addEventListener('click', async () => {
+      const paused = await window.hellomyphoto?.isQueuePaused()
+      if (paused) await window.hellomyphoto?.resumeQueue()
+      else await window.hellomyphoto?.pauseQueue()
+      isPausedCheck()
+      refreshList()
+    })
+
+    const diagBtn = document.createElement('button')
+    diagBtn.textContent = 'Full Diagnostics'
+    diagBtn.style.cssText = 'padding: 0.375rem 0.75rem; border: 1px solid #555; border-radius: 4px; background: #222; color: #fff; font-size: 0.75rem; cursor: pointer;'
+    diagBtn.addEventListener('click', () => this.showDiagnosticsModal())
+
+    controls.appendChild(pauseBtn)
+    controls.appendChild(diagBtn)
+    headerRow.appendChild(controls)
+    section.appendChild(headerRow)
+
+    const listContainer = document.createElement('div')
+    listContainer.style.cssText = 'background: #111; border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;'
+    section.appendChild(listContainer)
+
+    let refreshInterval: any
+    const refreshList = async () => {
+      if (!this.visible) return
+      try {
+        const recent = await window.hellomyphoto?.getRecentUploads(3) || []
+        listContainer.innerHTML = ''
+        if (recent.length === 0) {
+          listContainer.innerHTML = '<div style="padding: 1rem; color: #555; font-size: 0.75rem; text-align: center;">No recent uploads</div>'
+          return
+        }
+
+        for (const job of recent) {
+          const row = document.createElement('div')
+          row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #222; font-size: 0.75rem;'
+          
+          let statusColor = '#888'
+          if (job.status === 'completed') statusColor = '#4CAF50'
+          else if (job.status === 'failed') statusColor = '#f44336'
+          else if (job.status === 'uploading') statusColor = '#2196F3'
+
+          const left = document.createElement('div')
+          left.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem;'
+          left.innerHTML = `
+            <div style="color: #ccc; font-weight: 500;">Session: ${job.sessionId}</div>
+            <div style="color: #666; font-size: 0.65rem; margin-top: 2px;">${new Date(job.createdAt).toLocaleString()}</div>
+            <div style="color: ${statusColor}; margin-top: 4px;">${job.status.toUpperCase()}</div>
+          `
+
+          const stats = document.createElement('div')
+          stats.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem; align-items: flex-end; color: #888;'
+          
+          if (job.status === 'uploading' || job.status === 'completed') {
+            const sizeStr = job.sizeBytes ? (job.sizeBytes / (1024 * 1024)).toFixed(2) + ' MB' : 'Unknown size'
+            const speedStr = job.avgSpeedKbps ? (job.avgSpeedKbps / 1024).toFixed(1) + ' MB/s' : '-- MB/s'
+            let timeStr = '--'
+            if (job.startedAt) {
+              const end = job.completedAt || Date.now()
+              timeStr = Math.round((end - job.startedAt) / 1000) + 's'
+            }
+            stats.innerHTML = `
+              <div>${sizeStr}</div>
+              <div>${speedStr} · ${timeStr}</div>
+            `
+          }
+
+          const actions = document.createElement('div')
+          actions.style.cssText = 'display: flex; gap: 0.5rem; margin-left: 1rem;'
+
+          if (job.status === 'failed') {
+            const retryBtn = document.createElement('button')
+            retryBtn.textContent = 'Retry'
+            retryBtn.style.cssText = 'padding: 0.25rem 0.5rem; border: none; background: #333; color: #fff; border-radius: 4px; cursor: pointer;'
+            retryBtn.addEventListener('click', async () => {
+              await window.hellomyphoto?.retryUploadJob(job.id)
+              refreshList()
+            })
+            actions.appendChild(retryBtn)
+          }
+
+          if (job.status === 'uploading' || job.status === 'pending') {
+            const stopBtn = document.createElement('button')
+            stopBtn.textContent = 'Stop'
+            stopBtn.style.cssText = 'padding: 0.25rem 0.5rem; border: none; background: #4a1c1c; color: #f44336; border-radius: 4px; cursor: pointer;'
+            stopBtn.addEventListener('click', async () => {
+              await window.hellomyphoto?.cancelUploadJob(job.id)
+              refreshList()
+            })
+            actions.appendChild(stopBtn)
+          }
+
+          const rightContainer = document.createElement('div')
+          rightContainer.style.cssText = 'display: flex; align-items: center;'
+          rightContainer.appendChild(stats)
+          if (actions.children.length > 0) rightContainer.appendChild(actions)
+
+          row.appendChild(left)
+          row.appendChild(rightContainer)
+          listContainer.appendChild(row)
+        }
+      } catch (err) {
+        console.error(err)
+      }
+    }
+
+    // Refresh when visible
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        refreshList()
+        refreshInterval = setInterval(refreshList, 2000)
+      } else {
+        clearInterval(refreshInterval)
+      }
+    })
+    observer.observe(section)
+
+    return section
   }
 
   private createServerSection(): HTMLDivElement {
@@ -1392,5 +1545,85 @@ export class Settings {
   hide() {
     this.visible = false
     this.overlay.style.display = 'none'
+  }
+
+  private async showDiagnosticsModal() {
+    const overlay = document.createElement('div')
+    overlay.style.cssText = 'position: fixed; inset: 0; background: #0f0f0f; z-index: 100; display: flex; flex-direction: column; pointer-events: all;'
+
+    const headerRow = document.createElement('div')
+    headerRow.style.cssText = 'display: flex; align-items: center; gap: 1rem; padding: 1.5rem 2rem; border-bottom: 1px solid #2a2a2a; flex-shrink: 0;'
+
+    const closeBtn = document.createElement('button')
+    closeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>`
+    closeBtn.style.cssText = 'background: none; border: none; color: #888; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; border-radius: 6px;'
+    closeBtn.addEventListener('click', () => overlay.remove())
+    headerRow.appendChild(closeBtn)
+
+    const title = document.createElement('h2')
+    title.textContent = 'Upload Diagnostics'
+    title.style.cssText = 'font-size: 1.25rem; font-weight: 500; margin: 0; color: #fff;'
+    headerRow.appendChild(title)
+    overlay.appendChild(headerRow)
+
+    const listContainer = document.createElement('div')
+    listContainer.style.cssText = 'flex: 1; overflow-y: auto; padding: 2rem;'
+    overlay.appendChild(listContainer)
+
+    const table = document.createElement('table')
+    table.style.cssText = 'width: 100%; border-collapse: collapse; font-size: 0.8125rem; text-align: left;'
+    
+    const thead = document.createElement('thead')
+    thead.innerHTML = `
+      <tr style="color: #888; border-bottom: 1px solid #333;">
+        <th style="padding: 0.75rem;">Session ID</th>
+        <th style="padding: 0.75rem;">Status</th>
+        <th style="padding: 0.75rem;">Created</th>
+        <th style="padding: 0.75rem;">Started</th>
+        <th style="padding: 0.75rem;">Completed</th>
+        <th style="padding: 0.75rem;">Size</th>
+        <th style="padding: 0.75rem;">Speed</th>
+        <th style="padding: 0.75rem;">Retries</th>
+      </tr>
+    `
+    table.appendChild(thead)
+
+    const tbody = document.createElement('tbody')
+    table.appendChild(tbody)
+    listContainer.appendChild(table)
+
+    document.body.appendChild(overlay)
+
+    try {
+      const history = await window.hellomyphoto?.getRecentUploads(100) || []
+      
+      for (const job of history) {
+        const tr = document.createElement('tr')
+        tr.style.cssText = 'border-bottom: 1px solid #222; color: #ccc;'
+        
+        let statusColor = '#888'
+        if (job.status === 'completed') statusColor = '#4CAF50'
+        else if (job.status === 'failed') statusColor = '#f44336'
+        else if (job.status === 'uploading') statusColor = '#2196F3'
+
+        const formatTime = (ts: number | null) => ts ? new Date(ts).toLocaleTimeString() : '--'
+        const sizeStr = job.sizeBytes ? (job.sizeBytes / (1024 * 1024)).toFixed(2) + ' MB' : '--'
+        const speedStr = job.avgSpeedKbps ? (job.avgSpeedKbps / 1024).toFixed(1) + ' MB/s' : '--'
+
+        tr.innerHTML = `
+          <td style="padding: 0.75rem;">${job.sessionId}</td>
+          <td style="padding: 0.75rem; color: ${statusColor}; font-weight: 500;">${job.status.toUpperCase()}</td>
+          <td style="padding: 0.75rem;">${new Date(job.createdAt).toLocaleTimeString()}</td>
+          <td style="padding: 0.75rem;">${formatTime(job.startedAt)}</td>
+          <td style="padding: 0.75rem;">${formatTime(job.completedAt)}</td>
+          <td style="padding: 0.75rem;">${sizeStr}</td>
+          <td style="padding: 0.75rem;">${speedStr}</td>
+          <td style="padding: 0.75rem;">${job.retryCount}</td>
+        `
+        tbody.appendChild(tr)
+      }
+    } catch (err) {
+      console.error(err)
+    }
   }
 }

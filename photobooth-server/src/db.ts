@@ -132,6 +132,11 @@ db.exec(`
 
 try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`) } catch {}
 try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN share_id TEXT`) } catch {}
+try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN upload_status TEXT NOT NULL DEFAULT 'reserved'`) } catch {}
+try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN upload_started_at INTEGER`) } catch {}
+try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN upload_completed_at INTEGER`) } catch {}
+try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN upload_size_bytes INTEGER`) } catch {}
+try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN upload_avg_speed_kbps REAL`) } catch {}
 
 db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_photo_sessions_share_id
@@ -352,6 +357,56 @@ export function ensurePhotoSession(sessionId: string, eventId: string): string {
   insertPhotoSession.run(sessionId, eventId, shareId)
   db.prepare("INSERT INTO session_shares (id, session_id, is_active, created_at) VALUES (?, ?, 1, datetime('now'))").run(shareId, sessionId)
   return shareId
+}
+
+export function reservePhotoSession(sessionId: string, eventId: string): string {
+  const existing = findPhotoSession.get(sessionId) as any
+  if (existing) return existing.share_id as string
+  const shareId = randomBytes(4).toString('hex')
+  insertPhotoSession.run(sessionId, eventId, shareId)
+  db.prepare("INSERT INTO session_shares (id, session_id, is_active, created_at) VALUES (?, ?, 1, datetime('now'))").run(shareId, sessionId)
+  return shareId
+}
+
+export function updateUploadStatus(
+  sessionId: string,
+  status: 'reserved' | 'uploading' | 'complete' | 'failed',
+  extra?: {
+    upload_started_at?: number
+    upload_completed_at?: number
+    upload_size_bytes?: number
+    upload_avg_speed_kbps?: number
+  }
+) {
+  const fields: string[] = ['upload_status = ?']
+  const values: any[] = [status]
+  if (extra?.upload_started_at !== undefined) { fields.push('upload_started_at = ?'); values.push(extra.upload_started_at) }
+  if (extra?.upload_completed_at !== undefined) { fields.push('upload_completed_at = ?'); values.push(extra.upload_completed_at) }
+  if (extra?.upload_size_bytes !== undefined) { fields.push('upload_size_bytes = ?'); values.push(extra.upload_size_bytes) }
+  if (extra?.upload_avg_speed_kbps !== undefined) { fields.push('upload_avg_speed_kbps = ?'); values.push(extra.upload_avg_speed_kbps) }
+  values.push(sessionId)
+  db.prepare(`UPDATE photo_sessions SET ${fields.join(', ')} WHERE id = ?`).run(...values)
+}
+
+export function getSessionUploadStatus(token: string): { id: string; upload_status: string; upload_started_at: number | null; upload_completed_at: number | null; upload_size_bytes: number | null; upload_avg_speed_kbps: number | null; share_id: string } | null {
+  // Try by shareId via session_shares first
+  let row = db.prepare(`
+    SELECT ps.id, ps.upload_status, ps.upload_started_at, ps.upload_completed_at,
+           ps.upload_size_bytes, ps.upload_avg_speed_kbps, ss.id as share_id
+    FROM photo_sessions ps
+    JOIN session_shares ss ON ss.session_id = ps.id
+    WHERE ss.id = ? AND ss.is_active = 1
+  `).get(token) as any
+  if (!row) {
+    row = db.prepare(`
+      SELECT ps.id, ps.upload_status, ps.upload_started_at, ps.upload_completed_at,
+             ps.upload_size_bytes, ps.upload_avg_speed_kbps, ss.id as share_id
+      FROM photo_sessions ps
+      LEFT JOIN session_shares ss ON ss.session_id = ps.id AND ss.is_active = 1
+      WHERE ps.id = ?
+    `).get(token) as any
+  }
+  return row || null
 }
 
 export function getPhotoSession(sessionId: string) {
