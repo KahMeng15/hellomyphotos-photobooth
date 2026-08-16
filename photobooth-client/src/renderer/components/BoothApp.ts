@@ -739,7 +739,11 @@ export class BoothApp {
       this.offlineIndicator.setQueueDepth(offline)
     })
     window.hellomyphoto?.onUploadComplete((data) => {
-      if (!data.success) {
+      if (data.success) {
+        if (this.currentSessionId === data.sessionId) {
+          this.photoPreview.updateProgress(100, '', data.elapsed)
+        }
+      } else {
         this.offlineIndicator.setQueueDepth(1)
       }
     })

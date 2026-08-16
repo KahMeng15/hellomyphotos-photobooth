@@ -104,7 +104,7 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
   // Push listeners (main → renderer)
   // ------------------------------------------------------------------
 
-  onUploadComplete: (callback: (data: { sessionId: string; success: boolean }) => void) => {
+  onUploadComplete: (callback: (data: { sessionId: string; success: boolean; elapsed?: number }) => void) => {
     ipcRenderer.on('upload-complete', (_event, data) => callback(data))
   },
   onUploadProgress: (callback: (data: { sessionId: string; percent: number; speed: string; elapsed?: number; eta?: number }) => void) => {

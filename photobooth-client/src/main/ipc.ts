@@ -414,8 +414,9 @@ export function initIpcHandlers(
       })
 
       const responseData = response.data
+      const totalElapsedSeconds = Math.round((Date.now() - startTime) / 1000)
 
-      mainWindow.webContents.send('upload-complete', { sessionId: data.sessionId, success: true })
+      mainWindow.webContents.send('upload-complete', { sessionId: data.sessionId, success: true, elapsed: totalElapsedSeconds })
       return { success: true, shareId: responseData.shareId }
     } catch (error: any) {
       const paths = data.imagePaths.filter((p) => fs.existsSync(p))

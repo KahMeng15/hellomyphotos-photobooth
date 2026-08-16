@@ -202,11 +202,12 @@ export class PhotoPreview {
     if (this.progressFill) this.progressFill.style.width = `${percent}%`
     if (this.progressText) {
       if (percent >= 100) {
-        const timeStr = elapsed ? ` in ${elapsed}s` : ''
+        const timeStr = elapsed != null ? ` in ${elapsed}s` : ''
         this.progressText.textContent = `Upload complete${timeStr}!`
       } else {
-        const etaStr = eta ? ` (ETA: ${eta}s)` : ''
-        this.progressText.textContent = `Uploading... ${percent}% at ${speed}${etaStr}`
+        const elapsedStr = elapsed != null ? ` · ${elapsed}s elapsed` : ''
+        const etaStr = eta ? ` · ETA ${eta}s` : ''
+        this.progressText.textContent = `Uploading… ${percent}% at ${speed}${elapsedStr}${etaStr}`
       }
     }
   }
