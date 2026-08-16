@@ -61,6 +61,8 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
   isQueuePaused: () => ipcRenderer.invoke('is-queue-paused'),
   getRecentUploads: (limit?: number) => ipcRenderer.invoke('get-recent-uploads', limit),
   cancelUploadJob: (id: number) => ipcRenderer.invoke('cancel-upload-job', id),
+  stopAllUploads: () => ipcRenderer.invoke('stop-all-uploads'),
+  restartUploads: () => ipcRenderer.invoke('restart-uploads'),
 
   // ------------------------------------------------------------------
   // Hardware / settings
@@ -115,7 +117,7 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
   // Push listeners (main → renderer)
   // ------------------------------------------------------------------
 
-  onUploadComplete: (callback: (data: { sessionId: string; success: boolean; elapsed?: number }) => void) => {
+  onUploadComplete: (callback: (data: { sessionId: string; success: boolean; elapsed?: number; retryCount?: number; nextRetryMs?: number }) => void) => {
     ipcRenderer.on('upload-complete', (_event, data) => callback(data))
   },
   onUploadProgress: (callback: (data: { sessionId: string; percent: number; speed: string; elapsed?: number; eta?: number }) => void) => {
@@ -129,7 +131,7 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
     ipcRenderer.on('upload-queue-update', (_event, data) => callback(data))
   },
 
-  onServerStatus: (callback: (status: { online: boolean }) => void) => {
+  onServerStatus: (callback: (status: { online: boolean; retryCount?: number; nextRetryMs?: number }) => void) => {
     ipcRenderer.on('server-status', (_event, status) => callback(status))
   },
 

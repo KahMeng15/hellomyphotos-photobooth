@@ -80,6 +80,7 @@ export class BoothApp {
   private serverUrl = 'http://localhost:3000'
   private _state: BoothState = 'idle'
   private currentSessionId: string | null = null
+  private currentSessionUploaded = false
   private currentPaths: string[] = []
 
   constructor() {
@@ -324,7 +325,7 @@ export class BoothApp {
       },
       () => this.goHome()
     )
-    this.offlineIndicator = new OfflineIndicator(this.statusBar)
+    this.offlineIndicator = new OfflineIndicator(this.container)
 
     // Upload status bar
     this.uploadStatusBar = document.createElement('div')
@@ -754,20 +755,52 @@ export class BoothApp {
     window.hellomyphoto?.onServerConfig((config) => {
       this.serverUrl = config.serverUrl
     })
-    window.hellomyphoto?.onServerStatus(({ online }) => {
-      this.serverOnline = online
-      this.offlineIndicator.setOnline(online)
+    window.hellomyphoto?.onServerStatus((status) => {
+      this.serverOnline = status.online
+      this.offlineIndicator.setOnline(status.online)
+
+      // Only force "Server Offline" on the button if we don't even have a QR code yet
+      if (status.online || !this.photoPreview.hasShareUrl()) {
+        this.photoPreview.setOffline(!status.online)
+      }
+      
+      if (!status.online && status.nextRetryMs !== undefined) {
+        if (status.nextRetryMs > 0) {
+          const remaining = Math.round(status.nextRetryMs / 1000)
+          this.offlineIndicator.setRetryMessage(`Retrying in ${remaining}s`)
+          if (this.currentSessionId && !this.currentSessionUploaded) {
+            this.photoPreview.updateProgress(-1, `Offline / Retry ${status.retryCount} in ${remaining}s`)
+          }
+        } else {
+          this.offlineIndicator.setRetryMessage('Retrying...')
+          if (this.currentSessionId && !this.currentSessionUploaded) {
+            this.photoPreview.updateProgress(-1, 'Retrying...')
+          }
+        }
+      }
     })
     window.hellomyphoto?.onQueueUpdate(({ offline }) => {
       this.offlineIndicator.setQueueDepth(offline)
     })
-    window.hellomyphoto?.onUploadComplete((data) => {
+    
+    // The individual upload complete event now only handles photo progress, not the main countdown!
+    window.hellomyphoto?.onUploadComplete((data: any) => {
       if (data.success) {
+        this.offlineIndicator.setOnline(true)
         if (this.currentSessionId === data.sessionId) {
+          this.currentSessionUploaded = true
+          this.photoPreview.setOffline(false)
           this.photoPreview.updateProgress(100, '', data.elapsed)
         }
       } else {
         this.offlineIndicator.setQueueDepth(1)
+        if (this.currentSessionId === data.sessionId && !this.currentSessionUploaded) {
+          this.photoPreview.updateProgress(-1, 'Offline / Retrying...')
+          // Only lock the button if we failed before getting a share URL
+          if (!this.photoPreview.hasShareUrl()) {
+            this.photoPreview.setOffline(true)
+          }
+        }
       }
     })
     window.hellomyphoto?.onUploadProgress((data) => {
@@ -1068,6 +1101,7 @@ export class BoothApp {
       this.hideDslrError()
       this.updateStartBtn()
       this.currentSessionId = null
+      this.currentSessionUploaded = false
       this.currentPaths = []
 
       if (this.cameraMode === 'dslr') {
@@ -1127,6 +1161,7 @@ export class BoothApp {
     const photoCount = this.settingsData.photoCount
     const paths: string[] = []
     this.currentSessionId = `session_${Date.now()}`
+    this.currentSessionUploaded = false
     this.currentPaths = paths
     const audioCtx = new AudioContext()
 
@@ -1409,7 +1444,10 @@ export class BoothApp {
 
   private async uploadAndPreview() {
     const paths = this.currentPaths
-    if (!this.currentSessionId) this.currentSessionId = `session_${Date.now()}`
+    if (!this.currentSessionId) {
+      this.currentSessionId = `session_${Date.now()}`
+      this.currentSessionUploaded = false
+    }
     const sessionId = this.currentSessionId
     
     const filePaths = paths.filter((p) => !p.startsWith('blob:'))
@@ -1453,7 +1491,6 @@ export class BoothApp {
     })
 
     if (uploadResult?.queued) {
-      this.offlineIndicator.setOnline(false)
       this.offlineIndicator.setQueueDepth(1)
     }
   }

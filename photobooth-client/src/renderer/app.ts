@@ -45,6 +45,8 @@ declare global {
       isQueuePaused: () => Promise<boolean>
       getRecentUploads: (limit?: number) => Promise<any[]>
       cancelUploadJob: (id: number) => Promise<{ ok: boolean }>
+      stopAllUploads: () => Promise<{ ok: boolean }>
+      restartUploads: () => Promise<{ ok: boolean }>
 
       // ----------------------------------------------------------------
       // DSLR Focus Controls
@@ -88,6 +90,13 @@ declare global {
         autoPreview?: boolean
         liveviewRetryAttempts?: number
         shutterOffsetDelay?: number
+        devSimulationEnabled?: boolean
+        devSimulateOffline?: boolean
+        devLatencyMs?: number
+        devUploadThrottleKbps?: number
+        devPacketLossPercent?: number
+        devServerErrorPercent?: number
+        devTimeoutPercent?: number
       }) => Promise<any>
       getServerConfig: () => Promise<{ serverUrl: string }>
       killPtpDaemon: () => Promise<{ success: boolean; error?: string }>
@@ -96,11 +105,11 @@ declare global {
       // ----------------------------------------------------------------
       // Push listeners (main → renderer)
       // ----------------------------------------------------------------
-      onUploadComplete: (callback: (data: { sessionId: string; success: boolean; elapsed?: number }) => void) => void
+      onUploadComplete: (callback: (data: { sessionId: string; success: boolean; elapsed?: number; retryCount?: number; nextRetryMs?: number }) => void) => void
       onUploadProgress: (callback: (data: { sessionId: string; percent: number; speed: string; elapsed?: number; eta?: number }) => void) => void
       onShareIdReady: (callback: (data: { sessionId: string; shareId: string; shareUrl: string }) => void) => void
       onUploadQueueUpdate: (callback: (data: { pending: number; failed: number; jobs: any[] }) => void) => void
-      onServerStatus: (callback: (status: { online: boolean }) => void) => void
+      onServerStatus: (callback: (status: { online: boolean; retryCount?: number; nextRetryMs?: number }) => void) => void
       onServerConfig: (callback: (config: { serverUrl: string; dslrConnected: boolean }) => void) => void
       onQueueUpdate: (callback: (data: { offline: number }) => void) => void
       onBoothCommand: (callback: (command: { id: string; type: string; settings?: any }) => void) => void

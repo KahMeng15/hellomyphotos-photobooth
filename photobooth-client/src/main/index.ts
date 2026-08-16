@@ -100,25 +100,62 @@ app.on('ready', async () => {
       const depth = offlineQueue.getDepth()
       sendIfAlive('queue-update', { offline: depth })
       const all = offlineQueue.getAll()
-      const failed = all.filter((j: any) => j.status === 'failed').length
-      sendIfAlive('upload-queue-update', { pending: depth, failed, jobs: all })
-    } catch {}
-  }, 5000))
-
-  intervals.push(setInterval(async () => {
-    try {
-      const online = await checkServerOnline(activeServerUrl)
-      if (online) {
-        const { flushQueuedUploads } = await import('./ipc')
-        await flushQueuedUploads()
-      }
-      // Push queue state to renderer
-      const all = offlineQueue.getAll()
-      const pending = all.filter((j: any) => j.status === 'pending').length
+      const pending = all.filter((j: any) => j.status === 'pending' || j.status === 'uploading').length
       const failed = all.filter((j: any) => j.status === 'failed').length
       sendIfAlive('upload-queue-update', { pending, failed, jobs: all })
     } catch {}
-  }, 10000))
+  }, 5000))
+
+  let isServerOnline = true
+  let offlineRetryCount = 0
+
+  const runHeartbeat = async () => {
+    try {
+      const online = await checkServerOnline(activeServerUrl)
+      if (online) {
+        if (!isServerOnline) {
+          isServerOnline = true
+          offlineRetryCount = 0
+          sendIfAlive('server-status', { online: true })
+        }
+        const { flushQueuedUploads } = await import('./ipc')
+        await flushQueuedUploads()
+      } else {
+        isServerOnline = false
+        offlineRetryCount++
+      }
+      
+      const all = offlineQueue.getAll()
+      const pending = all.filter((j: any) => j.status === 'pending' || j.status === 'uploading').length
+      const failed = all.filter((j: any) => j.status === 'failed').length
+      sendIfAlive('upload-queue-update', { pending, failed, jobs: all })
+
+      if (!isServerOnline) {
+        // If offline, wait 2 seconds and ping again, emitting countdown events
+        let remaining = 2
+        const countdownInterval = setInterval(() => {
+          remaining--
+          if (remaining > 0) {
+            sendIfAlive('server-status', { online: false, retryCount: offlineRetryCount, nextRetryMs: remaining * 1000 })
+          } else {
+            clearInterval(countdownInterval)
+            sendIfAlive('server-status', { online: false, retryCount: offlineRetryCount, nextRetryMs: 0 })
+            runHeartbeat()
+          }
+        }, 1000)
+        intervals.push(countdownInterval)
+      } else {
+        // If online, ping again in 10 seconds
+        const timeoutId = setTimeout(runHeartbeat, 10000)
+        intervals.push(timeoutId as any)
+      }
+    } catch {
+      setTimeout(runHeartbeat, 10000)
+    }
+  }
+  
+  // Start the smart heartbeat
+  runHeartbeat()
 })
 
 function sendIfAlive(channel: string, data: any) {

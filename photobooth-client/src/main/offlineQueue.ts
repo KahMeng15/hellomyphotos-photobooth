@@ -134,16 +134,13 @@ export class OfflineQueue {
   }
 
   getDepth(): number {
-    const row = this.db.prepare(`SELECT COUNT(*) as count FROM pending_uploads WHERE status = 'pending'`).get() as { count: number }
+    const row = this.db.prepare(`SELECT COUNT(*) as count FROM pending_uploads WHERE status IN ('pending', 'uploading')`).get() as { count: number }
     return row.count
   }
 
   // Legacy backoff for scheduleRetry compat
   getBackoffDelay(retryCount: number): number {
-    const delays = [5000, 15000, 45000, 120000, 300000, 600000]
-    const base = delays[Math.min(retryCount, delays.length - 1)]
-    const jitter = base * 0.2 * (Math.random() * 2 - 1)
-    return Math.round(base + jitter)
+    return retryCount <= 150 ? 2000 : 10000
   }
 
   scheduleRetry(id: number, retryCount: number): void {

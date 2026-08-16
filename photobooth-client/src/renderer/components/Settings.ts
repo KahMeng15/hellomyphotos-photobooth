@@ -59,6 +59,13 @@ interface BoothSettings {
   liveviewRetryAttempts?: number
   shutterOffsetDelay?: number
   settingsPasscode?: string
+  devSimulationEnabled?: boolean
+  devSimulateOffline?: boolean
+  devLatencyMs?: number
+  devUploadThrottleKbps?: number
+  devPacketLossPercent?: number
+  devServerErrorPercent?: number
+  devTimeoutPercent?: number
 }
 
 interface MediaDeviceInfo {
@@ -81,6 +88,9 @@ export class Settings {
   private connectionStatus!: HTMLDivElement
   private passcodeInput!: HTMLInputElement
   private connectedEvent: { name: string; date: string; description: string } | null = null
+
+  private static progressMap: Record<string, any> = {}
+  private static progressListenerAdded = false
   // Camera source
   private webcamModeBtn!: HTMLButtonElement
   private dslrModeBtn!: HTMLButtonElement
@@ -108,6 +118,13 @@ export class Settings {
 
   constructor(container: HTMLElement, onChange: (settings: BoothSettings) => void) {
     this.onChange = onChange
+
+    if (!Settings.progressListenerAdded) {
+      Settings.progressListenerAdded = true
+      window.hellomyphoto?.onUploadProgress((data) => {
+        Settings.progressMap[data.sessionId] = data
+      })
+    }
 
     // Listen for socket status changes to update the UI when visible
     const onSocketEvent = () => {
@@ -175,15 +192,17 @@ export class Settings {
     })
     header.appendChild(saveBtn)
 
-    const logsBtn = document.createElement('button')
-    logsBtn.textContent = 'Logs'
-    logsBtn.style.cssText = `
+    const devBtn = document.createElement('button')
+    devBtn.textContent = 'Advanced Dev Options'
+    devBtn.style.cssText = `
       padding: 0.5rem 1rem;
       background: transparent; color: #888; border: 1px solid #333; border-radius: 8px;
-      font-size: 0.8125rem; font-weight: 500; cursor: pointer;
+      font-size: 0.8125rem; font-weight: 500; cursor: pointer; margin-right: auto;
     `
-    logsBtn.addEventListener('click', () => this.showLogs())
-    header.appendChild(logsBtn)
+    devBtn.addEventListener('click', () => this.showDevOptionsModal())
+    header.insertBefore(devBtn, header.firstChild)
+
+
     this.panel.appendChild(header)
 
     this.grid = document.createElement('div')
@@ -1580,10 +1599,9 @@ export class Settings {
         <th style="padding: 0.75rem;">Status</th>
         <th style="padding: 0.75rem;">Created</th>
         <th style="padding: 0.75rem;">Started</th>
-        <th style="padding: 0.75rem;">Completed</th>
-        <th style="padding: 0.75rem;">Size</th>
-        <th style="padding: 0.75rem;">Speed</th>
+        <th style="padding: 0.75rem; width: 200px;">Progress</th>
         <th style="padding: 0.75rem;">Retries</th>
+        <th style="padding: 0.75rem;">Actions</th>
       </tr>
     `
     table.appendChild(thead)
@@ -1594,36 +1612,246 @@ export class Settings {
 
     document.body.appendChild(overlay)
 
-    try {
-      const history = await window.hellomyphoto?.getRecentUploads(100) || []
-      
-      for (const job of history) {
-        const tr = document.createElement('tr')
-        tr.style.cssText = 'border-bottom: 1px solid #222; color: #ccc;'
+    const refreshDiagList = async () => {
+      try {
+        const history = await window.hellomyphoto?.getRecentUploads(100) || []
+        tbody.innerHTML = ''
         
-        let statusColor = '#888'
-        if (job.status === 'completed') statusColor = '#4CAF50'
-        else if (job.status === 'failed') statusColor = '#f44336'
-        else if (job.status === 'uploading') statusColor = '#2196F3'
+        history.forEach((job, index) => {
+          const tr = document.createElement('tr')
+          const bg = index % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.02)'
+          tr.style.cssText = `border-bottom: 1px solid #222; color: #ccc; background: ${bg};`
+          
+          let statusColor = '#888'
+          if (job.status === 'completed') statusColor = '#4CAF50'
+          else if (job.status === 'failed') statusColor = '#f44336'
+          else if (job.status === 'uploading') statusColor = '#2196F3'
 
-        const formatTime = (ts: number | null) => ts ? new Date(ts).toLocaleTimeString() : '--'
-        const sizeStr = job.sizeBytes ? (job.sizeBytes / (1024 * 1024)).toFixed(2) + ' MB' : '--'
-        const speedStr = job.avgSpeedKbps ? (job.avgSpeedKbps / 1024).toFixed(1) + ' MB/s' : '--'
+          const formatTime = (ts: number | null) => ts ? new Date(ts).toLocaleTimeString() : '--'
+          
+          let progressHtml = '--'
+          if (job.status === 'uploading' || job.status === 'completed') {
+            const isDone = job.status === 'completed'
+            const progData = Settings.progressMap[job.sessionId] || { percent: isDone ? 100 : 0, speed: '--', eta: '--' }
+            const percentStr = isDone ? '100%' : `${progData.percent}%`
+            const infoStr = isDone 
+              ? `Done (${job.sizeBytes ? (job.sizeBytes / (1024 * 1024)).toFixed(2) + ' MB' : ''})` 
+              : `${progData.percent}% · ${progData.speed} · ETA ${progData.eta}s`
 
-        tr.innerHTML = `
-          <td style="padding: 0.75rem;">${job.sessionId}</td>
-          <td style="padding: 0.75rem; color: ${statusColor}; font-weight: 500;">${job.status.toUpperCase()}</td>
-          <td style="padding: 0.75rem;">${new Date(job.createdAt).toLocaleTimeString()}</td>
-          <td style="padding: 0.75rem;">${formatTime(job.startedAt)}</td>
-          <td style="padding: 0.75rem;">${formatTime(job.completedAt)}</td>
-          <td style="padding: 0.75rem;">${sizeStr}</td>
-          <td style="padding: 0.75rem;">${speedStr}</td>
-          <td style="padding: 0.75rem;">${job.retryCount}</td>
-        `
-        tbody.appendChild(tr)
+            progressHtml = `
+              <div style="width: 100%; min-width: 120px; background: #333; height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 0.25rem;">
+                <div style="width: ${percentStr}; height: 100%; background: ${isDone ? '#4CAF50' : '#2196F3'}; transition: width 0.2s linear;"></div>
+              </div>
+              <div style="font-size: 0.65rem; color: #888;">${infoStr}</div>
+            `
+          }
+
+          tr.innerHTML = `
+            <td style="padding: 0.75rem;">${job.sessionId}</td>
+            <td style="padding: 0.75rem; color: ${statusColor}; font-weight: 500;">${job.status.toUpperCase()}</td>
+            <td style="padding: 0.75rem;">${new Date(job.createdAt).toLocaleTimeString()}</td>
+            <td style="padding: 0.75rem;">${formatTime(job.startedAt)}</td>
+            <td style="padding: 0.75rem;">${progressHtml}</td>
+            <td style="padding: 0.75rem;">${job.retryCount}</td>
+            <td style="padding: 0.75rem; width: 120px;" class="actions-cell"></td>
+          `
+
+          const actionsCell = tr.querySelector('.actions-cell') as HTMLTableCellElement
+          actionsCell.style.cssText = 'display: flex; gap: 0.5rem; padding: 0.75rem; align-items: center;'
+          
+          if (job.status === 'failed') {
+            const retryBtn = document.createElement('button')
+            retryBtn.textContent = 'Retry'
+            retryBtn.style.cssText = 'padding: 0.25rem 0.5rem; border: none; background: #333; color: #fff; border-radius: 4px; cursor: pointer;'
+            retryBtn.addEventListener('click', async () => {
+              await window.hellomyphoto?.retryUploadJob(job.id)
+              refreshDiagList()
+            })
+            actionsCell.appendChild(retryBtn)
+          } else if (job.status === 'uploading' || job.status === 'pending') {
+            const stopBtn = document.createElement('button')
+            stopBtn.textContent = 'Stop'
+            stopBtn.style.cssText = 'padding: 0.25rem 0.5rem; border: none; background: #4a1c1c; color: #f44336; border-radius: 4px; cursor: pointer;'
+            stopBtn.addEventListener('click', async () => {
+              await window.hellomyphoto?.cancelUploadJob(job.id)
+              refreshDiagList()
+            })
+            actionsCell.appendChild(stopBtn)
+          }
+
+          tbody.appendChild(tr)
+        })
+      } catch (err) {
+        console.error(err)
       }
-    } catch (err) {
-      console.error(err)
     }
+
+    refreshDiagList()
+    const intervalId = setInterval(refreshDiagList, 2000)
+
+    closeBtn.addEventListener('click', () => {
+      clearInterval(intervalId)
+      overlay.remove()
+    })
+  }
+  private showDevOptionsModal() {
+    const overlay = document.createElement('div')
+    overlay.style.cssText = `
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+    `
+    const modal = document.createElement('div')
+    modal.style.cssText = `
+      background: #111; border: 1px solid #333; border-radius: 12px;
+      padding: 2rem; width: 600px; max-height: 80vh; overflow-y: auto; color: #fff;
+    `
+
+    const header = document.createElement('div')
+    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;'
+    const title = document.createElement('h2')
+    title.textContent = 'Advanced Dev Options (Network Simulation)'
+    title.style.cssText = 'margin: 0; font-size: 1.25rem;'
+    const closeBtn = document.createElement('button')
+    closeBtn.textContent = 'Close'
+    closeBtn.style.cssText = 'padding: 0.5rem 1rem; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'
+    closeBtn.addEventListener('click', () => overlay.remove())
+    
+    header.appendChild(title)
+    header.appendChild(closeBtn)
+    modal.appendChild(header)
+
+    const form = document.createElement('div')
+    form.style.cssText = 'display: flex; flex-direction: column; gap: 1.5rem;'
+
+    // Logs
+    const logsRow = document.createElement('div')
+    logsRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between;'
+    const logsLabel = document.createElement('label')
+    logsLabel.textContent = 'Application Logs'
+    const logsBtn = document.createElement('button')
+    logsBtn.textContent = 'View Logs'
+    logsBtn.style.cssText = 'padding: 0.5rem 1rem; background: #333; color: #fff; border: 1px solid #444; border-radius: 4px; cursor: pointer;'
+    logsBtn.addEventListener('click', () => {
+      overlay.remove()
+      this.showLogs()
+    })
+    logsRow.appendChild(logsLabel)
+    logsRow.appendChild(logsBtn)
+    form.appendChild(logsRow)
+
+    // Master Toggle
+    const masterRow = document.createElement('div')
+    masterRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between;'
+    const masterLabel = document.createElement('label')
+    masterLabel.textContent = 'Enable Network Simulations'
+    const masterToggle = document.createElement('input')
+    masterToggle.type = 'checkbox'
+    masterToggle.checked = !!this.settings.devSimulationEnabled
+    masterRow.appendChild(masterLabel)
+    masterRow.appendChild(masterToggle)
+    form.appendChild(masterRow)
+
+    // Offline Toggle
+    const offlineRow = document.createElement('div')
+    offlineRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between;'
+    const offlineLabel = document.createElement('label')
+    offlineLabel.textContent = 'Simulate Complete Offline'
+    const offlineToggle = document.createElement('input')
+    offlineToggle.type = 'checkbox'
+    offlineToggle.checked = !!this.settings.devSimulateOffline
+    offlineRow.appendChild(offlineLabel)
+    offlineRow.appendChild(offlineToggle)
+    form.appendChild(offlineRow)
+
+    // Latency
+    const latencyRow = document.createElement('div')
+    latencyRow.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
+    const latencyLabel = document.createElement('label')
+    latencyLabel.textContent = 'Latency (ms, 0 = disabled)'
+    const latencyInput = document.createElement('input')
+    latencyInput.type = 'number'
+    latencyInput.value = String(this.settings.devLatencyMs || 0)
+    latencyInput.style.cssText = 'padding: 0.5rem; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px;'
+    latencyRow.appendChild(latencyLabel)
+    latencyRow.appendChild(latencyInput)
+    form.appendChild(latencyRow)
+
+    // Throttle
+    const throttleRow = document.createElement('div')
+    throttleRow.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
+    const throttleLabel = document.createElement('label')
+    throttleLabel.textContent = 'Upload Throttle (KB/s, 0 = disabled)'
+    const throttleInput = document.createElement('input')
+    throttleInput.type = 'number'
+    throttleInput.value = String(this.settings.devUploadThrottleKbps || 0)
+    throttleInput.style.cssText = 'padding: 0.5rem; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px;'
+    throttleRow.appendChild(throttleLabel)
+    throttleRow.appendChild(throttleInput)
+    form.appendChild(throttleRow)
+
+    // Packet Loss
+    const lossRow = document.createElement('div')
+    lossRow.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
+    const lossLabel = document.createElement('label')
+    lossLabel.textContent = 'Packet Loss Rate (%)'
+    const lossInput = document.createElement('input')
+    lossInput.type = 'number'
+    lossInput.min = '0'
+    lossInput.max = '100'
+    lossInput.value = String(this.settings.devPacketLossPercent || 0)
+    lossInput.style.cssText = 'padding: 0.5rem; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px;'
+    lossRow.appendChild(lossLabel)
+    lossRow.appendChild(lossInput)
+    form.appendChild(lossRow)
+    
+    // Server Error
+    const errRow = document.createElement('div')
+    errRow.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
+    const errLabel = document.createElement('label')
+    errLabel.textContent = 'Server Error Rate (5xx) (%)'
+    const errInput = document.createElement('input')
+    errInput.type = 'number'
+    errInput.min = '0'
+    errInput.max = '100'
+    errInput.value = String(this.settings.devServerErrorPercent || 0)
+    errInput.style.cssText = 'padding: 0.5rem; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px;'
+    errRow.appendChild(errLabel)
+    errRow.appendChild(errInput)
+    form.appendChild(errRow)
+
+    // Timeout Rate
+    const timeoutRow = document.createElement('div')
+    timeoutRow.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
+    const timeoutLabel = document.createElement('label')
+    timeoutLabel.textContent = 'Timeout Rate (%)'
+    const timeoutInput = document.createElement('input')
+    timeoutInput.type = 'number'
+    timeoutInput.min = '0'
+    timeoutInput.max = '100'
+    timeoutInput.value = String(this.settings.devTimeoutPercent || 0)
+    timeoutInput.style.cssText = 'padding: 0.5rem; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px;'
+    timeoutRow.appendChild(timeoutLabel)
+    timeoutRow.appendChild(timeoutInput)
+    form.appendChild(timeoutRow)
+
+    const applyBtn = document.createElement('button')
+    applyBtn.textContent = 'Apply Network Simulation'
+    applyBtn.style.cssText = 'padding: 1rem; background: #4caf50; color: #fff; border: none; border-radius: 4px; font-weight: bold; margin-top: 1rem; cursor: pointer;'
+    applyBtn.addEventListener('click', () => {
+      this.settings.devSimulationEnabled = masterToggle.checked
+      this.settings.devSimulateOffline = offlineToggle.checked
+      this.settings.devLatencyMs = parseInt(latencyInput.value, 10) || 0
+      this.settings.devUploadThrottleKbps = parseInt(throttleInput.value, 10) || 0
+      this.settings.devPacketLossPercent = parseInt(lossInput.value, 10) || 0
+      this.settings.devServerErrorPercent = parseInt(errInput.value, 10) || 0
+      this.settings.devTimeoutPercent = parseInt(timeoutInput.value, 10) || 0
+      this.save()
+      overlay.remove()
+    })
+    form.appendChild(applyBtn)
+
+    modal.appendChild(form)
+    overlay.appendChild(modal)
+    document.body.appendChild(overlay)
   }
 }

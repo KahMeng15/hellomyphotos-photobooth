@@ -14,6 +14,8 @@ export class PhotoPreview {
   private lastOtp?: string
   private lastSessionId?: string
   private shareUrl?: string
+  private shareBtn?: HTMLButtonElement
+  private isOffline: boolean = false
   private keydownHandler: (e: KeyboardEvent) => void
   private keydownHandlers: {
     toggle: (idx: number) => void,
@@ -92,6 +94,7 @@ export class PhotoPreview {
     this.lastOtp = otp
     this.lastSessionId = sessionId
     this.shareUrl = sessionId && serverUrl ? `${serverUrl}/share/${sessionId}` : undefined
+    this.setOffline(false)
     this.overlay.dataset.mode = 'preview'
     this.overlay.innerHTML = ''
     this.overlay.style.display = 'flex'
@@ -165,17 +168,21 @@ export class PhotoPreview {
     actions.appendChild(confirmBtn)
 
     if (sessionId && serverUrl) {
-      const shareBtn = document.createElement('button')
-      shareBtn.textContent = 'Share QR'
-      shareBtn.style.cssText = `
+      this.shareBtn = document.createElement('button')
+      this.shareBtn.textContent = 'Share QR'
+      this.shareBtn.style.cssText = `
         padding: 1rem 3rem; font-size: 1.25rem; font-weight: 600;
         background: #2196F3; color: #fff; border: none; border-radius: 100px;
-        cursor: pointer;
+        cursor: pointer; transition: background 0.2s, opacity 0.2s;
       `
-      shareBtn.addEventListener('click', () => {
-        this.showQR(this.shareUrl || `${serverUrl}/share/${sessionId}`)
+      this.shareBtn.addEventListener('click', () => {
+        if (this.isOffline) {
+          this.showQR('') // Empty URL signals offline message
+        } else {
+          this.showQR(this.shareUrl || `${serverUrl}/share/${sessionId}`)
+        }
       })
-      actions.appendChild(shareBtn)
+      actions.appendChild(this.shareBtn)
     }
 
     this.overlay.appendChild(actions)
@@ -202,14 +209,42 @@ export class PhotoPreview {
     this.shareUrl = url
   }
 
+  hasShareUrl(): boolean {
+    return !!this.shareUrl
+  }
+
+  setOffline(offline: boolean) {
+    this.isOffline = offline
+    if (this.shareBtn) {
+      if (offline) {
+        this.shareBtn.textContent = 'Server Offline'
+        this.shareBtn.style.background = '#d32f2f'
+      } else {
+        this.shareBtn.textContent = 'Share QR'
+        this.shareBtn.style.background = '#2196F3'
+        // If the overlay was showing the offline message, hide it so they can click the button again
+        if (this.qrOverlay && this.qrOverlay.style.display !== 'none') {
+          this.qrOverlay.style.display = 'none'
+        }
+      }
+    }
+  }
+
   updateProgress(percent: number, speed: string, elapsed?: number, eta?: number) {
     if (!this.progressContainer) return
     this.progressContainer.style.display = 'flex'
-    if (this.progressFill) this.progressFill.style.width = `${percent}%`
+    
+    if (this.progressFill && percent >= 0) {
+      this.progressFill.style.width = `${percent}%`
+    }
+
     if (this.progressText) {
       if (percent >= 100) {
         const timeStr = elapsed != null ? ` in ${elapsed}s` : ''
         this.progressText.textContent = `Upload complete${timeStr}!`
+      } else if (percent < 0) {
+        // Just show the speed text for offline / retry messages without prepending "Uploading... %"
+        this.progressText.textContent = speed
       } else {
         const elapsedStr = elapsed != null ? ` · ${elapsed}s elapsed` : ''
         const etaStr = eta ? ` · ETA ${eta}s` : ''
@@ -350,33 +385,51 @@ export class PhotoPreview {
     this.qrOverlay.style.display = 'flex'
 
     const box = document.createElement('div')
-    box.style.cssText = 'background: #fff; padding: 2rem; border-radius: 16px; text-align: center; max-width: 90%;'
+    box.style.cssText = 'background: #fff; padding: 2rem; border-radius: 16px; text-align: center; max-width: 90%; display: flex; flex-direction: column; align-items: center;'
     
-    const title = document.createElement('h3')
-    title.textContent = 'Scan to get photos'
-    title.style.cssText = 'color: #000; margin: 0 0 1.5rem; font-size: 1.5rem;'
-    box.appendChild(title)
+    if (url === '') {
+      // Show offline message
+      const title = document.createElement('h3')
+      title.textContent = 'Server Offline'
+      title.style.cssText = 'color: #d32f2f; margin: 0 0 1.5rem; font-size: 1.75rem;'
+      box.appendChild(title)
 
-    const img = document.createElement('img')
-    img.style.width = '400px'
-    img.style.height = '400px'
-    img.style.marginBottom = '1.5rem'
-    
-    try {
-      img.src = await QRCode.toDataURL(url, { margin: 1, width: 400 })
-    } catch (err) {
-      console.error('QR generation failed', err)
+      const msg = document.createElement('p')
+      msg.textContent = 'Your photos have been securely saved to the offline queue. They will automatically upload when the internet connection is restored. Please ask the event host for the gallery link later.'
+      msg.style.cssText = 'color: #555; margin: 0 0 1.5rem; font-size: 1.125rem; line-height: 1.5; max-width: 400px;'
+      box.appendChild(msg)
+    } else {
+      // Show QR code
+      const title = document.createElement('h3')
+      title.textContent = 'Scan to get photos'
+      title.style.cssText = 'color: #000; margin: 0 0 1.5rem; font-size: 1.5rem;'
+      box.appendChild(title)
+
+      const img = document.createElement('img')
+      img.style.width = '400px'
+      img.style.height = '400px'
+      img.style.marginBottom = '1.5rem'
+      
+      try {
+        img.src = await QRCode.toDataURL(url, { margin: 1, width: 400 })
+      } catch (err) {
+        console.error('QR generation failed', err)
+      }
+      box.appendChild(img)
+
+      const linkText = document.createElement('p')
+      linkText.textContent = url
+      linkText.style.cssText = 'color: #333; font-size: 1.125rem; margin: 0 0 1.5rem; word-break: break-all; max-width: 400px;'
+      box.appendChild(linkText)
     }
-    box.appendChild(img)
-
-    const linkText = document.createElement('p')
-    linkText.textContent = url
-    linkText.style.cssText = 'color: #333; font-size: 1.125rem; margin-bottom: 1.5rem; word-break: break-all;'
-    box.appendChild(linkText)
 
     const closeBtn = document.createElement('button')
     closeBtn.textContent = 'Close'
-    closeBtn.style.cssText = 'padding: 0.75rem 3rem; background: #000; color: #fff; border: none; border-radius: 100px; cursor: pointer; font-size: 1.125rem; font-weight: 600;'
+    closeBtn.style.cssText = `
+      padding: 0.75rem 2rem; font-size: 1rem; font-weight: 600;
+      background: #eee; color: #333; border: none; border-radius: 100px;
+      cursor: pointer; align-self: center; width: 100%; max-width: 200px;
+    `
     closeBtn.addEventListener('click', () => {
       this.qrOverlay.style.display = 'none'
     })

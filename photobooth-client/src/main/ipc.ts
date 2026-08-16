@@ -42,6 +42,15 @@ const DEFAULT_SETTINGS = {
   liveviewRetryAttempts: 1,
   shutterOffsetDelay: 0,
   dslrWhiteBalanceKelvin: 5200,
+  
+  // Advanced Dev Settings (Network Simulation)
+  devSimulationEnabled: false,
+  devSimulateOffline: false,
+  devLatencyMs: 0,
+  devUploadThrottleKbps: 0,
+  devPacketLossPercent: 0,
+  devServerErrorPercent: 0,
+  devTimeoutPercent: 0,
 }
 
 let _offlineQueue: OfflineQueue
@@ -59,6 +68,68 @@ function getSettingsSync() {
   } catch {
     return { ...DEFAULT_SETTINGS }
   }
+}
+
+// ------------------------------------------------------------------
+// Advanced Dev Settings: Network Simulation
+// ------------------------------------------------------------------
+async function applyNetworkSimulation() {
+  const s = getSettingsSync()
+  if (!s.devSimulationEnabled) return
+  
+  if (s.devSimulateOffline) {
+    throw new Error('fetch failed: Simulated Offline Mode')
+  }
+  if (s.devLatencyMs > 0) {
+    await new Promise(r => setTimeout(r, s.devLatencyMs))
+  }
+  if (s.devTimeoutPercent > 0 && Math.random() * 100 < s.devTimeoutPercent) {
+    throw new Error('fetch failed: timeout simulated')
+  }
+  if (s.devPacketLossPercent > 0 && Math.random() * 100 < s.devPacketLossPercent) {
+    throw new Error('fetch failed: Simulated Packet Loss (ECONNRESET)')
+  }
+  if (s.devServerErrorPercent > 0 && Math.random() * 100 < s.devServerErrorPercent) {
+    const err: any = new Error('Simulated 503 Service Unavailable')
+    err.response = { status: 503, data: 'Service Unavailable' }
+    err.status = 503
+    throw err
+  }
+}
+
+const _origFetch = global.fetch
+global.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  await applyNetworkSimulation()
+  return _origFetch(input, init)
+}
+
+import { Readable } from 'stream'
+
+function createThrottledStream(buffer: Buffer, kbps: number): Readable {
+  const stream = new Readable()
+  // chunk size in bytes per 100ms
+  const chunkSize = kbps > 0 ? Math.max(1024, Math.floor((kbps * 1024) / 10)) : 64 * 1024
+  const delayMs = kbps > 0 ? 100 : 0
+  let offset = 0
+
+  stream._read = () => {
+    if (offset >= buffer.length) {
+      stream.push(null)
+      return
+    }
+    const chunk = buffer.subarray(offset, Math.min(offset + chunkSize, buffer.length))
+    offset += chunk.length
+    if (delayMs > 0) {
+      setTimeout(() => {
+        stream.push(chunk)
+        if (offset >= buffer.length) stream.push(null)
+      }, delayMs)
+    } else {
+      stream.push(chunk)
+      if (offset >= buffer.length) stream.push(null)
+    }
+  }
+  return stream
 }
 
 export function initIpcHandlers(
@@ -472,6 +543,13 @@ export function initIpcHandlers(
     liveviewRetryAttempts?: number
     shutterOffsetDelay?: number
     settingsPasscode?: string
+    devSimulationEnabled?: boolean
+    devSimulateOffline?: boolean
+    devLatencyMs?: number
+    devUploadThrottleKbps?: number
+    devPacketLossPercent?: number
+    devServerErrorPercent?: number
+    devTimeoutPercent?: number
   }) => {
     try {
       const existing = getSettingsSync()
@@ -692,6 +770,18 @@ export function initIpcHandlers(
     cancelUploadJob(id)
     return { ok: true }
   })
+
+  ipcMain.handle('stop-all-uploads', () => {
+    for (const id of Object.keys(activeCancelTokens)) {
+      cancelUploadJob(Number(id))
+    }
+    return { ok: true }
+  })
+
+  ipcMain.handle('restart-uploads', () => {
+    flushQueuedUploads().catch(() => {})
+    return { ok: true }
+  })
 }
 
 let activeCancelTokens: Record<number, any> = {}
@@ -743,8 +833,17 @@ export async function flushQueuedUploads() {
       const source = axios.CancelToken.source()
       activeCancelTokens[job.id] = source
 
-      const response = await axios.post(`${_serverUrl}/api/booth/upload`, formData, {
-        headers,
+      await applyNetworkSimulation()
+
+      const formResponse = new Response(formData as any)
+      const formBuffer = Buffer.from(await formResponse.arrayBuffer())
+      const contentType = formResponse.headers.get('content-type') || 'multipart/form-data'
+      const finalHeaders = { ...headers, 'Content-Type': contentType, 'Content-Length': formBuffer.length.toString() }
+      
+      const uploadData = (settings.devSimulationEnabled && settings.devUploadThrottleKbps > 0) ? createThrottledStream(formBuffer, settings.devUploadThrottleKbps) : formBuffer
+
+      const response = await axios.post(`${_serverUrl}/api/booth/upload`, uploadData, {
+        headers: finalHeaders,
         cancelToken: source.token,
         onUploadProgress: (progressEvent: any) => {
           const { loaded, total } = progressEvent
@@ -798,6 +897,15 @@ export async function flushQueuedUploads() {
         _offlineQueue.markFailed(job.id)
         _offlineQueue.scheduleRetry(job.id, job.retryCount + 1)
         console.warn(`[Upload] Queue job ${job.id} failed:`, err.message)
+        if (_mainWindow && !_mainWindow.isDestroyed()) {
+          const delay = _offlineQueue.getBackoffDelay(job.retryCount + 1)
+          _mainWindow.webContents.send('upload-complete', { 
+            sessionId: job.sessionId, 
+            success: false,
+            retryCount: job.retryCount + 1,
+            nextRetryMs: delay
+          })
+        }
       }
     }
   }
