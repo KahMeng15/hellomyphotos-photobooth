@@ -611,6 +611,13 @@ export function initIpcHandlers(
         const autoPreviewOn = !!merged.autoPreview
         const autoPreviewChanged = autoPreviewOn !== !!existing.autoPreview
 
+        const exposureChanged = 
+          merged.dslrIso !== existing.dslrIso ||
+          merged.dslrShutterSpeed !== existing.dslrShutterSpeed ||
+          merged.dslrAperture !== existing.dslrAperture ||
+          merged.dslrWhiteBalance !== existing.dslrWhiteBalance ||
+          merged.dslrWhiteBalanceKelvin !== existing.dslrWhiteBalanceKelvin
+
         if (modeChanged && status.liveviewActive && _liveviewFrameCallback) {
           // Liveview mode changed — full restart with new mode.
           const newMode = merged.liveviewMode as 'mjpeg' | 'polling'
@@ -618,7 +625,7 @@ export function initIpcHandlers(
           await dslrManager.stopLiveview()
           if (autoPreviewOn) {
             await dslrManager.applyAutoExposure()
-          } else {
+          } else if (exposureChanged) {
             dslrManager.applyExposure(
               merged.dslrIso || 'auto',
               merged.dslrShutterSpeed || 'auto',
@@ -651,13 +658,15 @@ export function initIpcHandlers(
             }
           } else {
             // Normal path: apply all exposure settings while liveview is running.
-            dslrManager.applyExposure(
-              merged.dslrIso || 'auto',
-              merged.dslrShutterSpeed || 'auto',
-              merged.dslrAperture || 'auto',
-              merged.dslrWhiteBalance || 'auto',
-              merged.dslrWhiteBalanceKelvin
-            )
+            if (exposureChanged) {
+              dslrManager.applyExposure(
+                merged.dslrIso || 'auto',
+                merged.dslrShutterSpeed || 'auto',
+                merged.dslrAperture || 'auto',
+                merged.dslrWhiteBalance || 'auto',
+                merged.dslrWhiteBalanceKelvin
+              )
+            }
           }
           if (settings.dslrFocusMode && settings.dslrFocusMode !== existing.dslrFocusMode) {
             dslrManager.setFocusMode(settings.dslrFocusMode as 'auto' | 'manual')

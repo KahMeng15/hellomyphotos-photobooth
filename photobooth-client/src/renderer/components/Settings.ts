@@ -76,6 +76,7 @@ interface MediaDeviceInfo {
 export class Settings {
   private overlay: HTMLDivElement
   private visible = false
+  public get isVisible() { return this.visible }
   private dirty = false
   private onChange: (settings: BoothSettings) => void
   private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', dslrWhiteBalance: 'auto', dslrWhiteBalanceKelvin: 5200, liveviewMode: 'mjpeg', autoPreview: false, liveviewRetryAttempts: 1, shutterOffsetDelay: 0 }
@@ -197,10 +198,10 @@ export class Settings {
     devBtn.style.cssText = `
       padding: 0.5rem 1rem;
       background: transparent; color: #888; border: 1px solid #333; border-radius: 8px;
-      font-size: 0.8125rem; font-weight: 500; cursor: pointer; margin-right: auto;
+      font-size: 0.8125rem; font-weight: 500; cursor: pointer; margin-right: 0.5rem;
     `
-    devBtn.addEventListener('click', () => this.showDevOptionsModal())
-    header.insertBefore(devBtn, header.firstChild)
+    devBtn.addEventListener('click', () => this.promptForDevOptions())
+    header.insertBefore(devBtn, saveBtn)
 
 
     this.panel.appendChild(header)
@@ -212,6 +213,7 @@ export class Settings {
     const col1 = document.createElement('div')
     col1.style.cssText = 'display: flex; flex-direction: column; gap: 1.5rem;'
     const serverSection = this.createServerSection()
+    serverSection.style.borderBottom = 'none'
     col1.appendChild(serverSection)
     const otpSection = this.createOtpSection()
     otpSection.style.borderBottom = 'none'
@@ -430,7 +432,7 @@ export class Settings {
 
     const lvDesc = document.createElement('p')
     lvDesc.textContent = 'MJPEG: smooth 30fps preview (settings apply with brief pause). Polling: lower ~3fps (settings update without interruption).'
-    lvDesc.style.cssText = 'font-size: 0.6875rem; color: #555; margin: 0.25rem 0 0; line-height: 1.4;'
+    lvDesc.style.cssText = 'font-size: 0.75rem; color: #666; margin: 0 0 0.5rem; line-height: 1.4;'
     col3.appendChild(lvDesc)
 
     const liveviewBox = document.createElement('div')
@@ -688,9 +690,9 @@ export class Settings {
     const section = document.createElement('div')
     section.style.cssText = 'margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #2a2a2a;'
 
-    const label = document.createElement('label')
-    label.textContent = 'Server URL'
-    label.style.cssText = 'display: block; font-size: 0.8125rem; color: #888; margin-bottom: 0.375rem;'
+    const label = document.createElement('h3')
+    label.textContent = 'SERVER URL'
+    label.style.cssText = 'font-size: 0.8125rem; font-weight: 700; color: #888; margin: 0 0 1rem; letter-spacing: 0.05em;'
     section.appendChild(label)
 
     const row = document.createElement('div')
@@ -757,14 +759,14 @@ export class Settings {
     const section = document.createElement('div')
     section.style.cssText = 'margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #2a2a2a;'
 
-    const label = document.createElement('label')
-    label.textContent = 'Event OTP'
-    label.style.cssText = 'display: block; font-size: 0.8125rem; color: #888; margin-bottom: 0.375rem;'
+    const label = document.createElement('h3')
+    label.textContent = 'EVENT OTP'
+    label.style.cssText = 'font-size: 0.8125rem; font-weight: 700; color: #888; margin: 0 0 1rem; letter-spacing: 0.05em;'
     section.appendChild(label)
 
     const desc = document.createElement('p')
     desc.textContent = '6-digit code from the operator dashboard.'
-    desc.style.cssText = 'font-size: 0.75rem; color: #666; margin: 0 0 0.5rem;'
+    desc.style.cssText = 'font-size: 0.75rem; color: #666; margin: 0 0 0.5rem; line-height: 1.4;'
     section.appendChild(desc)
 
     const row = document.createElement('div')
@@ -841,9 +843,9 @@ export class Settings {
     const section = document.createElement('div')
     section.style.cssText = 'margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #2a2a2a;'
 
-    const label = document.createElement('label')
-    label.textContent = 'App Settings Passcode'
-    label.style.cssText = 'display: block; font-size: 0.8125rem; color: #888; margin-bottom: 0.375rem;'
+    const label = document.createElement('h3')
+    label.textContent = 'APP SETTINGS PASSCODE'
+    label.style.cssText = 'font-size: 0.8125rem; font-weight: 700; color: #888; margin: 0 0 1rem; letter-spacing: 0.05em;'
     section.appendChild(label)
 
     const desc = document.createElement('p')
@@ -1568,10 +1570,10 @@ export class Settings {
 
   private async showDiagnosticsModal() {
     const overlay = document.createElement('div')
-    overlay.style.cssText = 'position: fixed; inset: 0; background: #0f0f0f; z-index: 100; display: flex; flex-direction: column; pointer-events: all;'
+    overlay.style.cssText = 'position: fixed; inset: 0; background: #0f0f0f; z-index: 100; display: flex; flex-direction: column; pointer-events: all; padding: 2rem; box-sizing: border-box;'
 
     const headerRow = document.createElement('div')
-    headerRow.style.cssText = 'display: flex; align-items: center; gap: 1rem; padding: 1.5rem 2rem; border-bottom: 1px solid #2a2a2a; flex-shrink: 0;'
+    headerRow.style.cssText = 'display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;'
 
     const closeBtn = document.createElement('button')
     closeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>`
@@ -1581,12 +1583,12 @@ export class Settings {
 
     const title = document.createElement('h2')
     title.textContent = 'Upload Diagnostics'
-    title.style.cssText = 'font-size: 1.25rem; font-weight: 500; margin: 0; color: #fff;'
+    title.style.cssText = 'font-size: 1.25rem; font-weight: 700; margin: 0; flex: 1;'
     headerRow.appendChild(title)
     overlay.appendChild(headerRow)
 
     const listContainer = document.createElement('div')
-    listContainer.style.cssText = 'flex: 1; overflow-y: auto; padding: 2rem;'
+    listContainer.style.cssText = 'flex: 1; overflow-y: auto;'
     overlay.appendChild(listContainer)
 
     const table = document.createElement('table')
@@ -1694,43 +1696,141 @@ export class Settings {
       overlay.remove()
     })
   }
+  private async promptForDevOptions() {
+    const overlay = document.createElement('div')
+    overlay.style.cssText = 'position: fixed; inset: 0; background: #0f0f0f; z-index: 100; display: flex; flex-direction: column; pointer-events: all; padding: 2rem; box-sizing: border-box;'
+
+    const headerRow = document.createElement('div')
+    headerRow.style.cssText = 'display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;'
+
+    const closeBtn = document.createElement('button')
+    closeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>`
+    closeBtn.style.cssText = 'background: none; border: none; color: #888; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; border-radius: 6px;'
+    closeBtn.addEventListener('click', () => overlay.remove())
+    headerRow.appendChild(closeBtn)
+
+    const title = document.createElement('h2')
+    title.textContent = 'Developer Access'
+    title.style.cssText = 'font-size: 1.25rem; font-weight: 700; margin: 0; flex: 1;'
+    headerRow.appendChild(title)
+
+    overlay.appendChild(headerRow)
+
+    const container = document.createElement('div')
+    container.style.cssText = 'flex: 1; display: flex; align-items: center; justify-content: center;'
+
+    const modal = document.createElement('div')
+    modal.style.cssText = 'display: flex; flex-direction: column; gap: 1rem; width: 400px;'
+    
+    const input = document.createElement('input')
+    input.type = 'password'
+    input.placeholder = 'Enter Password'
+    input.style.cssText = 'padding: 0.75rem; background: transparent; border: 1px solid #333; color: #fff; border-radius: 8px; width: 100%; box-sizing: border-box; outline: none;'
+    input.addEventListener('focus', () => { input.style.borderColor = '#666' })
+    input.addEventListener('blur', () => { input.style.borderColor = '#333' })
+    
+    const err = document.createElement('div')
+    err.style.cssText = 'color: #f44336; font-size: 0.8125rem; min-height: 1.2rem;'
+
+    const row = document.createElement('div')
+    row.style.cssText = 'display: flex; justify-content: flex-end; gap: 0.5rem;'
+    
+    const cancelBtn = document.createElement('button')
+    cancelBtn.textContent = 'Cancel'
+    cancelBtn.style.cssText = 'padding: 0.5rem 1rem; background: transparent; color: #888; border: none; cursor: pointer; border-radius: 6px;'
+    cancelBtn.addEventListener('click', () => overlay.remove())
+    
+    const submitBtn = document.createElement('button')
+    submitBtn.textContent = 'Submit'
+    submitBtn.style.cssText = 'padding: 0.5rem 1rem; background: #fff; color: #000; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;'
+    
+    const checkPassword = async () => {
+      const pw = input.value
+      const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw))
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+      
+      // Target hash for "hellomyphotos12345"
+      if (hashHex === '0511be070cf1f6d7744eeeb1db04c6d9ef1c03bb559fe9b471e09c10019aed81') {
+        overlay.remove()
+        this.showDevOptionsModal()
+      } else {
+        err.textContent = 'Incorrect password'
+        input.value = ''
+        input.focus()
+      }
+    }
+    
+    submitBtn.addEventListener('click', checkPassword)
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation()
+      if (e.key === 'Enter') checkPassword()
+      if (e.key === 'Escape') overlay.remove()
+    })
+    
+    row.appendChild(cancelBtn)
+    row.appendChild(submitBtn)
+    modal.appendChild(input)
+    modal.appendChild(err)
+    modal.appendChild(row)
+    container.appendChild(modal)
+    overlay.appendChild(container)
+    document.body.appendChild(overlay)
+    input.focus()
+  }
+
   private showDevOptionsModal() {
     const overlay = document.createElement('div')
-    overlay.style.cssText = `
-      position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000;
-      display: flex; align-items: center; justify-content: center;
-    `
-    const modal = document.createElement('div')
-    modal.style.cssText = `
-      background: #111; border: 1px solid #333; border-radius: 12px;
-      padding: 2rem; width: 600px; max-height: 80vh; overflow-y: auto; color: #fff;
-    `
+    overlay.style.cssText = 'position: fixed; inset: 0; background: #0f0f0f; z-index: 100; display: flex; flex-direction: column; pointer-events: all; padding: 2rem; box-sizing: border-box;'
 
-    const header = document.createElement('div')
-    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;'
-    const title = document.createElement('h2')
-    title.textContent = 'Advanced Dev Options (Network Simulation)'
-    title.style.cssText = 'margin: 0; font-size: 1.25rem;'
+    const headerRow = document.createElement('div')
+    headerRow.style.cssText = 'display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;'
+
     const closeBtn = document.createElement('button')
-    closeBtn.textContent = 'Close'
-    closeBtn.style.cssText = 'padding: 0.5rem 1rem; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'
+    closeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>`
+    closeBtn.style.cssText = 'background: none; border: none; color: #888; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; border-radius: 6px;'
     closeBtn.addEventListener('click', () => overlay.remove())
-    
-    header.appendChild(title)
-    header.appendChild(closeBtn)
-    modal.appendChild(header)
+    headerRow.appendChild(closeBtn)
+
+    const title = document.createElement('h2')
+    title.textContent = 'Advanced Dev Options'
+    title.style.cssText = 'font-size: 1.25rem; font-weight: 700; margin: 0; flex: 1;'
+    headerRow.appendChild(title)
+
+    const saveBtn = document.createElement('button')
+    saveBtn.textContent = 'Apply Settings'
+    saveBtn.style.cssText = `
+      padding: 0.5rem 1.25rem;
+      background: #fff; color: #000; border: none; border-radius: 8px;
+      font-size: 0.875rem; font-weight: 600; cursor: pointer;
+    `
+    headerRow.appendChild(saveBtn)
+    overlay.appendChild(headerRow)
+
+    const listContainer = document.createElement('div')
+    listContainer.style.cssText = 'flex: 1; overflow-y: auto;'
+    overlay.appendChild(listContainer)
 
     const form = document.createElement('div')
-    form.style.cssText = 'display: flex; flex-direction: column; gap: 1.5rem;'
+    form.style.cssText = 'display: flex; flex-direction: column; gap: 1.5rem; max-width: 600px;'
+
+    // Helper to style inputs
+    const applyInputStyle = (el: HTMLInputElement) => {
+      el.style.cssText = 'padding: 0.75rem; background: transparent; border: 1px solid #333; color: #fff; border-radius: 8px; width: 100%; box-sizing: border-box; outline: none; margin-top: 0.5rem;'
+      el.addEventListener('focus', () => { el.style.borderColor = '#666' })
+      el.addEventListener('blur', () => { el.style.borderColor = '#333' })
+      el.addEventListener('keydown', (e) => e.stopPropagation())
+    }
 
     // Logs
     const logsRow = document.createElement('div')
-    logsRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between;'
+    logsRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; border: 1px solid #2a2a2a; border-radius: 8px; padding: 1rem;'
     const logsLabel = document.createElement('label')
     logsLabel.textContent = 'Application Logs'
+    logsLabel.style.color = '#ccc'
     const logsBtn = document.createElement('button')
     logsBtn.textContent = 'View Logs'
-    logsBtn.style.cssText = 'padding: 0.5rem 1rem; background: #333; color: #fff; border: 1px solid #444; border-radius: 4px; cursor: pointer;'
+    logsBtn.style.cssText = 'padding: 0.5rem 1rem; background: transparent; color: #888; border: 1px solid #333; border-radius: 6px; cursor: pointer;'
     logsBtn.addEventListener('click', () => {
       overlay.remove()
       this.showLogs()
@@ -1744,6 +1844,7 @@ export class Settings {
     masterRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between;'
     const masterLabel = document.createElement('label')
     masterLabel.textContent = 'Enable Network Simulations'
+    masterLabel.style.color = '#ccc'
     const masterToggle = document.createElement('input')
     masterToggle.type = 'checkbox'
     masterToggle.checked = !!this.settings.devSimulationEnabled
@@ -1756,6 +1857,7 @@ export class Settings {
     offlineRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between;'
     const offlineLabel = document.createElement('label')
     offlineLabel.textContent = 'Simulate Complete Offline'
+    offlineLabel.style.color = '#ccc'
     const offlineToggle = document.createElement('input')
     offlineToggle.type = 'checkbox'
     offlineToggle.checked = !!this.settings.devSimulateOffline
@@ -1765,79 +1867,76 @@ export class Settings {
 
     // Latency
     const latencyRow = document.createElement('div')
-    latencyRow.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
     const latencyLabel = document.createElement('label')
     latencyLabel.textContent = 'Latency (ms, 0 = disabled)'
+    latencyLabel.style.color = '#ccc'
     const latencyInput = document.createElement('input')
     latencyInput.type = 'number'
     latencyInput.value = String(this.settings.devLatencyMs || 0)
-    latencyInput.style.cssText = 'padding: 0.5rem; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px;'
+    applyInputStyle(latencyInput)
     latencyRow.appendChild(latencyLabel)
     latencyRow.appendChild(latencyInput)
     form.appendChild(latencyRow)
 
     // Throttle
     const throttleRow = document.createElement('div')
-    throttleRow.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
     const throttleLabel = document.createElement('label')
     throttleLabel.textContent = 'Upload Throttle (KB/s, 0 = disabled)'
+    throttleLabel.style.color = '#ccc'
     const throttleInput = document.createElement('input')
     throttleInput.type = 'number'
     throttleInput.value = String(this.settings.devUploadThrottleKbps || 0)
-    throttleInput.style.cssText = 'padding: 0.5rem; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px;'
+    applyInputStyle(throttleInput)
     throttleRow.appendChild(throttleLabel)
     throttleRow.appendChild(throttleInput)
     form.appendChild(throttleRow)
 
     // Packet Loss
     const lossRow = document.createElement('div')
-    lossRow.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
     const lossLabel = document.createElement('label')
     lossLabel.textContent = 'Packet Loss Rate (%)'
+    lossLabel.style.color = '#ccc'
     const lossInput = document.createElement('input')
     lossInput.type = 'number'
     lossInput.min = '0'
     lossInput.max = '100'
     lossInput.value = String(this.settings.devPacketLossPercent || 0)
-    lossInput.style.cssText = 'padding: 0.5rem; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px;'
+    applyInputStyle(lossInput)
     lossRow.appendChild(lossLabel)
     lossRow.appendChild(lossInput)
     form.appendChild(lossRow)
     
     // Server Error
     const errRow = document.createElement('div')
-    errRow.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
     const errLabel = document.createElement('label')
     errLabel.textContent = 'Server Error Rate (5xx) (%)'
+    errLabel.style.color = '#ccc'
     const errInput = document.createElement('input')
     errInput.type = 'number'
     errInput.min = '0'
     errInput.max = '100'
     errInput.value = String(this.settings.devServerErrorPercent || 0)
-    errInput.style.cssText = 'padding: 0.5rem; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px;'
+    applyInputStyle(errInput)
     errRow.appendChild(errLabel)
     errRow.appendChild(errInput)
     form.appendChild(errRow)
 
     // Timeout Rate
     const timeoutRow = document.createElement('div')
-    timeoutRow.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;'
     const timeoutLabel = document.createElement('label')
     timeoutLabel.textContent = 'Timeout Rate (%)'
+    timeoutLabel.style.color = '#ccc'
     const timeoutInput = document.createElement('input')
     timeoutInput.type = 'number'
     timeoutInput.min = '0'
     timeoutInput.max = '100'
     timeoutInput.value = String(this.settings.devTimeoutPercent || 0)
-    timeoutInput.style.cssText = 'padding: 0.5rem; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px;'
+    applyInputStyle(timeoutInput)
     timeoutRow.appendChild(timeoutLabel)
     timeoutRow.appendChild(timeoutInput)
     form.appendChild(timeoutRow)
 
-    const applyBtn = document.createElement('button')
-    applyBtn.textContent = 'Apply Network Simulation'
-    applyBtn.style.cssText = 'padding: 1rem; background: #4caf50; color: #fff; border: none; border-radius: 4px; font-weight: bold; margin-top: 1rem; cursor: pointer;'
-    applyBtn.addEventListener('click', () => {
+    saveBtn.addEventListener('click', () => {
       this.settings.devSimulationEnabled = masterToggle.checked
       this.settings.devSimulateOffline = offlineToggle.checked
       this.settings.devLatencyMs = parseInt(latencyInput.value, 10) || 0
@@ -1848,10 +1947,8 @@ export class Settings {
       this.save()
       overlay.remove()
     })
-    form.appendChild(applyBtn)
 
-    modal.appendChild(form)
-    overlay.appendChild(modal)
+    listContainer.appendChild(form)
     document.body.appendChild(overlay)
   }
 }

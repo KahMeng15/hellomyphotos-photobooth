@@ -584,6 +584,7 @@ export class BoothApp {
     document.addEventListener('keydown', (e) => {
       // Ignore if PhotoPreview or settings is open
       if (this.photoPreview && this.photoPreview.isVisible()) return
+      if (this.settings && this.settings.isVisible) return
       
       if (e.key === ' ' || e.key === 'Enter') {
         if (this.isLive && !this.isCapturing) {
