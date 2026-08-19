@@ -72,7 +72,7 @@
           >
             <div class="session-thumb">
               <img
-                :src="session.photos[session.photos.length - 1]?.thumbnail"
+                :src="session.photos[session.photos.length - 1]?.thumbnail ? baseUrl + session.photos[session.photos.length - 1].thumbnail : ''"
                 :alt="'Session ' + session.sessionId"
                 class="thumb-img"
               />
@@ -137,6 +137,7 @@
 </template>
 
 <script setup lang="ts">
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'

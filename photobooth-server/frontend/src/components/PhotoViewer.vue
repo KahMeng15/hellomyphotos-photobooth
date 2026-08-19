@@ -3,7 +3,7 @@
     <div class="overlay" @click.self="$emit('close')">
       <div class="viewer">
         <button class="close-btn" @click="$emit('close')">✕</button>
-        <img :src="photo.url" :alt="'Photo ' + photo.id" class="full-image" />
+        <img :src="baseUrl + photo.url" :alt="'Photo ' + photo.id" class="full-image" />
         <div class="viewer-meta">
           <span>{{ formatTime(photo.timestamp) }}</span>
           <span v-if="photo.frameName">Frame: {{ photo.frameName }}</span>
@@ -26,6 +26,7 @@
 </template>
 
 <script setup lang="ts">
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
 import { computed, ref } from 'vue'
 import QRCode from 'qrcode'
 import { usePhotosStore } from '../stores/photos'
@@ -51,7 +52,7 @@ const downloadUrl = computed(() => {
 })
 
 async function sharePhoto() {
-  const url = window.location.origin + props.photo.url
+  const url = window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, '') + props.photo.url
   if (navigator.share) {
     try {
       await navigator.share({ title: 'Booth Photo', url })
@@ -79,7 +80,7 @@ async function shareSessionLink() {
 async function showQr() {
   showQrCode.value = !showQrCode.value
   if (showQrCode.value && qrCanvas.value) {
-    await QRCode.toCanvas(qrCanvas.value, window.location.origin + props.photo.url, {
+    await QRCode.toCanvas(qrCanvas.value, window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, '') + props.photo.url, {
       width: 200,
       margin: 2,
     })

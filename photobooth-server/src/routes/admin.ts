@@ -1041,7 +1041,13 @@ router.delete('/session/:sessionId', async (req: Request, res: Response) => {
 // ── Global Defaults ──
 
 router.get('/settings/defaults', (req: Request, res: Response) => {
-  res.json({ settings: getGlobalSettings() })
+  res.json({ 
+    settings: getGlobalSettings(),
+    serverInfo: {
+      domain: config.cookie.domain || 'Not set',
+      path: config.cookie.path || '/',
+    }
+  })
 })
 
 router.put('/settings/defaults', (req: Request, res: Response) => {

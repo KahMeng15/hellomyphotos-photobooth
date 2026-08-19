@@ -46,7 +46,7 @@
         <h2 class="greeting">Hello there! Here are your photos!</h2>
         <div class="photo-grid" :class="`cols-${Math.min(photos.length, 2)}`">
           <div v-for="(photo, i) in photos" :key="i" class="photo-item" @click="openLightbox(i)">
-            <img :src="photo.thumbnail || photo.url" :alt="`Photo ${i+1}`" loading="lazy" />
+            <img :src="baseUrl + (photo.thumbnail || photo.url)" :alt="`Photo ${i+1}`" loading="lazy" />
           </div>
         </div>
         <div class="actions">
@@ -58,9 +58,9 @@
         <div v-if="lightboxIdx !== null" class="lightbox" @click.self="closeLightbox">
           <button class="lb-close" @click="closeLightbox">✕</button>
           <button v-if="lightboxIdx > 0" class="lb-prev" @click="lightboxIdx--">‹</button>
-          <img :src="photos[lightboxIdx].url" class="lb-img" />
+          <img :src="baseUrl + photos[lightboxIdx].url" class="lb-img" />
           <button v-if="lightboxIdx < photos.length - 1" class="lb-next" @click="lightboxIdx++">›</button>
-          <a :href="photos[lightboxIdx].downloadUrl || photos[lightboxIdx].url"
+          <a :href="baseUrl + (photos[lightboxIdx].downloadUrl || photos[lightboxIdx].url)"
              :download="`photo_${lightboxIdx + 1}`"
              class="lb-dl">↓ Download</a>
         </div>
@@ -70,6 +70,7 @@
 </template>
 
 <script setup lang="ts">
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 
@@ -110,7 +111,7 @@ function stopPolling() {
 }
 
 async function loadPhotos() {
-  const res = await fetch(`/api/share/${token}`)
+  const res = await fetch(`${baseUrl}/api/share/${token}`)
   if (!res.ok) {
     const d = await res.json().catch(() => ({}))
     error.value = d.expired ? 'expired' : 'not_found'
@@ -126,7 +127,7 @@ async function loadPhotos() {
 
 async function checkStatus() {
   try {
-    const res = await fetch(`/api/share/${token}/status`)
+    const res = await fetch(`${baseUrl}/api/share/${token}/status`)
     if (res.status === 404) { error.value = 'not_found'; stopPolling(); return }
     if (!res.ok) return
     const d = await res.json()

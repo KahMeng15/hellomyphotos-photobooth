@@ -12,6 +12,21 @@
 
     <div class="settings-body">
       <section class="card">
+        <h2>Server Information</h2>
+        <p class="card-desc">Read-only network and path configuration loaded from the server's .env file.</p>
+        <div class="settings-box">
+          <div class="field-row">
+            <label>Cookie Domain</label>
+            <div class="value">{{ serverInfo.domain || 'Not set' }}</div>
+          </div>
+          <div class="field-row">
+            <label>Cookie Base Path</label>
+            <div class="value">{{ serverInfo.path || '/' }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
         <h2>Capture Defaults</h2>
         <p class="card-desc">These defaults apply to all new events. You can override them per-event.</p>
 
@@ -100,6 +115,7 @@ const apertureChoices = ['auto', '2.8', '4', '4.5', '5', '5.6', '6.3', '7.1', '8
 const router = useRouter()
 const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', organizer: '', contactInfo: '' })
 const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', organizer: '', contactInfo: '' })
+const serverInfo = ref({ domain: 'Not set', path: '/' })
 
 const dirty = computed(() =>
   settings.value.photoCount !== originalSettings.value.photoCount ||
@@ -117,6 +133,9 @@ onMounted(async () => {
     const { data } = await axios.get('/api/admin/settings/defaults')
     settings.value = data.settings
     originalSettings.value = { ...data.settings }
+    if (data.serverInfo) {
+      serverInfo.value = data.serverInfo
+    }
   } catch (err) {
     toast.error('Failed to load settings')
   }

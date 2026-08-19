@@ -56,15 +56,19 @@ router.post('/login', rateLimitLogin, async (req: Request, res: Response) => {
 
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
-      secure: config.isProduction,
-      sameSite: 'strict',
+      secure: config.cookie.secure,
+      sameSite: config.cookie.sameSite,
+      domain: config.cookie.domain,
+      path: config.cookie.path,
       maxAge: 15 * 60 * 1000,
     })
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: config.isProduction,
-      sameSite: 'strict',
+      secure: config.cookie.secure,
+      sameSite: config.cookie.sameSite,
+      domain: config.cookie.domain,
+      path: config.cookie.path,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     })
 
@@ -96,8 +100,10 @@ router.post('/refresh', (req: Request, res: Response) => {
 
     res.cookie('accessToken', newAccessToken, {
       httpOnly: true,
-      secure: config.isProduction,
-      sameSite: 'strict',
+      secure: config.cookie.secure,
+      sameSite: config.cookie.sameSite,
+      domain: config.cookie.domain,
+      path: config.cookie.path,
       maxAge: 15 * 60 * 1000,
     })
 
@@ -108,8 +114,9 @@ router.post('/refresh', (req: Request, res: Response) => {
 })
 
 router.post('/logout', (req: Request, res: Response) => {
-  res.clearCookie('accessToken')
-  res.clearCookie('refreshToken')
+  const options = { domain: config.cookie.domain, path: config.cookie.path }
+  res.clearCookie('accessToken', options)
+  res.clearCookie('refreshToken', options)
   logger.info('User logged out')
   res.json({ success: true })
 })

@@ -28,6 +28,13 @@ export const config = {
     refreshExpiry: '7d',
   },
 
+  cookie: {
+    domain: process.env.COOKIE_DOMAIN || undefined,
+    path: process.env.COOKIE_PATH || '/',
+    sameSite: (process.env.COOKIE_SAME_SITE || 'lax') as 'lax' | 'strict' | 'none',
+    secure: process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production',
+  },
+
   operator: {
     email: process.env.OPERATOR_EMAIL || 'operator@hellomyphoto.local',
     password: process.env.OPERATOR_PASSWORD || 'admin123',

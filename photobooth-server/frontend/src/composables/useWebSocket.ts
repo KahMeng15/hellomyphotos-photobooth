@@ -12,9 +12,13 @@ export function useWebSocket() {
     const auth = useAuthStore()
     if (!auth.accessToken) return
 
+    const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
+    const socketPath = baseUrl ? `${baseUrl}/socket.io` : '/socket.io'
+
     const socket = io({
+      path: socketPath,
       auth: { token: auth.accessToken },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,

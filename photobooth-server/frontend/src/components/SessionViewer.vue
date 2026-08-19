@@ -21,7 +21,7 @@
           <img
             v-for="(photo, i) in displayPhotos"
             :key="photo.id"
-            :src="photo.url"
+            :src="baseUrl + photo.url"
             :alt="'Photo ' + (i + 1)"
             class="grid-img"
             @click="openFullscreen(i)"
@@ -169,6 +169,7 @@
 </template>
 
 <script setup lang="ts">
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import QRCode from 'qrcode'
 import axios from 'axios'
@@ -422,7 +423,7 @@ async function copyPrimaryShare() {
     const primaryShare = shares.value.find((s: any) => s.is_active) || shares.value[0]
     if (!primaryShare) throw new Error('No shares available')
 
-    shareUrl = `${window.location.origin}/share/${primaryShare.id}`
+    shareUrl = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, '')}/share/${primaryShare.id}`
     await navigator.clipboard.writeText(shareUrl)
     linkCopied.value = true
     toast.success('Share link copied to clipboard!')
@@ -435,7 +436,7 @@ async function copyPrimaryShare() {
 
 async function copySpecificShare(shareId: string) {
   try {
-    await navigator.clipboard.writeText(`${window.location.origin}/share/${shareId}`)
+    await navigator.clipboard.writeText(`${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, '')}/share/${shareId}`)
     toast.success('Link copied to clipboard')
   } catch (err) {
     console.error(err)
@@ -454,7 +455,7 @@ async function showPrimaryQr() {
 }
 
 async function showSpecificQr(shareId: string) {
-  shareUrl = `${window.location.origin}/share/${shareId}`
+  shareUrl = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, '')}/share/${shareId}`
   showQrCode.value = true
   await nextTick()
   if (qrCanvas.value) {

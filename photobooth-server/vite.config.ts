@@ -5,6 +5,7 @@ import path from 'path'
 export default defineConfig({
   plugins: [vue()],
   root: './frontend',
+  base: process.env.VITE_BASE_URL || '/',
   build: {
     outDir: '../public',
     emptyOutDir: true,
