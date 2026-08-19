@@ -34,6 +34,7 @@ function setActiveServerUrl(url: string) {
 
 app.on('ready', async () => {
   offlineQueue = new OfflineQueue()
+  offlineQueue.cleanupOldSessions(7) // Clean up history older than 7 days
   dslrManager = new DslrManager()
 
   const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize

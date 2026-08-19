@@ -9,7 +9,7 @@ import { boothAuthMiddleware } from '../middleware/authMiddleware'
 import { io, operatorSubscriptions } from '../server'
 import { processSinglePhoto, generateThumbnail, compileVerticalStrip, applyFrame } from '../pipeline'
 import { getActiveFrames } from '../utils/frames'
-import { ensurePhotoSession, getEventByOtp, updateEventSettingsById, getCameraSettings, updateCameraSettings, reservePhotoSession, updateUploadStatus } from '../db'
+import { ensurePhotoSession, getEventByOtp, updateEventSettingsById, getCameraSettings, updateCameraSettings, reservePhotoSession, updateUploadStatus, listEventPhotoSessions } from '../db'
 
 const router = Router()
 
@@ -91,6 +91,39 @@ router.get('/frames/:frameId/image', boothAuthMiddleware, async (req: Request, r
     res.sendFile(framePath)
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to serve frame image' })
+  }
+})
+
+router.get('/sessions', boothAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const eventId = (req as any).eventId
+    const eventDir = config.eventPhotosDir(eventId)
+    
+    let files: string[] = []
+    try { files = await fs.readdir(eventDir) } catch {}
+    
+    const photoCounts = new Map<string, number>()
+    for (const name of files) {
+      if (name.includes('_thumb') || name.includes('_strip')) continue
+      const match = name.match(/^(.+)_(\d+)\.\w+$/)
+      if (match) {
+        const sessionId = match[1]
+        photoCounts.set(sessionId, (photoCounts.get(sessionId) || 0) + 1)
+      }
+    }
+
+    const dbSessions = listEventPhotoSessions(eventId, false)
+    const sessions = dbSessions.map(s => ({
+      sessionId: s.id,
+      shareId: (s as any).share_id || null,
+      createdAt: s.created_at,
+      photoCount: photoCounts.get(s.id) || 0
+    }))
+
+    res.json({ sessions })
+  } catch (error: any) {
+    logger.error(`Failed to list booth sessions: ${error.message}`)
+    res.status(500).json({ error: error.message })
   }
 })
 

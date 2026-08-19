@@ -801,6 +801,11 @@ export function initIpcHandlers(
     return { ok: true }
   })
 
+  ipcMain.handle('clear-history', () => {
+    _offlineQueue.clearHistory()
+    return { ok: true }
+  })
+
   ipcMain.handle('remove-upload-job', (event, id: number) => {
     _offlineQueue.remove(id)
     cancelUploadJob(id)

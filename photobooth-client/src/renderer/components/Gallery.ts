@@ -11,6 +11,7 @@ export interface QueuedSession {
   retryCount?: number
   sizeBytes?: number | null
   avgSpeedKbps?: number | null
+  thumbPaths?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -22,6 +23,13 @@ const ROW_B       = '#111'
 const BORDER      = '#2a2a2a'
 const LABEL_COLOR = '#888'
 const TEXT_COLOR  = '#ccc'
+
+const normalizeUrl = (url: string) => {
+  let u = url.trim().replace(/\/+$/, '')
+  if (!u.startsWith('http')) u = `http://${u}`
+  return u
+}
+const fileSrc = (p: string) => p.startsWith('http') ? p : `file://${p}`
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -247,15 +255,53 @@ export class Gallery {
 
   private async loadSessions() {
     const countEl = document.getElementById('g-session-count')
-    this.listGrid.innerHTML = ''
-
-    const loadingRow = document.createElement('div')
-    loadingRow.style.cssText = `color: ${LABEL_COLOR}; font-size: 0.875rem; padding: 1rem 0;`
-    loadingRow.textContent = 'Loading sessions…'
-    this.listGrid.appendChild(loadingRow)
 
     try {
-      const sessions = await window.hellomyphoto.getRecentUploads(50) as QueuedSession[]
+      let sessions = await window.hellomyphoto.getRecentUploads(50) as QueuedSession[]
+      
+      const settings = await window.hellomyphoto.getSettings()
+      if (settings.serverUrl && settings.otp) {
+        try {
+          const res = await fetch(`${normalizeUrl(settings.serverUrl)}/api/booth/sessions`, {
+            headers: { 'x-booth-otp': settings.otp }
+          })
+          if (res.ok) {
+            const data = await res.json()
+            const serverSessions = data.sessions || []
+            const localIds = new Set(sessions.map((s: any) => s.sessionId))
+            
+            for (const ss of serverSessions) {
+              if (!localIds.has(ss.sessionId)) {
+                const sUrl = normalizeUrl(settings.serverUrl)
+                const remotePaths = []
+                const remoteThumbPaths = []
+                for (let i = 0; i < (ss.photoCount || 0); i++) {
+                  remotePaths.push(`${sUrl}/api/share/${ss.shareId}/photo/${ss.sessionId}_${i + 1}.webp`)
+                  remoteThumbPaths.push(`${sUrl}/api/share/${ss.shareId}/photo/${ss.sessionId}_${i + 1}_thumb.webp`)
+                }
+
+                sessions.push({
+                  id: -1,
+                  sessionId: ss.sessionId,
+                  shareId: ss.shareId,
+                  metadata: '{}',
+                  imagePaths: JSON.stringify(remotePaths),
+                  thumbPaths: JSON.stringify(remoteThumbPaths),
+                  createdAt: ss.createdAt,
+                  retryCount: 0,
+                  status: 'completed',
+                  sizeBytes: null,
+                  avgSpeedKbps: null
+                })
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[Gallery] Failed to fetch server sessions', e)
+        }
+      }
+
+      sessions.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
       this.listGrid.innerHTML = ''
 
@@ -280,11 +326,16 @@ export class Gallery {
       sessions.forEach((session, i) => {
         let paths: string[] = []
         try { paths = JSON.parse(session.imagePaths) } catch { /* ignore */ }
+        
+        let thumbPathsArray: string[] = []
+        if (session.thumbPaths) {
+          try { thumbPathsArray = JSON.parse(session.thumbPaths) } catch { /* ignore */ }
+        }
 
-        // Use only the LAST image as the card thumbnail
-        const thumbPath = paths.length > 0 ? paths[paths.length - 1] : null
+        // Use the LAST image thumbnail, falling back to full image if thumbs aren't generated yet
+        const displayThumbPath = thumbPathsArray.length > 0 ? thumbPathsArray[thumbPathsArray.length - 1] : (paths.length > 0 ? paths[paths.length - 1] : null)
 
-        const card = this.buildCard(session, paths, thumbPath, i)
+        const card = this.buildCard(session, paths, displayThumbPath, i, thumbPathsArray)
         this.listGrid.appendChild(card)
       })
 
@@ -307,6 +358,7 @@ export class Gallery {
     paths: string[],
     thumbPath: string | null,
     index: number,
+    thumbPathsArray?: string[]
   ): HTMLDivElement {
     const card = document.createElement('div')
     card.className = 'g-card'
@@ -325,8 +377,22 @@ export class Gallery {
       img.loading = 'lazy'
       img.decoding = 'async'
       // Defer src assignment slightly so layout doesn't block
-      requestAnimationFrame(() => { img.src = `file://${thumbPath}` })
-      img.onerror = () => { img.style.display = 'none' }
+      requestAnimationFrame(() => { img.src = fileSrc(thumbPath) })
+      img.onerror = () => { 
+        if (session.shareId && paths.length > 0) {
+          window.hellomyphoto.getSettings().then(settings => {
+            const sUrl = normalizeUrl(settings.serverUrl || '')
+            if (sUrl) {
+              img.onerror = () => { img.style.display = 'none' }
+              img.src = `${sUrl}/api/share/${session.shareId}/photo/${session.sessionId}_${paths.length}_thumb.webp`
+            } else {
+              img.style.display = 'none'
+            }
+          })
+        } else {
+          img.style.display = 'none'
+        }
+      }
       thumb.appendChild(img)
     } else {
       thumb.innerHTML = `
@@ -391,7 +457,7 @@ export class Gallery {
     info.appendChild(pill)
     card.appendChild(info)
 
-    card.addEventListener('click', () => this.showDetail(session, paths))
+    card.addEventListener('click', () => this.showDetail(session, paths, thumbPathsArray))
     return card
   }
 
@@ -399,7 +465,7 @@ export class Gallery {
   // Detail page — full Settings-style layout
   // -------------------------------------------------------------------------
 
-  private async showDetail(session: QueuedSession, paths: string[]) {
+  private async showDetail(session: QueuedSession, paths: string[], thumbPathsArray?: string[]) {
     this.detailPage.innerHTML = ''
     this.detailPage.classList.add('g-visible')
 
@@ -468,12 +534,30 @@ export class Gallery {
           width: 100%; height: auto; object-fit: contain; display: block;
         `
         img.onerror = () => {
-          wrap.style.background = '#1f1f1f'
-          img.style.display = 'none'
+          if (session.shareId) {
+            window.hellomyphoto.getSettings().then(settings => {
+              const sUrl = normalizeUrl(settings.serverUrl || '')
+              if (sUrl) {
+                img.onerror = () => {
+                  wrap.style.background = '#1f1f1f'
+                  img.style.display = 'none'
+                }
+                img.src = `${sUrl}/api/share/${session.shareId}/photo/${session.sessionId}_${i + 1}_thumb.webp`
+              } else {
+                wrap.style.background = '#1f1f1f'
+                img.style.display = 'none'
+              }
+            })
+          } else {
+            wrap.style.background = '#1f1f1f'
+            img.style.display = 'none'
+          }
         }
-        requestAnimationFrame(() => { img.src = `file://${p}` })
 
-        wrap.addEventListener('click', () => this.openLightbox(paths, i))
+        const displayPath = thumbPathsArray && thumbPathsArray[i] ? thumbPathsArray[i] : p;
+        requestAnimationFrame(() => { img.src = fileSrc(displayPath) })
+
+        wrap.addEventListener('click', () => this.openLightbox(session, paths, i))
         wrap.appendChild(img)
         photoCard.appendChild(wrap)
       })
@@ -506,7 +590,7 @@ export class Gallery {
 
       try {
         const serverConfig = await window.hellomyphoto.getServerConfig()
-        const serverUrl = (serverConfig?.serverUrl || '').replace(/\/+$/, '')
+        const serverUrl = normalizeUrl(serverConfig?.serverUrl || '')
         const shareUrl = `${serverUrl}/share/${session.shareId}`
 
         const qrDataUrl = await QRCode.toDataURL(shareUrl, {
@@ -692,7 +776,7 @@ export class Gallery {
         refetchBtn.textContent = 'Refetching...'
         const serverConfig = await window.hellomyphoto.getServerConfig()
         const settings = await window.hellomyphoto.getSettings()
-        const serverUrl = (serverConfig?.serverUrl || '').replace(/\/+$/, '')
+        const serverUrl = normalizeUrl(serverConfig?.serverUrl || '')
         const res = await fetch(`${serverUrl}/api/booth/session/reserve`, {
           method: 'POST',
           headers: { 
@@ -754,7 +838,7 @@ export class Gallery {
   // Lightbox — Settings-style full overlay
   // -------------------------------------------------------------------------
 
-  private openLightbox(paths: string[], startIndex: number) {
+  private openLightbox(session: QueuedSession, paths: string[], startIndex: number) {
     let current = startIndex
 
     const lb = document.createElement('div')
@@ -826,7 +910,20 @@ export class Gallery {
     lb.appendChild(imgArea)
 
     const update = () => {
-      img.src = `file://${paths[current]}`
+      img.onerror = () => {
+        if (session.shareId) {
+          window.hellomyphoto.getSettings().then(settings => {
+            const sUrl = normalizeUrl(settings.serverUrl || '')
+            if (sUrl) {
+              img.onerror = () => { img.style.display = 'none' }
+              img.src = `${sUrl}/api/share/${session.shareId}/photo/${session.sessionId}_${current + 1}.webp`
+              img.style.display = 'block'
+            }
+          })
+        }
+      }
+      img.style.display = 'block'
+      img.src = fileSrc(paths[current])
       lbCounter.textContent = `Photo ${current + 1} of ${paths.length}`
     }
 

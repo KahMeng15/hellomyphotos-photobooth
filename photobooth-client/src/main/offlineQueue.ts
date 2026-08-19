@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import path from 'path'
 import { app } from 'electron'
+import fs from 'fs'
 
 export interface QueuedSession {
   id: number
@@ -192,6 +193,39 @@ export class OfflineQueue {
 
   updateStats(id: number, sizeBytes: number, speedKbps: number): void {
     this.db.prepare(`UPDATE pending_uploads SET size_bytes = ?, avg_speed_kbps = ? WHERE id = ?`).run(sizeBytes, speedKbps, id)
+  }
+
+  private deleteFilesForSession(imagePaths: string, thumbPaths: string | null) {
+    try {
+      const paths: string[] = JSON.parse(imagePaths || '[]')
+      const thumbs: string[] = JSON.parse(thumbPaths || '[]')
+      for (const p of [...paths, ...thumbs]) {
+        if (fs.existsSync(p)) fs.unlinkSync(p)
+      }
+    } catch (e) {
+      console.error('[OfflineQueue] Failed to delete session files', e)
+    }
+  }
+
+  clearHistory(): void {
+    const rows = this.db.prepare(`SELECT image_paths, thumb_paths FROM pending_uploads`).all() as any[]
+    for (const r of rows) {
+      this.deleteFilesForSession(r.image_paths, r.thumb_paths)
+    }
+    this.db.prepare(`DELETE FROM pending_uploads`).run()
+  }
+
+  cleanupOldSessions(days: number): void {
+    const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+    const rows = this.db.prepare(`
+      SELECT id, image_paths, thumb_paths FROM pending_uploads 
+      WHERE created_at < ? AND status IN ('completed', 'failed')
+    `).all(cutoffDate) as any[]
+    
+    for (const r of rows) {
+      this.deleteFilesForSession(r.image_paths, r.thumb_paths)
+      this.db.prepare(`DELETE FROM pending_uploads WHERE id = ?`).run(r.id)
+    }
   }
 
   close(): void {

@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
   getUploadQueue: () => ipcRenderer.invoke('get-upload-queue'),
   resetFailedUploads: () => ipcRenderer.invoke('reset-failed-uploads'),
   clearUploadQueue: () => ipcRenderer.invoke('clear-upload-queue'),
+  clearHistory: () => ipcRenderer.invoke('clear-history'),
   removeUploadJob: (id: number) => ipcRenderer.invoke('remove-upload-job', id),
   retryUploadJob: (id: number) => ipcRenderer.invoke('retry-upload-job', id),
   updateShareId: (id: number, shareId: string) => ipcRenderer.invoke('update-share-id', id, shareId),

@@ -578,9 +578,22 @@ export class Settings {
     diagBtn.textContent = 'Full Diagnostics'
     diagBtn.style.cssText = 'padding: 0.375rem 0.75rem; border: 1px solid #555; border-radius: 4px; background: #222; color: #fff; font-size: 0.75rem; cursor: pointer;'
     diagBtn.addEventListener('click', () => this.showDiagnosticsModal())
+    
+    const clearHistoryBtn = document.createElement('button')
+    clearHistoryBtn.textContent = 'Clear Cache & History'
+    clearHistoryBtn.style.cssText = 'padding: 0.375rem 0.75rem; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 4px; background: rgba(239, 68, 68, 0.1); color: #ef4444; font-size: 0.75rem; cursor: pointer; transition: background 150ms;'
+    clearHistoryBtn.onmouseenter = () => { clearHistoryBtn.style.background = 'rgba(239, 68, 68, 0.2)' }
+    clearHistoryBtn.onmouseleave = () => { clearHistoryBtn.style.background = 'rgba(239, 68, 68, 0.1)' }
+    clearHistoryBtn.addEventListener('click', async () => {
+      if (confirm('Are you sure you want to clear all past sessions and cached photos? This cannot be undone.')) {
+        await window.hellomyphoto.clearHistory()
+        refreshList()
+      }
+    })
 
     controls.appendChild(pauseBtn)
     controls.appendChild(diagBtn)
+    controls.appendChild(clearHistoryBtn)
     headerRow.appendChild(controls)
     section.appendChild(headerRow)
 

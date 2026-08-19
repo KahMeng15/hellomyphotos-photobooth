@@ -38,6 +38,7 @@ declare global {
       getUploadQueue: () => Promise<any[]>
       resetFailedUploads: () => Promise<{ ok: boolean }>
       clearUploadQueue: () => Promise<{ ok: boolean }>
+      clearHistory: () => Promise<{ ok: boolean }>
       removeUploadJob: (id: number) => Promise<{ ok: boolean }>
       retryUploadJob: (id: number) => Promise<{ ok: boolean }>
       updateShareId: (id: number, shareId: string) => Promise<{ ok: boolean }>
