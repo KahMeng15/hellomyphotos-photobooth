@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, app } from 'electron'
+import { BrowserWindow, ipcMain, app, nativeImage } from 'electron'
 import { DslrManager, killPtpDaemon } from './gphoto2'
 import { OfflineQueue } from './offlineQueue'
 import { readFile, writeFile, readdir } from 'fs/promises'
@@ -130,6 +130,62 @@ function createThrottledStream(buffer: Buffer, kbps: number): Readable {
     }
   }
   return stream
+}
+
+
+// ---------------------------------------------------------------------------
+// Gallery thumbnail generation
+// Uses Electron's built-in nativeImage — no extra npm deps required.
+// Runs async/fire-and-forget after enqueueing so it never blocks the capture flow.
+// ---------------------------------------------------------------------------
+
+const THUMB_WIDTH = 420  // px — wide enough for 2-col detail grid, tiny for cards
+const THUMB_QUALITY = 72 // JPEG quality 0–100
+
+async function generateGalleryThumbnails(
+  sessionId: string,
+  imagePaths: string[],
+  queue: OfflineQueue
+): Promise<void> {
+  try {
+    const thumbDir = path.join(app.getPath('userData'), 'gallery_thumbs')
+    if (!fs.existsSync(thumbDir)) fs.mkdirSync(thumbDir, { recursive: true })
+
+    const thumbPaths: string[] = []
+
+    for (let i = 0; i < imagePaths.length; i++) {
+      const srcPath = imagePaths[i]
+      if (!fs.existsSync(srcPath)) continue
+
+      const thumbName = `${sessionId}_${i}_thumb.jpg`
+      const thumbPath = path.join(thumbDir, thumbName)
+
+      // Skip if thumb already exists (e.g. re-enqueue after retry)
+      if (fs.existsSync(thumbPath)) {
+        thumbPaths.push(thumbPath)
+        continue
+      }
+
+      try {
+        const ni = nativeImage.createFromPath(srcPath)
+        if (ni.isEmpty()) continue
+
+        const resized = ni.resize({ width: THUMB_WIDTH, quality: 'good' })
+        const buffer = resized.toJPEG(THUMB_QUALITY)
+        await fs.promises.writeFile(thumbPath, buffer)
+        thumbPaths.push(thumbPath)
+      } catch (err) {
+        console.warn(`[Gallery] Thumbnail failed for ${srcPath}:`, err)
+      }
+    }
+
+    if (thumbPaths.length > 0) {
+      queue.setThumbPaths(sessionId, thumbPaths)
+      console.log(`[Gallery] Generated ${thumbPaths.length} thumbnail(s) for session ${sessionId}`)
+    }
+  } catch (err) {
+    console.error('[Gallery] Thumbnail generation error:', err)
+  }
 }
 
 export function initIpcHandlers(
@@ -500,7 +556,8 @@ export function initIpcHandlers(
           headers,
         })
         if (response.ok) {
-          offlineQueue.markCompleted(job.id)
+          const resData = await response.json().catch(() => ({}))
+          offlineQueue.markCompleted(job.id, resData.shareId)
         } else {
           throw new Error('Upload failed')
         }
@@ -756,6 +813,11 @@ export function initIpcHandlers(
     return { ok: true }
   })
 
+  ipcMain.handle('update-share-id', (event, id: number, shareId: string) => {
+    _offlineQueue.updateShareId(id, shareId)
+    return { ok: true }
+  })
+
   ipcMain.handle('pause-queue', () => {
     _offlineQueue.pause()
     return { ok: true }
@@ -890,7 +952,8 @@ export async function flushQueuedUploads() {
 
       if (response.status === 200) {
         _offlineQueue.updateStats(job.id, totalFileSize, finalSpeed / 1024)
-        _offlineQueue.markCompleted(job.id)
+        const shareId = response.data?.shareId
+        _offlineQueue.markCompleted(job.id, shareId)
         const elapsed = Math.round((Date.now() - startTime) / 1000)
         if (_mainWindow && !_mainWindow.isDestroyed()) {
           _mainWindow.webContents.send('upload-complete', { sessionId: job.sessionId, success: true, elapsed })

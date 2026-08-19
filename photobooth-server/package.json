@@ -30,6 +30,7 @@
     "ua-parser-js": "^2.0.10",
     "uuid": "^9.0.0",
     "vue3-toastify": "^0.2.9",
+    "vuedraggable": "^2.24.3",
     "winston": "^3.11.0",
     "winston-daily-rotate-file": "^5.0.0"
   },

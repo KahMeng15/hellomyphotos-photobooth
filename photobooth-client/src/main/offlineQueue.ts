@@ -8,6 +8,7 @@ export interface QueuedSession {
   shareId: string | null
   metadata: string
   imagePaths: string
+  thumbPaths: string | null  // JSON array of generated thumbnail paths, or null if not yet generated
   createdAt: string
   retryCount: number
   nextRetryAt: number | null
@@ -53,6 +54,8 @@ export class OfflineQueue {
     if (!cols.includes('started_at')) this.db.exec(`ALTER TABLE pending_uploads ADD COLUMN started_at INTEGER`)
     if (!cols.includes('completed_at')) this.db.exec(`ALTER TABLE pending_uploads ADD COLUMN completed_at INTEGER`)
     if (!cols.includes('avg_speed_kbps')) this.db.exec(`ALTER TABLE pending_uploads ADD COLUMN avg_speed_kbps REAL`)
+    // Thumbnail paths column — added for gallery performance
+    if (!cols.includes('thumb_paths')) this.db.exec(`ALTER TABLE pending_uploads ADD COLUMN thumb_paths TEXT`)
     // Handle old column name (image_paths vs imagePaths)
     if (cols.includes('image_paths') && !cols.includes('imagePaths')) {
       // already correct - new schema uses image_paths
@@ -94,6 +97,7 @@ export class OfflineQueue {
       metadata: r.metadata,
       // Support both old (imagePaths TEXT) and new (image_paths TEXT) column names
       imagePaths: r.image_paths ?? r.imagePaths ?? '[]',
+      thumbPaths: r.thumb_paths || null,
       createdAt: r.created_at,
       retryCount: r.retry_count ?? 0,
       nextRetryAt: r.next_retry_at || null,
@@ -105,8 +109,16 @@ export class OfflineQueue {
     }
   }
 
-  markCompleted(id: number): void {
-    this.db.prepare(`UPDATE pending_uploads SET status = 'completed', completed_at = ? WHERE id = ?`).run(Date.now(), id)
+  markCompleted(id: number, shareId?: string): void {
+    if (shareId) {
+      this.db.prepare(`UPDATE pending_uploads SET status = 'completed', completed_at = ?, share_id = ? WHERE id = ?`).run(Date.now(), shareId, id)
+    } else {
+      this.db.prepare(`UPDATE pending_uploads SET status = 'completed', completed_at = ? WHERE id = ?`).run(Date.now(), id)
+    }
+  }
+
+  updateShareId(id: number, shareId: string): void {
+    this.db.prepare(`UPDATE pending_uploads SET share_id = ? WHERE id = ?`).run(shareId, id)
   }
 
   markFailed(id: number): void {
@@ -162,6 +174,16 @@ export class OfflineQueue {
       ORDER BY created_at DESC LIMIT ?
     `).all(limit) as any[]
     return rows.map(this.normalizeRow)
+  }
+
+  /**
+   * Persist generated thumbnail paths for a session.
+   * Called asynchronously after thumbnail generation in the IPC handler.
+   */
+  setThumbPaths(sessionId: string, thumbPaths: string[]): void {
+    this.db.prepare(`
+      UPDATE pending_uploads SET thumb_paths = ? WHERE session_id = ?
+    `).run(JSON.stringify(thumbPaths), sessionId)
   }
 
   markUploading(id: number, startedAt: number): void {

@@ -5,6 +5,7 @@ import { FrameCarousel } from './FrameCarousel.js'
 import { PhotoPreview } from './PhotoPreview.js'
 import { OfflineIndicator } from './OfflineIndicator.js'
 import { Settings, connectBoothSocket, boothSocket } from './Settings.js'
+import { Gallery } from './Gallery.js'
 
 type BoothState = 'idle' | 'live' | 'capturing' | 'preview' | 'paused'
 type CameraMode = 'webcam' | 'dslr'
@@ -18,6 +19,7 @@ export class BoothApp {
   private frameCarousel: FrameCarousel
   private photoPreview: PhotoPreview
   private offlineIndicator: OfflineIndicator
+  private gallery: Gallery
   private uploadStatusBar!: HTMLDivElement
   private settings: Settings
 
@@ -236,6 +238,41 @@ export class BoothApp {
     })
     this.landingEl.appendChild(this.startBtn)
 
+    // Past Sessions button
+    const pastSessionsBtn = document.createElement('button')
+    pastSessionsBtn.textContent = 'Past Sessions'
+    Object.assign(pastSessionsBtn.style, {
+      padding: '0.5rem 1.25rem',
+      background: 'transparent', color: '#888', border: '1px solid #333',
+      borderRadius: '8px', cursor: 'pointer',
+      fontSize: '0.8125rem', fontWeight: '500',
+      transition: 'color 150ms, border-color 150ms',
+    })
+    pastSessionsBtn.addEventListener('mouseenter', () => {
+      pastSessionsBtn.style.color = '#ccc'
+      pastSessionsBtn.style.borderColor = '#555'
+    })
+    pastSessionsBtn.addEventListener('mouseleave', () => {
+      pastSessionsBtn.style.color = '#888'
+      pastSessionsBtn.style.borderColor = '#333'
+    })
+    pastSessionsBtn.addEventListener('click', () => this.gallery.show())
+    this.landingEl.appendChild(pastSessionsBtn)
+
+    // Settings as hyperlink text
+    const settingsLink = document.createElement('button')
+    settingsLink.textContent = 'Settings'
+    Object.assign(settingsLink.style, {
+      background: 'none', border: 'none', cursor: 'pointer',
+      fontSize: '0.8125rem', color: '#444',
+      padding: '0.25rem 0', textDecoration: 'none',
+      transition: 'color 150ms',
+    })
+    settingsLink.addEventListener('mouseenter', () => { settingsLink.style.color = '#888' })
+    settingsLink.addEventListener('mouseleave', () => { settingsLink.style.color = '#444' })
+    settingsLink.addEventListener('click', () => this.openSettings('full'))
+    this.landingEl.appendChild(settingsLink)
+
     // ------------------------------------------------------------------
     // Offline confirm modal
     // ------------------------------------------------------------------
@@ -270,16 +307,6 @@ export class BoothApp {
     confirmBox.querySelector('#offline-cancel-btn')!.addEventListener('click', () => {
       this.confirmModal.style.display = 'none'
     })
-
-    const settingsBtn = document.createElement('button')
-    settingsBtn.textContent = 'Settings'
-    Object.assign(settingsBtn.style, {
-      padding: '0.75rem 2.5rem', fontSize: '1rem', fontWeight: '500',
-      background: 'transparent', color: '#888', border: '1px solid #333',
-      borderRadius: '100px', cursor: 'pointer',
-    })
-    settingsBtn.addEventListener('click', () => this.openSettings('full'))
-    this.landingEl.appendChild(settingsBtn)
 
     // ------------------------------------------------------------------
     // Flash overlay
@@ -326,6 +353,7 @@ export class BoothApp {
       () => this.goHome()
     )
     this.offlineIndicator = new OfflineIndicator(this.container)
+    this.gallery = new Gallery(this.container)
 
     // Upload status bar
     this.uploadStatusBar = document.createElement('div')
