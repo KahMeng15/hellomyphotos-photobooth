@@ -16,7 +16,9 @@ services:
       OPERATOR_EMAIL: operator@hellomyphoto.local
       OPERATOR_PASSWORD: admin123
       ALLOWED_ORIGINS: "*"
+      COOKIE_SAME_SITE: lax
+      COOKIE_SECURE: "false"
     volumes:
       - ./photobooth-server:/app
       - /app/node_modules # Anonymous volume to prevent host OS module conflicts
-    restart: always
+    restart: unless-stopped

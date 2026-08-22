@@ -4,14 +4,11 @@ services:
     container_name: hellomyphoto-server
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
       NODE_ENV: production
       PORT: 3000
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-change-me-in-production}
-      OPERATOR_EMAIL: ${OPERATOR_EMAIL:-operator@hellomyphoto.local}
-      OPERATOR_PASSWORD: ${OPERATOR_PASSWORD:-admin123}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-"http://localhost:3000,http://192.168.1.*"}
     volumes:
       - ./storage/photos:/app/storage/photos
       - ./storage/frames:/app/storage/frames
