@@ -17,13 +17,18 @@
         </div>
         <div class="viewer-body">
 
-        <div v-if="displayPhotos.length > 0" class="photo-grid">
+        <div v-if="isLoadingPhotos" class="photo-grid">
+          <div v-for="i in 4" :key="'skeleton-'+i" class="grid-img skeleton-pulse" style="width: 100%; aspect-ratio: 2/3;"></div>
+        </div>
+        <div v-else-if="displayPhotos.length > 0" class="photo-grid">
           <img
             v-for="(photo, i) in displayPhotos"
             :key="photo.id"
-            :src="baseUrl + photo.url"
+            :src="baseUrl + (photo.thumbnail || photo.url)"
             :alt="'Photo ' + (i + 1)"
             class="grid-img"
+            loading="lazy"
+            @load="$event.target.classList.add('loaded')"
             @click="openFullscreen(i)"
           />
         </div>
@@ -80,9 +85,17 @@
       </transition>
       
       <img
-        :src="displayPhotos[fullscreenPhotoIndex]?.url"
+        :key="displayPhotos[fullscreenPhotoIndex]?.url"
+        :src="baseUrl + (displayPhotos[fullscreenPhotoIndex]?.url || '')"
+        :style="{
+          backgroundImage: `url(${baseUrl + (displayPhotos[fullscreenPhotoIndex]?.thumbnail || displayPhotos[fullscreenPhotoIndex]?.url || '')})`,
+          backgroundSize: 'contain',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'center'
+        }"
         class="fs-image"
         :alt="'Fullscreen Photo ' + (fullscreenPhotoIndex + 1)"
+        @load="$event.target.classList.add('loaded')"
       />
       
       <transition name="fade">
@@ -277,17 +290,22 @@ function openManageShares() {
   showManageSharesModal.value = true
 }
 
+const isLoadingPhotos = ref(false)
+
 async function fetchFramedPhotos() {
   if (!selectedFrameId.value) {
     framedPhotos.value = []
     return
   }
+  isLoadingPhotos.value = true
   try {
     const res = await axios.get(`/api/admin/events/${props.eventId}/sessions/${props.session.sessionId}/framed?frameId=${selectedFrameId.value}`)
     framedPhotos.value = res.data.photos || []
   } catch (e) {
     console.error('Failed to load framed photos', e)
     framedPhotos.value = []
+  } finally {
+    isLoadingPhotos.value = false
   }
 }
 
@@ -626,6 +644,17 @@ function formatTime(ts: string) {
   border: 1px dashed #333;
 }
 
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 0.8; }
+  100% { opacity: 0.6; }
+}
+
+.skeleton-pulse {
+  background-color: #333;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
 .grid-img {
   max-width: 100%;
   max-height: 100%;
@@ -640,6 +669,12 @@ function formatTime(ts: string) {
   transition: transform 0.2s ease, opacity 0.2s ease;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   object-fit: contain;
+  background-color: #333;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+.grid-img.loaded {
+  animation: none;
+  background-color: transparent;
 }
 
 .grid-img:hover {
@@ -995,5 +1030,10 @@ function formatTime(ts: string) {
   max-height: 100vh;
   object-fit: contain;
   user-select: none;
+  filter: blur(10px);
+  will-change: filter;
+}
+.fs-image.loaded {
+  filter: blur(0);
 }
 </style>

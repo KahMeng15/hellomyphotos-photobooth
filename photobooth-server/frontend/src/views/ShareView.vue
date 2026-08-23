@@ -1,8 +1,10 @@
 <template>
   <div class="share-page">
-    <div v-if="loading" class="loading">
-      <div class="spinner"></div>
-      <p>Loading photos...</p>
+    <div v-if="loading" class="share-content skeleton-loader">
+      <header class="share-header skeleton-pulse" style="height: 60px; max-width: 300px; margin: 0 auto 2rem; border-radius: 8px;"></header>
+      <div class="photo-grid">
+        <div v-for="i in 3" :key="i" class="photo-card skeleton-pulse" style="aspect-ratio: 2/3;"></div>
+      </div>
     </div>
 
     <div v-else-if="error" class="error">
@@ -67,7 +69,19 @@
           </svg>
         </button>
 
-        <img :src="baseUrl + session.photos[selectedPhotoIndex].url" alt="Photo" class="lightbox-img" />
+        <img
+          :key="session.photos[selectedPhotoIndex].url"
+          :src="baseUrl + session.photos[selectedPhotoIndex].url"
+          :style="{
+            backgroundImage: `url(${baseUrl + (session.photos[selectedPhotoIndex].thumbnail || session.photos[selectedPhotoIndex].url)})`,
+            backgroundSize: 'contain',
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'center'
+          }"
+          alt="Photo"
+          class="lightbox-img"
+          @load="$event.target.classList.add('loaded')"
+        />
 
         <button v-if="selectedPhotoIndex < session.photos.length - 1" class="lightbox-nav-btn lightbox-next" :class="{ 'hidden-control': !showControls }" @click.stop="nextPhoto(); resetControlsTimeout()">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -389,6 +403,19 @@ async function downloadAll() {
   opacity: 0.9;
 }
 
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 0.8; }
+  100% { opacity: 0.6; }
+}
+.skeleton-pulse {
+  background-color: #222;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+.skeleton-loader {
+  width: 100%;
+}
+
 .photo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -418,7 +445,7 @@ async function downloadAll() {
   background-color: #222;
   filter: blur(10px);
   transform: scale(1.05);
-  transition: filter 0.4s ease-out, transform 0.4s ease-out;
+  transition: transform 0.4s ease-out;
   will-change: filter, transform;
 }
 
@@ -572,6 +599,11 @@ async function downloadAll() {
   max-width: 90vw;
   max-height: 80vh;
   border-radius: 8px;
+  filter: blur(10px);
+  will-change: filter;
+}
+.lightbox-img.loaded {
+  filter: blur(0);
 }
 
 .contact-link {

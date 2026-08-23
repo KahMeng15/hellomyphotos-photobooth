@@ -758,7 +758,7 @@ function formatTime(ts: string) {
   background-color: #222;
   filter: blur(10px);
   transform: scale(1.05);
-  transition: filter 0.4s ease-out, transform 0.4s ease-out;
+  transition: transform 0.4s ease-out;
   will-change: filter, transform;
 }
 .thumb-img.loaded {
