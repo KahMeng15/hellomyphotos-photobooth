@@ -75,6 +75,8 @@
                 :src="session.photos[session.photos.length - 1]?.thumbnail ? baseUrl + session.photos[session.photos.length - 1].thumbnail : ''"
                 :alt="'Session ' + session.sessionId"
                 class="thumb-img"
+                loading="lazy"
+                @load="$event.target.classList.add('loaded')"
               />
               <div class="session-check" :class="{ checked: selectedSessions.has(session.sessionId) }" @click.stop="toggleSelect(session.sessionId)">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -753,6 +755,15 @@ function formatTime(ts: string) {
   height: 100%;
   object-fit: cover;
   display: block;
+  background-color: #222;
+  filter: blur(10px);
+  transform: scale(1.05);
+  transition: filter 0.4s ease-out, transform 0.4s ease-out;
+  will-change: filter, transform;
+}
+.thumb-img.loaded {
+  filter: blur(0);
+  transform: scale(1);
 }
 
 .session-check {

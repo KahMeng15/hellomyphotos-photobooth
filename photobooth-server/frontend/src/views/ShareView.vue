@@ -33,7 +33,7 @@
 
         <div class="photo-grid">
           <div v-for="(photo, i) in session.photos" :key="photo.id" class="photo-card">
-            <img :src="baseUrl + (photo.thumbnail || photo.url)" :alt="'Photo'" loading="lazy" @click="openPhoto(i)" />
+            <img :src="baseUrl + (photo.thumbnail || photo.url)" :alt="'Photo'" loading="lazy" class="share-img" @load="$event.target.classList.add('loaded')" @click="openPhoto(i)" />
             <a :href="downloadUrl(photo.id)" class="download-btn" download>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Download JPEG
@@ -415,6 +415,16 @@ async function downloadAll() {
   height: auto;
   display: block;
   cursor: pointer;
+  background-color: #222;
+  filter: blur(10px);
+  transform: scale(1.05);
+  transition: filter 0.4s ease-out, transform 0.4s ease-out;
+  will-change: filter, transform;
+}
+
+.photo-card img.loaded {
+  filter: blur(0);
+  transform: scale(1);
 }
 
 .download-btn {

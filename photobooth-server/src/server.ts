@@ -47,19 +47,25 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }))
 app.use(cookieParser())
 app.use(requestLogger)
 
-app.use(express.static(path.join(projectRoot, 'public'), {
-  maxAge: '1y',
-  etag: false,
-  immutable: true,
-}))
+const publicPath = path.join(projectRoot, 'public');
+const staticOpts = { maxAge: '1y', etag: false, immutable: true };
 
-app.use('/api/auth', authRoutes)
-app.use('/api/booth', boothRoutes)
-app.use('/api/share', shareRoutes)
-app.use('/api/upload', authMiddleware, uploadRoutes)
-app.use('/api/admin', authMiddleware, adminRoutes)
-app.use('/api/health', healthRoutes)
-app.use('/api/photos', authMiddleware, express.static(config.storage.photos))
+app.use(express.static(publicPath, staticOpts));
+
+// Fallback: Also mount on /hellomyphotos-photobooth-test in case Nginx regex blocks don't strip the prefix
+app.use('/hellomyphotos-photobooth-test', express.static(publicPath, staticOpts));
+
+const apiRouter = express.Router();
+apiRouter.use('/auth', authRoutes)
+apiRouter.use('/booth', boothRoutes)
+apiRouter.use('/share', shareRoutes)
+apiRouter.use('/upload', authMiddleware, uploadRoutes)
+apiRouter.use('/admin', authMiddleware, adminRoutes)
+apiRouter.use('/health', healthRoutes)
+apiRouter.use('/photos', authMiddleware, express.static(config.storage.photos))
+
+app.use('/api', apiRouter)
+app.use('/hellomyphotos-photobooth-test/api', apiRouter)
 
 // Track booth sockets per event
 const boothSockets = new Map<string, Set<string>>()
@@ -252,7 +258,8 @@ function getBoothStatus() {
 app.use(errorHandler)
 
 app.get('*', (req, res) => {
-  if (req.path.startsWith('/api/')) {
+  const isApi = req.path.startsWith('/api/') || req.path.startsWith('/hellomyphotos-photobooth-test/api/')
+  if (isApi) {
     return res.status(404).json({ error: 'Not found' })
   }
   res.sendFile(path.join(projectRoot, 'public', 'index.html'))
