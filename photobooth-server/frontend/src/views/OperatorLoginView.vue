@@ -3,24 +3,12 @@
     <div class="login-card">
       <div class="login-header">
         <h1>hellomyphoto</h1>
-        <p>Operator Dashboard</p>
+        <p>Event Operator Login</p>
       </div>
 
       <form @submit.prevent="handleLogin" class="login-form">
         <div class="field">
-          <label for="email">Email</label>
-          <input
-            id="email"
-            v-model="email"
-            type="email"
-            placeholder="admin@example.com"
-            required
-            autocomplete="email"
-          />
-        </div>
-
-        <div class="field">
-          <label for="password">Password</label>
+          <label for="password">Operator Password</label>
           <input
             id="password"
             v-model="password"
@@ -33,8 +21,8 @@
 
         <p v-if="error" class="error-msg">{{ error }}</p>
 
-        <button type="submit" class="btn-login" :disabled="authStore.loading">
-          {{ authStore.loading ? 'Signing in...' : 'Sign In' }}
+        <button type="submit" class="btn-login" :disabled="loading">
+          {{ loading ? 'Signing in...' : 'Sign In' }}
         </button>
       </form>
 
@@ -44,24 +32,37 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import axios from 'axios'
+import { toast } from 'vue3-toastify'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
-const email = ref('')
 const password = ref('')
 const error = ref('')
+const loading = ref(false)
+
+const token = computed(() => route.params.token as string)
 
 async function handleLogin() {
   error.value = ''
+  loading.value = true
   try {
-    await authStore.login(email.value, password.value)
-    router.push('/events')
+    const { data } = await axios.post('/api/auth/operator-login', { token: token.value, password: password.value })
+    if (data.success) {
+      authStore.setToken(data.accessToken, data.user)
+      toast.success('Logged in successfully')
+      router.push(`/events/${data.user.eventId}`)
+    }
   } catch (err: any) {
+    console.error('Operator login error:', err)
     error.value = err.response?.data?.error || 'Login failed'
+  } finally {
+    loading.value = false
   }
 }
 </script>
@@ -73,6 +74,7 @@ async function handleLogin() {
   justify-content: center;
   min-height: 100vh;
   background: #0f0f0f;
+  padding: 1rem;
 }
 
 .login-card {

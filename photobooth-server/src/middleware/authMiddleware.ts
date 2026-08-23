@@ -4,6 +4,9 @@ import { config } from '../config'
 import { getEventByOtp } from '../db'
 import { logger } from '../utils/logger'
 
+const loginAttempts = new Map<string, { count: number; resetTime: number }>()
+const otpAttempts = new Map<string, { count: number; resetTime: number }>()
+
 export interface AuthRequest extends Request {
   user?: any
   eventId?: string
@@ -23,6 +26,8 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
 }
 
 export function boothAuthMiddleware(req: Request, res: Response, next: NextFunction) {
+  if (checkOtpRateLimit(req, res)) return
+
   const otp = req.headers['x-booth-otp'] as string
   if (!otp) {
     return res.status(401).json({ error: 'No OTP provided' })
@@ -30,6 +35,7 @@ export function boothAuthMiddleware(req: Request, res: Response, next: NextFunct
 
   const event = getEventByOtp(otp)
   if (!event) {
+    recordFailedOtpAttempt(req)
     return res.status(401).json({ error: 'Invalid or expired OTP' })
   }
 
@@ -50,8 +56,6 @@ export function requireRole(...roles: string[]) {
   }
 }
 
-const loginAttempts = new Map<string, { count: number; resetTime: number }>()
-
 export function rateLimitLogin(req: Request, res: Response, next: NextFunction) {
   const ip = req.ip || req.socket.remoteAddress || 'unknown'
   const now = Date.now()
@@ -71,3 +75,29 @@ export function rateLimitLogin(req: Request, res: Response, next: NextFunction) 
   attempts.count++
   next()
 }
+
+export function checkOtpRateLimit(req: Request, res: Response): boolean {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown'
+  const attempts = otpAttempts.get(ip)
+  if (attempts && Date.now() <= attempts.resetTime && attempts.count >= 20) {
+    logger.warn(`OTP rate limit exceeded for IP: ${ip}`)
+    res.status(429).json({ error: 'Too many failed OTP attempts. Try again later.' })
+    return true
+  }
+  return false
+}
+
+export function recordFailedOtpAttempt(req: Request) {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown'
+  const now = Date.now()
+  const attempts = otpAttempts.get(ip) || { count: 0, resetTime: now + 15 * 60 * 1000 }
+  
+  if (now > attempts.resetTime) {
+    attempts.count = 1
+    attempts.resetTime = now + 15 * 60 * 1000
+  } else {
+    attempts.count++
+  }
+  otpAttempts.set(ip, attempts)
+}
+

@@ -1,61 +1,75 @@
 <template>
   <div class="admin-page">
     <header class="admin-header">
-      <button @click="goBack" class="btn-ghost">&larr; Dashboard</button>
-      <h1>Admin</h1>
-      <div></div>
+      <button @click="router.push('/events')" class="btn-ghost">&larr; Dashboard</button>
+      <h1>System Admin</h1>
+      <div class="admin-tabs">
+        <button :class="['tab-btn', { active: currentTab === 'frames' }]" @click="currentTab = 'frames'">Frames & Health</button>
+        <button :class="['tab-btn', { active: currentTab === 'settings' }]" @click="currentTab = 'settings'">Global Settings</button>
+        <button v-if="authStore.user?.role === 'admin'" :class="['tab-btn', { active: currentTab === 'users' }]" @click="currentTab = 'users'">Users</button>
+      </div>
     </header>
 
-    <div class="admin-grid">
-      <section class="admin-card">
-        <h2>Frame Library</h2>
-        <div class="upload-area" @drop="handleDrop" @dragover.prevent>
-          <p>Drag & drop frame PNGs here</p>
-          <input
-            type="file"
-            accept=".png,.jpg,.jpeg,.webp"
-            @change="handleFileSelect"
-            ref="fileInput"
-            hidden
-          />
-          <button @click="openFilePicker" class="btn-secondary">Browse Files</button>
-        </div>
-        <div class="frame-list">
-          <div v-for="frame in photosStore.frames" :key="frame.id" class="frame-item">
-            <span class="frame-name">{{ frame.name }}</span>
-            <button @click="deleteFrame(frame.id)" class="btn-icon">✕</button>
+    <div class="admin-content">
+      <div v-if="currentTab === 'frames'" class="admin-grid">
+        <section class="admin-card">
+          <h2>Frame Library</h2>
+          <div class="upload-area" @drop="handleDrop" @dragover.prevent>
+            <p>Drag & drop frame PNGs here</p>
+            <input
+              type="file"
+              accept=".png,.jpg,.jpeg,.webp"
+              @change="handleFileSelect"
+              ref="fileInput"
+              hidden
+            />
+            <button @click="openFilePicker" class="btn-secondary">Browse Files</button>
           </div>
-          <p v-if="photosStore.frames.length === 0" class="empty">No frames uploaded yet.</p>
-        </div>
-      </section>
+          <div class="frame-list">
+            <div v-for="frame in photosStore.frames" :key="frame.id" class="frame-item">
+              <span class="frame-name">{{ frame.name }}</span>
+              <button @click="deleteFrame(frame.id)" class="btn-icon">✕</button>
+            </div>
+            <p v-if="photosStore.frames.length === 0" class="empty">No frames uploaded yet.</p>
+          </div>
+        </section>
 
-      <section class="admin-card">
-        <h2>Server Health</h2>
-        <div class="health-stats" v-if="health">
-          <div class="stat">
-            <span class="stat-label">Uptime</span>
-            <span class="stat-value">{{ formatUptime(health.uptime) }}</span>
+        <section class="admin-card">
+          <h2>Server Health</h2>
+          <div class="health-stats" v-if="health">
+            <div class="stat">
+              <span class="stat-label">Uptime</span>
+              <span class="stat-value">{{ formatUptime(health.uptime) }}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Memory</span>
+              <span class="stat-value">{{ health.system?.memory?.usagePercent }}%</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Photos</span>
+              <span class="stat-value">{{ health.storage?.photos }}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Queue</span>
+              <span class="stat-value">{{ health.queue?.depth || 0 }}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">WebSocket</span>
+              <span class="stat-value">{{ health.connections?.websocket || 0 }}</span>
+            </div>
           </div>
-          <div class="stat">
-            <span class="stat-label">Memory</span>
-            <span class="stat-value">{{ health.system?.memory?.usagePercent }}%</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Photos</span>
-            <span class="stat-value">{{ health.storage?.photos }}</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Queue</span>
-            <span class="stat-value">{{ health.queue?.depth || 0 }}</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">WebSocket</span>
-            <span class="stat-value">{{ health.connections?.websocket || 0 }}</span>
-          </div>
-        </div>
-        <p v-else class="empty">Loading health data...</p>
-        <button @click="fetchHealth" class="btn-secondary">Refresh</button>
-      </section>
+          <p v-else class="empty">Loading health data...</p>
+          <button @click="fetchHealth" class="btn-secondary">Refresh</button>
+        </section>
+      </div>
+
+      <div v-if="currentTab === 'settings'">
+        <SettingsViewEmbedded />
+      </div>
+
+      <div v-if="currentTab === 'users' && authStore.user?.role === 'admin'">
+        <UsersViewEmbedded />
+      </div>
     </div>
   </div>
 </template>
@@ -64,12 +78,17 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePhotosStore } from '../stores/photos'
+import { useAuthStore } from '../stores/auth'
 import axios from 'axios'
+import SettingsViewEmbedded from './SettingsView.vue'
+import UsersViewEmbedded from './UsersView.vue'
 
 const router = useRouter()
 const photosStore = usePhotosStore()
+const authStore = useAuthStore()
 const fileInput = ref<HTMLInputElement | null>(null)
 const health = ref<any>(null)
+const currentTab = ref('frames')
 
 onMounted(async () => {
   await photosStore.fetchFrames()
@@ -139,9 +158,46 @@ function formatUptime(s: number) {
 }
 
 .admin-header h1 {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 500;
   margin: 0;
+  color: #fff;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 0.5rem;
+  background: #2a2a2a;
+  padding: 0.25rem;
+  border-radius: 8px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: #aaa;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: #fff;
+}
+
+.tab-btn.active {
+  background: #444;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.admin-content {
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .admin-grid {

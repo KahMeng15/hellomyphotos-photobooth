@@ -79,14 +79,23 @@ app.on('ready', async () => {
     const online = await checkServerOnline(activeServerUrl)
     sendIfAlive('server-status', { online })
 
-    fetch(`${activeServerUrl}/api/booth/heartbeat`, { method: 'POST' }).catch(() => {})
+    let otp = ''
+    try {
+      const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'))
+      otp = s.otp || ''
+    } catch {}
+
+    const headers: Record<string, string> = {}
+    if (otp) headers['x-booth-otp'] = otp
+
+    fetch(`${activeServerUrl}/api/booth/heartbeat`, { method: 'POST', headers }).catch(() => {})
 
     if (!online) return
 
     // HTTP command polling is a fallback for environments where WebSocket is unavailable.
     // Commands are primarily delivered in real-time via the booth's WebSocket connection.
     try {
-      const res = await fetch(`${activeServerUrl}/api/booth/commands`)
+      const res = await fetch(`${activeServerUrl}/api/booth/commands`, { headers })
       if (res.ok) {
         const { commands } = await res.json()
         for (const cmd of commands) {

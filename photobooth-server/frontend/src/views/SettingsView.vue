@@ -1,14 +1,6 @@
 <template>
   <div class="settings-page">
-    <header class="settings-header">
-      <button @click="router.back()" class="btn-back" title="Back">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-      </button>
-      <h1>Default Settings</h1>
-      <div></div>
-    </header>
+
 
     <div class="settings-body">
       <section class="card">
@@ -54,6 +46,33 @@
           <div class="field-row" style="flex-direction: column; align-items: stretch; gap: 0.5rem; padding: 0.75rem;">
             <label style="align-self: flex-start;">Contact Info</label>
             <textarea v-model="settings.contactInfo" class="str-input" style="width: 100%; height: 60px; text-align: left;"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Rate Limits & Security</h2>
+        <p class="card-desc">Protect your server from brute force attacks and bandwidth exhaustion. Limits reset every 15 minutes.</p>
+        <div class="settings-box">
+          <div class="field-row">
+            <label>Admin Dashboard Req Limit</label>
+            <input type="number" v-model.number="settings.apiRateLimitAdmin" class="num-input" />
+          </div>
+          <div class="field-row">
+            <label>Share Page Req Limit</label>
+            <input type="number" v-model.number="settings.apiRateLimitShare" class="num-input" />
+          </div>
+          <div class="field-row">
+            <label>Admin Bandwidth (MB)</label>
+            <input type="number" v-model.number="settings.bwLimitAdmin" class="num-input" />
+          </div>
+          <div class="field-row">
+            <label>Share Bandwidth (MB)</label>
+            <input type="number" v-model.number="settings.bwLimitShare" class="num-input" />
+          </div>
+          <div class="field-row">
+            <label>Lockout Duration (mins)</label>
+            <input type="number" v-model.number="settings.lockoutDuration" class="num-input" />
           </div>
         </div>
       </section>
@@ -113,8 +132,8 @@ const shutterChoices = ['auto', '1/30', '1/40', '1/50', '1/60', '1/80', '1/100',
 const apertureChoices = ['auto', '2.8', '4', '4.5', '5', '5.6', '6.3', '7.1', '8', '9', '10', '11']
 
 const router = useRouter()
-const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', organizer: '', contactInfo: '' })
-const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', organizer: '', contactInfo: '' })
+const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', organizer: '', contactInfo: '', apiRateLimitAdmin: 500, apiRateLimitShare: 300, bwLimitAdmin: 1000, bwLimitShare: 100, lockoutDuration: 5 })
+const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', organizer: '', contactInfo: '', apiRateLimitAdmin: 500, apiRateLimitShare: 300, bwLimitAdmin: 1000, bwLimitShare: 100, lockoutDuration: 5 })
 const serverInfo = ref({ domain: 'Not set', path: '/' })
 
 const dirty = computed(() =>
@@ -125,7 +144,14 @@ const dirty = computed(() =>
   settings.value.dslrIso !== originalSettings.value.dslrIso ||
   settings.value.dslrShutterSpeed !== originalSettings.value.dslrShutterSpeed ||
   settings.value.dslrAperture !== originalSettings.value.dslrAperture ||
-  settings.value.dslrFocusMode !== originalSettings.value.dslrFocusMode || settings.value.organizer !== originalSettings.value.organizer || settings.value.contactInfo !== originalSettings.value.contactInfo
+  settings.value.dslrFocusMode !== originalSettings.value.dslrFocusMode ||
+  settings.value.organizer !== originalSettings.value.organizer ||
+  settings.value.contactInfo !== originalSettings.value.contactInfo ||
+  settings.value.apiRateLimitAdmin !== originalSettings.value.apiRateLimitAdmin ||
+  settings.value.apiRateLimitShare !== originalSettings.value.apiRateLimitShare ||
+  settings.value.bwLimitAdmin !== originalSettings.value.bwLimitAdmin ||
+  settings.value.bwLimitShare !== originalSettings.value.bwLimitShare ||
+  settings.value.lockoutDuration !== originalSettings.value.lockoutDuration
 )
 
 onMounted(async () => {
@@ -146,7 +172,6 @@ async function saveAndClose() {
     await axios.put('/api/admin/settings/defaults', settings.value)
     originalSettings.value = { ...settings.value }
     toast.success('Settings saved')
-    router.back()
   } catch (err) {
     console.error('Failed to save defaults', err)
     toast.error('Failed to save settings')
@@ -158,7 +183,6 @@ function cancelChanges() {
     if (!confirm('You have unsaved changes. Discard them?')) return
   }
   settings.value = { ...originalSettings.value }
-  router.back()
 }
 </script>
 

@@ -102,11 +102,20 @@ try { db.exec(`ALTER TABLE events ADD COLUMN expiry_type TEXT NOT NULL DEFAULT '
 try { db.exec(`ALTER TABLE events ADD COLUMN expiry_value TEXT NOT NULL DEFAULT ''`) } catch {}
 try { db.exec(`ALTER TABLE events ADD COLUMN organizer TEXT NOT NULL DEFAULT ''`) } catch {}
 try { db.exec(`ALTER TABLE events ADD COLUMN contact_info TEXT NOT NULL DEFAULT ''`) } catch {}
+try { db.exec(`ALTER TABLE events ADD COLUMN operator_password TEXT`) } catch {}
 
 
 try { db.exec(`ALTER TABLE global_settings ADD COLUMN dslr_whitebalance_kelvin INTEGER NOT NULL DEFAULT 5200`) } catch {}
 try { db.exec(`ALTER TABLE global_settings ADD COLUMN organizer TEXT NOT NULL DEFAULT ''`) } catch {}
 try { db.exec(`ALTER TABLE global_settings ADD COLUMN contact_info TEXT NOT NULL DEFAULT ''`) } catch {}
+
+// Phase 2: Rate Limits & Bandwidth
+try { db.exec(`ALTER TABLE global_settings ADD COLUMN api_rate_limit_admin INTEGER NOT NULL DEFAULT 500`) } catch {}
+try { db.exec(`ALTER TABLE global_settings ADD COLUMN api_rate_limit_share INTEGER NOT NULL DEFAULT 300`) } catch {}
+try { db.exec(`ALTER TABLE global_settings ADD COLUMN bw_limit_admin INTEGER NOT NULL DEFAULT 1000`) } catch {} // in MB/15m
+try { db.exec(`ALTER TABLE global_settings ADD COLUMN bw_limit_share INTEGER NOT NULL DEFAULT 100`) } catch {} // in MB/15m
+try { db.exec(`ALTER TABLE global_settings ADD COLUMN lockout_duration INTEGER NOT NULL DEFAULT 5`) } catch {} // in minutes
+
 try { db.exec(`ALTER TABLE camera_settings ADD COLUMN dslr_whitebalance_kelvin INTEGER NOT NULL DEFAULT 5200`) } catch {}
 
 // Seed defaults row
@@ -139,6 +148,14 @@ try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN upload_size_bytes INTEGER`)
 try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN upload_avg_speed_kbps REAL`) } catch {}
 try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN width INTEGER NOT NULL DEFAULT 0`) } catch {}
 try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN height INTEGER NOT NULL DEFAULT 0`) } catch {}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS event_shares (
+    token TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`)
 
 db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_photo_sessions_share_id
@@ -195,6 +212,18 @@ db.exec(`
   )
 `)
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS event_operators (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    access_token TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(event_id) REFERENCES events(id) ON DELETE CASCADE
+  )
+`)
+
 const insertEvent = db.prepare(`
   INSERT INTO events (id, name, date, description, otp, status, photo_count, countdown, capture_interval, post_capture_preview, dslr_iso, dslr_shutterspeed, dslr_aperture, dslr_focus_mode, dslr_whitebalance, dslr_whitebalance_kelvin, obfuscate_links, expiry_type, expiry_value, organizer, contact_info)
   VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -222,6 +251,29 @@ const deleteEventStmt = db.prepare('DELETE FROM events WHERE id = ?')
 
 const archiveSessionStmt = db.prepare("UPDATE photo_sessions SET archived = 1 WHERE id = ?")
 const restoreSessionStmt = db.prepare("UPDATE photo_sessions SET archived = 0 WHERE id = ?")
+
+const insertOperatorStmt = db.prepare('INSERT INTO event_operators (id, event_id, name, password_hash, access_token) VALUES (?, ?, ?, ?, ?)')
+const listOperatorsStmt = db.prepare('SELECT id, event_id, name, access_token, created_at FROM event_operators WHERE event_id = ? ORDER BY created_at ASC')
+const getOperatorByTokenStmt = db.prepare('SELECT * FROM event_operators WHERE access_token = ?')
+const deleteOperatorStmt = db.prepare('DELETE FROM event_operators WHERE id = ? AND event_id = ?')
+
+export function addEventOperator(eventId: string, name: string, passwordHash: string, accessToken: string) {
+  const id = `op_${Date.now()}_${randomInt(1000, 9999)}`
+  insertOperatorStmt.run(id, eventId, name, passwordHash, accessToken)
+  return id
+}
+
+export function listEventOperators(eventId: string) {
+  return listOperatorsStmt.all(eventId) as { id: string; event_id: string; name: string; access_token: string; created_at: string }[]
+}
+
+export function getEventOperatorByToken(token: string) {
+  return getOperatorByTokenStmt.get(token) as { id: string; event_id: string; name: string; password_hash: string; access_token: string; created_at: string } | undefined
+}
+
+export function deleteEventOperator(id: string, eventId: string) {
+  deleteOperatorStmt.run(id, eventId)
+}
 
 const insertPhotoSession = db.prepare(`
   INSERT INTO photo_sessions (id, event_id, share_id) VALUES (?, ?, ?)
@@ -302,7 +354,7 @@ export function getEvent(id: string) {
     dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string;
     dslr_focus_mode: string; dslr_whitebalance: string; dslr_whitebalance_kelvin: number;
     obfuscate_links: number; expiry_type: string; expiry_value: string; organizer: string; contact_info: string;
-    created_at: string
+    operator_password?: string; created_at: string
   } | undefined
 }
 
@@ -347,7 +399,7 @@ export function ensurePhotoSession(sessionId: string, eventId: string): string {
     const hasShares = db.prepare('SELECT 1 FROM session_shares WHERE session_id = ?').get(sessionId)
     let shareId = (existing as any).share_id
     if (!shareId) {
-      shareId = randomBytes(4).toString('hex')
+      shareId = require('uuid').v4()
       db.prepare('UPDATE photo_sessions SET share_id = ? WHERE id = ?').run(shareId, sessionId)
     }
     if (!hasShares) {
@@ -355,7 +407,7 @@ export function ensurePhotoSession(sessionId: string, eventId: string): string {
     }
     return shareId
   }
-  const shareId = randomBytes(4).toString('hex')
+  const shareId = require('uuid').v4()
   insertPhotoSession.run(sessionId, eventId, shareId)
   db.prepare("INSERT INTO session_shares (id, session_id, is_active, created_at) VALUES (?, ?, 1, datetime('now'))").run(shareId, sessionId)
   return shareId
@@ -364,7 +416,7 @@ export function ensurePhotoSession(sessionId: string, eventId: string): string {
 export function reservePhotoSession(sessionId: string, eventId: string): string {
   const existing = findPhotoSession.get(sessionId) as any
   if (existing) return existing.share_id as string
-  const shareId = randomBytes(4).toString('hex')
+  const shareId = require('uuid').v4()
   insertPhotoSession.run(sessionId, eventId, shareId)
   db.prepare("INSERT INTO session_shares (id, session_id, is_active, created_at) VALUES (?, ?, 1, datetime('now'))").run(shareId, sessionId)
   return shareId
@@ -445,8 +497,8 @@ export function restoreSession(sessionId: string) {
 
 const getDefaultsStmt = db.prepare('SELECT * FROM global_settings WHERE id = 1')
 const upsertDefaultsStmt = db.prepare(`
-  INSERT INTO global_settings (id, photo_count, countdown, capture_interval, post_capture_preview, dslr_iso, dslr_shutterspeed, dslr_aperture, dslr_focus_mode, dslr_whitebalance, dslr_whitebalance_kelvin, organizer, contact_info)
-  VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO global_settings (id, photo_count, countdown, capture_interval, post_capture_preview, dslr_iso, dslr_shutterspeed, dslr_aperture, dslr_focus_mode, dslr_whitebalance, dslr_whitebalance_kelvin, organizer, contact_info, api_rate_limit_admin, api_rate_limit_share, bw_limit_admin, bw_limit_share, lockout_duration)
+  VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(id) DO UPDATE SET
     photo_count = excluded.photo_count,
     countdown = excluded.countdown,
@@ -459,11 +511,16 @@ const upsertDefaultsStmt = db.prepare(`
     dslr_whitebalance = excluded.dslr_whitebalance,
     dslr_whitebalance_kelvin = excluded.dslr_whitebalance_kelvin,
     organizer = excluded.organizer,
-    contact_info = excluded.contact_info
+    contact_info = excluded.contact_info,
+    api_rate_limit_admin = excluded.api_rate_limit_admin,
+    api_rate_limit_share = excluded.api_rate_limit_share,
+    bw_limit_admin = excluded.bw_limit_admin,
+    bw_limit_share = excluded.bw_limit_share,
+    lockout_duration = excluded.lockout_duration
 `)
 
 export function getGlobalSettings() {
-  const row = getDefaultsStmt.get() as { photo_count: number; countdown: number; capture_interval: number; post_capture_preview: number; dslr_iso: string; dslr_shutterspeed: string; dslr_aperture: string; dslr_focus_mode: string; dslr_whitebalance: string; dslr_whitebalance_kelvin: number; organizer: string; contact_info: string } | undefined
+  const row = getDefaultsStmt.get() as any
   return {
     photoCount: row?.photo_count ?? 4,
     countdown: row?.countdown ?? 5,
@@ -475,13 +532,18 @@ export function getGlobalSettings() {
     dslrFocusMode: row?.dslr_focus_mode ?? 'auto',
     dslrWhiteBalance: row?.dslr_whitebalance ?? 'auto',
     dslrWhiteBalanceKelvin: row?.dslr_whitebalance_kelvin ?? 5200,
-    organizer: (row as any)?.organizer ?? '',
-    contactInfo: (row as any)?.contact_info ?? '',
+    organizer: row?.organizer ?? '',
+    contactInfo: row?.contact_info ?? '',
+    apiRateLimitAdmin: row?.api_rate_limit_admin ?? 500,
+    apiRateLimitShare: row?.api_rate_limit_share ?? 300,
+    bwLimitAdmin: row?.bw_limit_admin ?? 1000,
+    bwLimitShare: row?.bw_limit_share ?? 100,
+    lockoutDuration: row?.lockout_duration ?? 5,
   }
 }
 
-export function updateGlobalSettings(settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; dslrIso: string; dslrShutterSpeed: string; dslrAperture: string; dslrFocusMode?: string; dslrWhiteBalance?: string; dslrWhiteBalanceKelvin?: number; organizer?: string; contactInfo?: string }) {
-  upsertDefaultsStmt.run(settings.photoCount, settings.countdown, settings.captureInterval, settings.postCapturePreview, settings.dslrIso, settings.dslrShutterSpeed, settings.dslrAperture, settings.dslrFocusMode ?? 'auto', settings.dslrWhiteBalance ?? 'auto', settings.dslrWhiteBalanceKelvin ?? 5200, (settings as any).organizer ?? '', (settings as any).contactInfo ?? '')
+export function updateGlobalSettings(settings: { photoCount: number; countdown: number; captureInterval: number; postCapturePreview: number; dslrIso: string; dslrShutterSpeed: string; dslrAperture: string; dslrFocusMode?: string; dslrWhiteBalance?: string; dslrWhiteBalanceKelvin?: number; organizer?: string; contactInfo?: string; apiRateLimitAdmin?: number; apiRateLimitShare?: number; bwLimitAdmin?: number; bwLimitShare?: number; lockoutDuration?: number }) {
+  upsertDefaultsStmt.run(settings.photoCount, settings.countdown, settings.captureInterval, settings.postCapturePreview, settings.dslrIso, settings.dslrShutterSpeed, settings.dslrAperture, settings.dslrFocusMode ?? 'auto', settings.dslrWhiteBalance ?? 'auto', settings.dslrWhiteBalanceKelvin ?? 5200, settings.organizer ?? '', settings.contactInfo ?? '', settings.apiRateLimitAdmin ?? 500, settings.apiRateLimitShare ?? 300, settings.bwLimitAdmin ?? 1000, settings.bwLimitShare ?? 100, settings.lockoutDuration ?? 5)
   logger.info('Global defaults updated', settings)
 }
 
@@ -636,4 +698,18 @@ export function setEventShareOriginals(id: string, value: number) {
   } catch (e: any) {
     logger.error('Failed to update share_originals: ' + e.message)
   }
+}
+
+export function getOrCreateEventShareToken(eventId: string): string {
+  const existing = db.prepare('SELECT token FROM event_shares WHERE event_id = ?').get(eventId) as any
+  if (existing) return existing.token
+
+  const token = require('uuid').v4()
+  db.prepare('INSERT INTO event_shares (token, event_id) VALUES (?, ?)').run(token, eventId)
+  return token
+}
+
+export function getEventIdByShareToken(token: string): string | null {
+  const row = db.prepare('SELECT event_id FROM event_shares WHERE token = ?').get(token) as any
+  return row ? row.event_id : null
 }

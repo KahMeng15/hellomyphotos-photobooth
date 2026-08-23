@@ -13,6 +13,11 @@ export const router = createRouter({
       component: () => import('./views/LoginView.vue'),
     },
     {
+      path: '/operator/:token',
+      name: 'operatorLogin',
+      component: () => import('./views/OperatorLoginView.vue'),
+    },
+    {
       path: '/events',
       name: 'events',
       component: () => import('./views/EventListView.vue'),
@@ -52,13 +57,13 @@ export const router = createRouter({
       path: '/admin',
       name: 'admin',
       component: () => import('./views/AdminView.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, requiresAdmin: true },
     },
     {
       path: '/settings',
       name: 'settings',
       component: () => import('./views/SettingsView.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, requiresAdmin: true },
     },
     {
       path: '/share/:token',
@@ -69,7 +74,7 @@ export const router = createRouter({
       path: '/users',
       name: 'users',
       component: () => import('./views/UsersView.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, requiresAdmin: true },
     },
   ],
 })
@@ -89,6 +94,11 @@ router.beforeEach(async (to, from, next) => {
       next('/login')
       return
     }
+  }
+
+  if (to.meta.requiresAdmin && auth.user?.role !== 'admin') {
+    next('/events')
+    return
   }
 
   if (to.path === '/login' && auth.isAuthenticated) {

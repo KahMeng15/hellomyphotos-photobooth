@@ -18,11 +18,16 @@ import shareRoutes from './routes/share'
 import { authMiddleware } from './middleware/authMiddleware'
 import { errorHandler } from './middleware/errorHandler'
 import { requestLogger } from './middleware/requestLogger'
+import { csrfProtection, setCsrfToken } from './middleware/csrfMiddleware'
 import { config, projectRoot } from './config'
 import { logger } from './utils/logger'
 import { getEventByOtp } from './db'
 
 const app = express()
+
+// Trust the reverse proxy (Nginx) so req.ip is correct for rate limiting
+app.set('trust proxy', 1)
+
 const server = http.createServer(app)
 const io = new SocketIOServer(server, {
   cors: {
@@ -42,9 +47,11 @@ app.use(cors({
   credentials: true,
 }))
 
-app.use(express.json({ limit: '50mb' }))
-app.use(express.urlencoded({ limit: '50mb', extended: true }))
+// Reduce limit to prevent DoS, 10mb is plenty for JSON payloads
+app.use(express.json({ limit: '10mb' }))
+app.use(express.urlencoded({ limit: '10mb', extended: true }))
 app.use(cookieParser())
+app.use(setCsrfToken)
 app.use(requestLogger)
 
 const publicPath = path.join(projectRoot, 'public');
@@ -56,13 +63,19 @@ app.use(express.static(publicPath, staticOpts));
 app.use('/hellomyphotos-photobooth-test', express.static(publicPath, staticOpts));
 
 const apiRouter = express.Router();
-apiRouter.use('/auth', authRoutes)
+// Apply CSRF protection to routes that rely on cookies
+import { adminRateLimiter, shareRateLimiter } from './middleware/rateLimit'
+
+apiRouter.use('/auth', adminRateLimiter, csrfProtection, authRoutes)
+apiRouter.use('/upload', adminRateLimiter, csrfProtection, authMiddleware, uploadRoutes)
+apiRouter.use('/admin', adminRateLimiter, csrfProtection, authMiddleware, adminRoutes)
+
+// Booth and Share do not use session cookies, so CSRF is not applicable
 apiRouter.use('/booth', boothRoutes)
-apiRouter.use('/share', shareRoutes)
-apiRouter.use('/upload', authMiddleware, uploadRoutes)
-apiRouter.use('/admin', authMiddleware, adminRoutes)
+apiRouter.use('/share', shareRateLimiter, shareRoutes)
+
 apiRouter.use('/health', healthRoutes)
-apiRouter.use('/photos', authMiddleware, express.static(config.storage.photos))
+apiRouter.use('/photos', adminRateLimiter, authMiddleware, express.static(config.storage.photos))
 
 app.use('/api', apiRouter)
 app.use('/hellomyphotos-photobooth-test/api', apiRouter)

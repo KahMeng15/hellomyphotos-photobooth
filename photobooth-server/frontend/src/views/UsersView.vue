@@ -1,12 +1,5 @@
 <template>
   <div class="users-page">
-    <header class="page-header">
-      <div class="header-left">
-        <button @click="router.back()" class="btn-ghost">&larr; Back</button>
-        <h1>Manage Users</h1>
-      </div>
-    </header>
-
     <main class="users-main">
       <div class="users-header">
         <h2>Users</h2>

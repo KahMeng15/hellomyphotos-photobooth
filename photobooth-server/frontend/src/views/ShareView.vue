@@ -39,7 +39,7 @@
               <div class="blur-bg" :style="{ backgroundImage: `url(${baseUrl + (photo.thumbnail || photo.url)})` }"></div>
               <img :src="baseUrl + (photo.thumbnail || photo.url)" :alt="'Photo'" loading="lazy" class="share-img" @load="$event.target.classList.add('loaded')" @click="openPhoto(i)" />
             </div>
-            <a :href="downloadUrl(photo.id)" class="download-btn" download>
+            <a :href="getDownloadUrl(photo)" class="download-btn" download>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Download JPEG
             </a>
@@ -302,9 +302,10 @@ function prevPhoto() {
   }
 }
 
-function downloadUrl(photoId: string) {
-  if (!route.params.token) return '#'
-  return baseUrl + `/api/share/${route.params.token}/photo/${photoId}?download=1`
+function getDownloadUrl(photo: any) {
+  if (!photo.downloadUrl) return '#'
+  const separator = photo.downloadUrl.includes('?') ? '&' : '?'
+  return baseUrl + photo.downloadUrl + separator + 'download=1'
 }
 
 async function downloadAll() {

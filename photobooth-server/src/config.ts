@@ -62,6 +62,10 @@ export const config = {
     api: { max: 100, windowMs: 60 * 1000 },
   },
 
+  security: {
+    signedUrlSecret: process.env.SIGNED_URL_SECRET || 'dev-signed-url-secret',
+  },
+
   imageProcessing: {
     webpQuality: 75,
     framedJpegQuality: 95,

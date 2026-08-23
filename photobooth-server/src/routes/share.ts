@@ -7,14 +7,12 @@ import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { authMiddleware } from '../middleware/authMiddleware'
-import { getEvent, getPhotoSessionByShareId, getPhotoSession, logShareAnalytics, getSessionUploadStatus, getSessionDimensions } from '../db'
+import { getEvent, getPhotoSessionByShareId, getPhotoSession, logShareAnalytics, getSessionUploadStatus, getSessionDimensions, getOrCreateEventShareToken, getEventIdByShareToken } from '../db'
 import { UAParser } from 'ua-parser-js'
 import { getActiveFrames } from '../utils/frames'
+import { generateSignedUrl, verifySignedUrl } from '../utils/signedUrls'
 
 const router = Router()
-
-// In-memory share tokens for events
-const shareTokens = new Map<string, string>() // token → eventId
 
 function extractSessionId(filename: string): string | null {
   const match = filename.match(/^(.+)_(\d+)\.\w+$/)
@@ -61,15 +59,7 @@ router.post('/create', authMiddleware, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Event not found' })
     }
 
-    // Find existing token or create new
-    let token: string | undefined
-    for (const [t, eid] of shareTokens) {
-      if (eid === eventId) { token = t; break }
-    }
-    if (!token) {
-      token = uuidv4()
-      shareTokens.set(token, eventId)
-    }
+    const token = getOrCreateEventShareToken(eventId)
 
     const shareUrl = `${req.protocol}://${req.get('host')}/share/${token}`
     logger.info(`Share link created for event ${eventId}: ${shareUrl}`)
@@ -117,7 +107,7 @@ router.get('/:token/status', async (req: Request, res: Response) => {
 router.get('/:token', async (req: Request, res: Response) => {
   try {
     const token = req.params.token
-    let eventId = shareTokens.get(token)
+    let eventId = getEventIdByShareToken(token)
     let isSessionToken = false
     let sessionFilter = ''
 
@@ -190,9 +180,9 @@ router.get('/:token', async (req: Request, res: Response) => {
             id: idToUse,
             frameId,
             frameName,
-            url: `/api/share/${token}/photo/${idToUse}`,
-            thumbnail: thumbExists ? `/api/share/${token}/photo/${thumbIdToUse}` : null,
-            downloadUrl: jpegExists ? `/api/share/${token}/photo/${jpegIdToUse}` : `/api/share/${token}/photo/${idToUse}`,
+            url: generateSignedUrl(token, idToUse, 3600),
+            thumbnail: thumbExists ? generateSignedUrl(token, thumbIdToUse, 3600) : null,
+            downloadUrl: jpegExists ? generateSignedUrl(token, jpegIdToUse, 3600) : generateSignedUrl(token, idToUse, 3600),
             size: stat.size,
             width: matchingFrame?.config?.canvasWidth || 0,
             height: matchingFrame?.config?.canvasHeight || 0,
@@ -230,9 +220,9 @@ router.get('/:token', async (req: Request, res: Response) => {
           const sessionDim = getSessionDimensions(isSessionToken ? sessionFilter : extractSessionId(name) || '')
           return {
             id: idToUse,
-            url: `/api/share/${token}/photo/${idToUse}`,
-            thumbnail: thumbExists ? `/api/share/${token}/photo/${thumbIdToUse}` : null,
-            downloadUrl: `/api/share/${token}/photo/${idToUse}`,
+            url: generateSignedUrl(token, idToUse, 3600),
+            thumbnail: thumbExists ? generateSignedUrl(token, thumbIdToUse, 3600) : null,
+            downloadUrl: generateSignedUrl(token, idToUse, 3600),
             size: stat.size,
             width: sessionDim.width,
             height: sessionDim.height,
@@ -268,7 +258,7 @@ router.post('/:token/analytics', async (req: Request, res: Response) => {
     const token = req.params.token
     const { source } = req.body
     
-    let eventId = shareTokens.get(token)
+    let eventId = getEventIdByShareToken(token)
     if (!eventId) {
       let sess = getPhotoSessionByShareId(token)
       if (!sess) sess = getPhotoSession(token) as any
@@ -293,7 +283,7 @@ router.post('/:token/analytics', async (req: Request, res: Response) => {
 router.get('/:token/download-all', async (req: Request, res: Response) => {
   try {
     const token = req.params.token
-    let eventId = shareTokens.get(token)
+    let eventId = getEventIdByShareToken(token)
     let isSessionToken = false
     let sessionFilter = ''
 
@@ -376,8 +366,13 @@ router.get('/:token/photo/:filename', async (req: Request, res: Response) => {
   try {
     const token = req.params.token
     const filename = req.params.filename
+    const { exp, sig } = req.query
 
-    let eventId = shareTokens.get(token)
+    if (!verifySignedUrl(token, filename, exp as string, sig as string)) {
+      return res.status(403).json({ error: 'Invalid or expired signature' })
+    }
+
+    let eventId = getEventIdByShareToken(token)
     let isSessionToken = false
     let sessionFilter = ''
 

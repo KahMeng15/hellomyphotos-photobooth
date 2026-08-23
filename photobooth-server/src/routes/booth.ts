@@ -5,7 +5,7 @@ import fs from 'fs/promises'
 import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
-import { boothAuthMiddleware } from '../middleware/authMiddleware'
+import { boothAuthMiddleware, authMiddleware, checkOtpRateLimit, recordFailedOtpAttempt } from '../middleware/authMiddleware'
 import { io, operatorSubscriptions } from '../server'
 import { processSinglePhoto, generateThumbnail, compileVerticalStrip, applyFrame } from '../pipeline'
 import { getActiveFrames } from '../utils/frames'
@@ -282,28 +282,28 @@ router.get('/status', (req: Request, res: Response) => {
   })
 })
 
-router.post('/remote-capture', (req: Request, res: Response) => {
+router.post('/remote-capture', authMiddleware, (req: Request, res: Response) => {
   const id = uuidv4()
   pendingCommands.push({ id, type: 'capture', createdAt: Date.now() })
   logger.info(`Remote capture command queued: ${id}`)
   res.json({ success: true, commandId: id })
 })
 
-router.post('/remote-start', (req: Request, res: Response) => {
+router.post('/remote-start', authMiddleware, (req: Request, res: Response) => {
   const id = uuidv4()
   pendingCommands.push({ id, type: 'start', createdAt: Date.now() })
   logger.info(`Remote start command queued: ${id}`)
   res.json({ success: true, commandId: id })
 })
 
-router.post('/remote-go-home', (req: Request, res: Response) => {
+router.post('/remote-go-home', authMiddleware, (req: Request, res: Response) => {
   const id = uuidv4()
   pendingCommands.push({ id, type: 'go-home', createdAt: Date.now() })
   logger.info(`Remote go-home command queued: ${id}`)
   res.json({ success: true, commandId: id })
 })
 
-router.post('/remote-pause', (req: Request, res: Response) => {
+router.post('/remote-pause', authMiddleware, (req: Request, res: Response) => {
   const id = uuidv4()
   const paused = req.body?.paused !== false
   pendingCommands.push({ id, type: paused ? 'pause' : 'resume', createdAt: Date.now() })
@@ -311,18 +311,22 @@ router.post('/remote-pause', (req: Request, res: Response) => {
   res.json({ success: true, commandId: id })
 })
 
-router.get('/commands', (req: Request, res: Response) => {
+router.get('/commands', boothAuthMiddleware, (req: Request, res: Response) => {
   const commands = pendingCommands.splice(0)
   res.json({ commands })
 })
 
 router.get('/validate-otp', (req: Request, res: Response) => {
+  if (checkOtpRateLimit(req, res)) return
+  
   const otp = (req.query.otp || '').toString().trim()
   if (!otp || otp.length !== 6) {
+    recordFailedOtpAttempt(req)
     return res.status(400).json({ valid: false, error: 'Invalid OTP format' })
   }
   const event = getEventByOtp(otp)
   if (!event) {
+    recordFailedOtpAttempt(req)
     return res.json({ valid: false, error: 'OTP not found or expired' })
   }
   res.json({
@@ -336,7 +340,7 @@ router.get('/validate-otp', (req: Request, res: Response) => {
   })
 })
 
-router.get('/camera-settings', async (req: Request, res: Response) => {
+router.get('/camera-settings', boothAuthMiddleware, async (req: Request, res: Response) => {
   const model = req.query.model as string
   if (!model) return res.status(400).json({ error: 'Model required' })
   const settings = getCameraSettings(model)
@@ -347,7 +351,7 @@ router.get('/camera-settings', async (req: Request, res: Response) => {
   }
 })
 
-router.post('/camera-settings', async (req: Request, res: Response) => {
+router.post('/camera-settings', boothAuthMiddleware, async (req: Request, res: Response) => {
   const { model, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, dslrWhiteBalanceKelvin } = req.body
   if (!model) return res.status(400).json({ error: 'Model required' })
   updateCameraSettings(model, { dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, dslrWhiteBalanceKelvin })
@@ -355,12 +359,16 @@ router.post('/camera-settings', async (req: Request, res: Response) => {
 })
 
 router.get('/settings', async (req: Request, res: Response) => {
+  if (checkOtpRateLimit(req, res)) return
+  
   const otp = (req.query.otp as string || '').trim()
   if (otp.length !== 6) {
+    recordFailedOtpAttempt(req)
     return res.status(400).json({ error: 'OTP required as query param' })
   }
   const event = getEventByOtp(otp)
   if (!event) {
+    recordFailedOtpAttempt(req)
     return res.status(404).json({ error: 'Event not found for OTP' })
   }
   res.json({
@@ -378,12 +386,16 @@ router.get('/settings', async (req: Request, res: Response) => {
 })
 
 router.post('/settings', async (req: Request, res: Response) => {
+  if (checkOtpRateLimit(req, res)) return
+
   const { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, dslrWhiteBalanceKelvin, otp } = req.body
   if (!otp) {
+    recordFailedOtpAttempt(req)
     return res.status(400).json({ error: 'OTP required' })
   }
   const event = getEventByOtp(otp)
   if (!event) {
+    recordFailedOtpAttempt(req)
     return res.status(404).json({ error: 'Event not found for OTP' })
   }
   const settings: any = {

@@ -277,7 +277,10 @@ export function initIpcHandlers(
 
   async function syncCameraSettingsFromServer(model: string, applyToCamera = true) {
     try {
-      const res = await fetch(`${_serverUrl}/api/booth/camera-settings?model=${encodeURIComponent(model)}`)
+      const s = getSettingsSync()
+      const headers: Record<string, string> = {}
+      if (s.otp) headers['x-booth-otp'] = s.otp
+      const res = await fetch(`${_serverUrl}/api/booth/camera-settings?model=${encodeURIComponent(model)}`, { headers })
       const data = await res.json()
       
       const hw = await dslrManager.getHardwareSettings()
@@ -320,7 +323,7 @@ export function initIpcHandlers(
         // Push adopted settings up to server
         fetch(`${_serverUrl}/api/booth/camera-settings`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-booth-otp': s.otp || '' },
           body: JSON.stringify({
             model: model,
             dslrIso: s.dslrIso,
@@ -642,7 +645,7 @@ export function initIpcHandlers(
         if (status.connected && status.model) {
           await fetch(`${syncUrl}/api/booth/camera-settings`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-booth-otp': syncOtp },
             body: JSON.stringify({
               model: status.model,
               dslrIso: merged.dslrIso,

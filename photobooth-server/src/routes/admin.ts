@@ -21,12 +21,13 @@ import {
   updateEventSettingsById, getGlobalSettings, updateGlobalSettings,
   archiveSession, restoreSession, getEventAnalytics,
   getAllUsers, insertUser, deleteUser, findUserByEmail, regenerateSessionShareId, setEventShareOriginals,
-  getSessionShares, createSessionShare, setSessionShareStatus, deleteSessionShare, setSessionDimensions
+  getSessionShares, createSessionShare, setSessionShareStatus, deleteSessionShare, setSessionDimensions, addEventOperator, listEventOperators, deleteEventOperator
 } from '../db'
 
 const router = Router()
 
 // --- USER MANAGEMENT (RBAC) ---
+
 router.get('/users', requireRole('admin'), (req: Request, res: Response) => {
   try {
     const users = getAllUsers()
@@ -69,6 +70,14 @@ router.delete('/users/:id', requireRole('admin'), (req: Request, res: Response) 
 })
 
 // --- END USER MANAGEMENT ---
+
+router.param('id', (req: Request, res: Response, next, id) => {
+  const scope = (req as any).user?.eventIdScope
+  if (scope && scope !== id) {
+    return res.status(403).json({ error: 'Access denied: Token scoped to a different event' })
+  }
+  next()
+})
 
 
 const tempUpload = multer({
@@ -334,22 +343,91 @@ router.post('/events/:id/frames/:frameId/test', async (req: Request, res: Respon
 router.get('/events', async (req: Request, res: Response) => {
   try {
     const includeEnded = req.query.includeEnded === 'true'
-    const events = listEvents(includeEnded)
+    let events = listEvents(includeEnded)
+    const scope = (req as any).user?.eventIdScope
+    if (scope) {
+      events = events.filter((e: any) => e.id === scope)
+    }
     res.json({ events })
   } catch (error: any) {
     res.status(500).json({ error: error.message })
   }
 })
 
-router.post('/events', async (req: Request, res: Response) => {
+router.post('/events', requireRole('admin'), async (req: Request, res: Response) => {
   try {
     const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance } = req.body
     if (!name) return res.status(400).json({ error: 'Event name required' })
 
     const { id, otp } = createEvent(name, date || new Date().toISOString().split('T')[0], description || '', { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance })
     const event = getEvent(id)
-    logger.info(`Event created: ${name} (${id}) otp=${otp}`)
+    logger.info(`Event created: ${name} (${id})`)
     res.json({ success: true, event, otp })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.post('/verify-password', requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { password } = req.body
+    if (!password) return res.status(400).json({ error: 'Password required' })
+    const userEmail = (req as any).user.email
+    const user = findUserByEmail(userEmail)
+    if (!user) return res.status(401).json({ error: 'User not found' })
+    const isValid = await bcrypt.compare(password, user.password_hash)
+    if (!isValid) return res.status(401).json({ error: 'Invalid password' })
+    res.json({ success: true })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.get('/events/:id/operators', requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const operators = listEventOperators(req.params.id)
+    res.json({ operators })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+import crypto from 'crypto'
+
+router.post('/events/:id/operators', requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { name, operatorPassword, adminPassword } = req.body
+    if (!name || !operatorPassword || !adminPassword) {
+      return res.status(400).json({ error: 'Missing required fields' })
+    }
+
+    const userEmail = (req as any).user.email
+    const user = findUserByEmail(userEmail)
+    if (!user || !(await bcrypt.compare(adminPassword, user.password_hash))) {
+      return res.status(401).json({ error: 'Invalid admin password' })
+    }
+
+    const hash = await bcrypt.hash(operatorPassword, 10)
+    const token = crypto.randomBytes(16).toString('hex')
+    const id = addEventOperator(req.params.id, name, hash, token)
+    res.json({ success: true, operator: { id, event_id: req.params.id, name, access_token: token } })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.delete('/events/:id/operators/:operatorId', requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { adminPassword } = req.body
+    if (!adminPassword) return res.status(400).json({ error: 'Admin password required' })
+    const userEmail = (req as any).user.email
+    const user = findUserByEmail(userEmail)
+    if (!user || !(await bcrypt.compare(adminPassword, user.password_hash))) {
+      return res.status(401).json({ error: 'Invalid admin password' })
+    }
+
+    deleteEventOperator(req.params.operatorId, req.params.id)
+    res.json({ success: true })
   } catch (error: any) {
     res.status(500).json({ error: error.message })
   }
@@ -460,7 +538,7 @@ router.post('/events/:eventId/sessions/:sessionId/reset-link', async (req: Reque
     }
   })
 
-  router.post('/events/:id/end', async (req: Request, res: Response) => {
+  router.post('/events/:id/end', requireRole('admin'), async (req: Request, res: Response) => {
   try {
     const event = getEvent(req.params.id)
     if (!event) return res.status(404).json({ error: 'Event not found' })
@@ -472,7 +550,7 @@ router.post('/events/:eventId/sessions/:sessionId/reset-link', async (req: Reque
   }
 })
 
-router.delete('/events/:id', async (req: Request, res: Response) => {
+router.delete('/events/:id', requireRole('admin'), async (req: Request, res: Response) => {
   try {
     const event = getEvent(req.params.id)
     if (!event) return res.status(404).json({ error: 'Event not found' })
@@ -1074,7 +1152,7 @@ router.delete('/session/:sessionId', async (req: Request, res: Response) => {
 
 // ── Global Defaults ──
 
-router.get('/settings/defaults', (req: Request, res: Response) => {
+router.get('/settings/defaults', requireRole('admin'), (req: Request, res: Response) => {
   res.json({ 
     settings: getGlobalSettings(),
     serverInfo: {
@@ -1084,8 +1162,8 @@ router.get('/settings/defaults', (req: Request, res: Response) => {
   })
 })
 
-router.put('/settings/defaults', (req: Request, res: Response) => {
-  const { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance } = req.body
+router.put('/settings/defaults', requireRole('admin'), (req: Request, res: Response) => {
+  const { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, dslrWhiteBalanceKelvin, organizer, contactInfo, apiRateLimitAdmin, apiRateLimitShare, bwLimitAdmin, bwLimitShare, lockoutDuration } = req.body
   const settings = {
     photoCount: Math.max(1, Math.min(4, photoCount ?? 4)),
     countdown: Math.max(3, Math.min(10, countdown ?? 5)),
@@ -1096,6 +1174,14 @@ router.put('/settings/defaults', (req: Request, res: Response) => {
     dslrAperture: dslrAperture?.toString().trim() || 'auto',
     dslrFocusMode: dslrFocusMode?.toString().trim() || 'auto',
     dslrWhiteBalance: dslrWhiteBalance?.toString().trim() || 'auto',
+    dslrWhiteBalanceKelvin: parseInt(dslrWhiteBalanceKelvin) || 5200,
+    organizer: organizer?.toString().trim() || '',
+    contactInfo: contactInfo?.toString().trim() || '',
+    apiRateLimitAdmin: parseInt(apiRateLimitAdmin) || 500,
+    apiRateLimitShare: parseInt(apiRateLimitShare) || 300,
+    bwLimitAdmin: parseInt(bwLimitAdmin) || 1000,
+    bwLimitShare: parseInt(bwLimitShare) || 100,
+    lockoutDuration: parseInt(lockoutDuration) || 5,
   }
   updateGlobalSettings(settings)
   res.json({ success: true, settings })

@@ -5,7 +5,7 @@
         <h1>hellomyphoto</h1>
       </div>
       <div class="header-right">
-        <button @click="showCreateModal = true" class="btn-primary btn-sm">Create Event</button>
+        <button v-if="authStore.user?.role === 'admin'" @click="showCreateModal = true" class="btn-primary btn-sm">Create Event</button>
         <span class="user-email">{{ authStore.user?.email }}</span>
         <button @click="handleLogout" class="btn-icon" title="Logout">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -22,8 +22,7 @@
         <h2>Events</h2>
         <div class="events-header-right">
           <span class="event-count">{{ events.length }} event{{ events.length !== 1 ? 's' : '' }}</span>
-          <router-link to="/settings" class="btn-link">Default Settings</router-link>
-          <router-link v-if="authStore.user?.role === 'admin'" to="/users" class="btn-link">Manage Users</router-link>
+          <router-link v-if="authStore.user?.role === 'admin'" to="/admin" class="btn-link">System Admin</router-link>
         </div>
       </div>
 
@@ -89,6 +88,7 @@
         </div>
       </div>
     </Teleport>
+
   </div>
 </template>
 
