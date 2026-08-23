@@ -9,7 +9,8 @@ import { boothAuthMiddleware } from '../middleware/authMiddleware'
 import { io, operatorSubscriptions } from '../server'
 import { processSinglePhoto, generateThumbnail, compileVerticalStrip, applyFrame } from '../pipeline'
 import { getActiveFrames } from '../utils/frames'
-import { ensurePhotoSession, getEventByOtp, updateEventSettingsById, getCameraSettings, updateCameraSettings, reservePhotoSession, updateUploadStatus, listEventPhotoSessions } from '../db'
+import { ensurePhotoSession, getEventByOtp, updateEventSettingsById, getCameraSettings, updateCameraSettings, reservePhotoSession, updateUploadStatus, listEventPhotoSessions, setSessionDimensions } from '../db'
+import sharp from 'sharp'
 
 const router = Router()
 
@@ -168,6 +169,17 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
         output: outputName,
         thumbnail: thumbName,
       })
+    }
+
+    // Store dimensions from first processed photo
+    try {
+      const firstPhotoPath = path.join(eventDir, `${sessionId}_1.webp`)
+      const meta = await sharp(firstPhotoPath).metadata()
+      if (meta.width && meta.height) {
+        setSessionDimensions(sessionId, meta.width, meta.height)
+      }
+    } catch (e: any) {
+      logger.warn(`Could not store photo dimensions: ${e.message}`)
     }
 
     if (files.length >= 2) {

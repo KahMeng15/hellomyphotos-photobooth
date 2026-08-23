@@ -3,7 +3,16 @@
     <div class="overlay" @click.self="$emit('close')">
       <div class="viewer">
         <button class="close-btn" @click="$emit('close')">✕</button>
-        <img :src="baseUrl + photo.url" :alt="'Photo ' + photo.id" class="full-image" />
+        <div class="image-wrap">
+          <div class="image-skeleton skeleton-pulse" :class="{ 'thumb-hidden': photoLoaded }"></div>
+          <img 
+            :src="baseUrl + photo.url" 
+            :alt="'Photo ' + photo.id" 
+            class="full-image"
+            :class="{ loaded: photoLoaded }"
+            @load="photoLoaded = true"
+          />
+        </div>
         <div class="viewer-meta">
           <span>{{ formatTime(photo.timestamp) }}</span>
           <span v-if="photo.frameName">Frame: {{ photo.frameName }}</span>
@@ -40,6 +49,7 @@ const emit = defineEmits<{ close: [] }>()
 
 const photosStore = usePhotosStore()
 
+const photoLoaded = ref(false)
 const showQrCode = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const sessionLinkCopied = ref(false)
@@ -148,11 +158,49 @@ function formatTime(ts: string) {
   color: #fff;
 }
 
+.image-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.image-skeleton {
+  position: absolute;
+  inset: 0;
+  background-color: #222;
+  border-radius: 8px;
+  transition: opacity 0.3s ease;
+}
+
+.image-skeleton.thumb-hidden {
+  opacity: 0;
+}
+
+@keyframes skeleton-pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 0.9; }
+  100% { opacity: 0.6; }
+}
+
+.skeleton-pulse {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
 .full-image {
   max-width: 100%;
   max-height: 70vh;
   border-radius: 8px;
   display: block;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.full-image.loaded {
+  opacity: 1;
 }
 
 .viewer-meta {

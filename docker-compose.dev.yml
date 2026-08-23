@@ -18,6 +18,7 @@ services:
       ALLOWED_ORIGINS: "*"
       COOKIE_SAME_SITE: lax
       COOKIE_SECURE: "false"
+      VITE_BASE_URL: /hellomyphotos-photobooth-test/
     volumes:
       - ./photobooth-server:/app
       - /app/node_modules # Anonymous volume to prevent host OS module conflicts

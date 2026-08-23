@@ -21,7 +21,7 @@ import {
   updateEventSettingsById, getGlobalSettings, updateGlobalSettings,
   archiveSession, restoreSession, getEventAnalytics,
   getAllUsers, insertUser, deleteUser, findUserByEmail, regenerateSessionShareId, setEventShareOriginals,
-  getSessionShares, createSessionShare, setSessionShareStatus, deleteSessionShare
+  getSessionShares, createSessionShare, setSessionShareStatus, deleteSessionShare, setSessionDimensions
 } from '../db'
 
 const router = Router()
@@ -524,6 +524,8 @@ router.get('/events/:id/photos', async (req: Request, res: Response) => {
         thumbnail: thumbExists ? `/api/admin/events/${req.params.id}/photo/${thumbName}` : `/api/admin/events/${req.params.id}/photo/${name}`,
         size: stat.size,
         timestamp: stat.birthtime.toISOString(),
+        width: 0,
+        height: 0,
       })
       sessionMap.get(sessionId)!.timestamps.push(stat.birthtime.toISOString())
     }
@@ -532,9 +534,26 @@ router.get('/events/:id/photos', async (req: Request, res: Response) => {
     const dbSessions = listEventPhotoSessions(req.params.id, true)
     const dbSessionMap = new Map(dbSessions.map(s => [s.id, s]))
 
-    let sessions = Array.from(sessionMap.entries())
-      .map(([sessionId, data]) => {
+    let sessions = await Promise.all(Array.from(sessionMap.entries())
+      .map(async ([sessionId, data]) => {
         const dbSess = dbSessionMap.get(sessionId)
+        let w = dbSess ? ((dbSess as any).width || 0) : 0
+        let h = dbSess ? ((dbSess as any).height || 0) : 0
+
+        if ((w === 0 || h === 0) && data.photos.length > 0) {
+          try {
+            const firstPhotoPath = path.join(eventDir, data.photos[0].id)
+            const meta = await sharp(firstPhotoPath).metadata()
+            if (meta.width && meta.height) {
+              w = meta.width
+              h = meta.height
+              setSessionDimensions(sessionId, w, h)
+            }
+          } catch (e: any) {
+            logger.warn(`Could not backfill dimensions for session ${sessionId}: ${e.message}`)
+          }
+        }
+
         return {
           sessionId,
           photoCount: data.photos.length,
@@ -544,9 +563,12 @@ router.get('/events/:id/photos', async (req: Request, res: Response) => {
           createdAt: data.timestamps.sort().reverse()[0] || new Date().toISOString(),
           archived: dbSess ? dbSess.archived === 1 : false,
           share_id: dbSess ? (dbSess as any).share_id : null,
+          photoWidth: w,
+          photoHeight: h,
         }
-      })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      }))
+    
+    sessions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
     if (!includeArchived) {
       sessions = sessions.filter(s => !s.archived)
@@ -687,6 +709,16 @@ router.get('/events/:id/sessions/:sessionId/framed', async (req: Request, res: R
       .sort()
 
     logger.info(`GET /framed - files: ${files.length}, matched: ${sessionFiles.length}, sessionId: ${sessionId}, frameId: ${frameId}`)
+    let frameWidth = 0
+    let frameHeight = 0
+    try {
+      const configPath = path.join(config.eventFrames(eventId), frameId, 'config.json')
+      const configData = await fs.readFile(configPath, 'utf8')
+      const frameConfig = JSON.parse(configData)
+      frameWidth = frameConfig.canvasWidth || 0
+      frameHeight = frameConfig.canvasHeight || 0
+    } catch {}
+
     const photos = await Promise.all(
       sessionFiles.map(async (name) => {
         const stat = await fs.stat(path.join(framedDir, name))
@@ -704,6 +736,8 @@ router.get('/events/:id/sessions/:sessionId/framed', async (req: Request, res: R
           downloadUrl: jpegExists ? `/api/admin/events/${eventId}/photo/framed/${jpegName}?v=${v}` : `/api/admin/events/${eventId}/photo/framed/${name}?v=${v}`,
           size: stat.size,
           timestamp: stat.birthtime.toISOString(),
+          width: frameWidth,
+          height: frameHeight,
         }
       })
     )

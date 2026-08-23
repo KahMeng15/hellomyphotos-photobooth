@@ -70,14 +70,16 @@
             :class="['session-card', { selected: selectedSessions.has(session.sessionId) }]"
             @click="selectSession(session)"
           >
-            <div class="session-thumb">
+            <div class="session-thumb" :style="session.photoWidth && session.photoHeight ? { aspectRatio: `${session.photoWidth}/${session.photoHeight}` } : {}">
               <img
-                :src="session.photos[session.photos.length - 1]?.thumbnail ? baseUrl + session.photos[session.photos.length - 1].thumbnail : ''"
+                v-if="session.photos[session.photos.length - 1]?.thumbnail"
+                :src="baseUrl + session.photos[session.photos.length - 1].thumbnail"
                 :alt="'Session ' + session.sessionId"
                 class="thumb-img"
                 loading="lazy"
                 @load="$event.target.classList.add('loaded')"
               />
+              <div v-else class="thumb-img thumb-skeleton skeleton-pulse"></div>
               <div class="session-check" :class="{ checked: selectedSessions.has(session.sessionId) }" @click.stop="toggleSelect(session.sessionId)">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="20 6 9 17 4 12"/>
@@ -764,6 +766,18 @@ function formatTime(ts: string) {
 .thumb-img.loaded {
   filter: blur(0);
   transform: scale(1);
+}
+
+.thumb-skeleton {
+  background-color: #222;
+}
+@keyframes skeleton-pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 0.9; }
+  100% { opacity: 0.6; }
+}
+.skeleton-pulse {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
 .session-check {

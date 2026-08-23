@@ -19,6 +19,8 @@ export interface PhotoSession {
   photos: Photo[]
   timestamps: string[]
   createdAt: string
+  photoWidth?: number
+  photoHeight?: number
 }
 
 export interface Photo {
@@ -29,6 +31,8 @@ export interface Photo {
   timestamp: string
   sessionId?: string
   frameName?: string | null
+  width?: number
+  height?: number
 }
 
 export interface Frame {

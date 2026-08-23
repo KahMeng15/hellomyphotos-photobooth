@@ -137,6 +137,8 @@ try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN upload_started_at INTEGER`)
 try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN upload_completed_at INTEGER`) } catch {}
 try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN upload_size_bytes INTEGER`) } catch {}
 try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN upload_avg_speed_kbps REAL`) } catch {}
+try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN width INTEGER NOT NULL DEFAULT 0`) } catch {}
+try { db.exec(`ALTER TABLE photo_sessions ADD COLUMN height INTEGER NOT NULL DEFAULT 0`) } catch {}
 
 db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_photo_sessions_share_id
@@ -388,6 +390,17 @@ export function updateUploadStatus(
   db.prepare(`UPDATE photo_sessions SET ${fields.join(', ')} WHERE id = ?`).run(...values)
 }
 
+const setSessionDimensionsStmt = db.prepare(`UPDATE photo_sessions SET width = ?, height = ? WHERE id = ?`)
+export function setSessionDimensions(sessionId: string, width: number, height: number) {
+  setSessionDimensionsStmt.run(width, height, sessionId)
+}
+
+const getSessionDimensionsStmt = db.prepare('SELECT width, height FROM photo_sessions WHERE id = ?')
+export function getSessionDimensions(sessionId: string): { width: number; height: number } {
+  const row = getSessionDimensionsStmt.get(sessionId) as any
+  return { width: row?.width || 0, height: row?.height || 0 }
+}
+
 export function getSessionUploadStatus(token: string): { id: string; upload_status: string; upload_started_at: number | null; upload_completed_at: number | null; upload_size_bytes: number | null; upload_avg_speed_kbps: number | null; share_id: string } | null {
   // Try by shareId via session_shares first
   let row = db.prepare(`
@@ -418,7 +431,7 @@ export function getPhotoSession(sessionId: string) {
 export function listEventPhotoSessions(eventId: string, includeArchived = false) {
   const stmt = includeArchived ? listPhotoSessionsByEvent : listActivePhotoSessionsByEvent
   return stmt.all(eventId) as Array<{
-    id: string; event_id: string; created_at: string; archived: number; share_id: string
+    id: string; event_id: string; created_at: string; archived: number; share_id: string; width: number; height: number
   }>
 }
 

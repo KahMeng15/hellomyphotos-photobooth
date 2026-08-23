@@ -30,7 +30,7 @@
         </header>
 
         <div v-if="animationPhotos.length >= 2" class="hero-preview">
-          <img :src="baseUrl + animationPhotos[heroIndex]?.url" alt="Preview animation" />
+          <img :src="baseUrl + (animationPhotos[heroIndex]?.thumbnail || animationPhotos[heroIndex]?.url)" alt="Preview animation" />
         </div>
 
         <div class="photo-grid">
@@ -69,19 +69,22 @@
           </svg>
         </button>
 
-        <img
-          :key="session.photos[selectedPhotoIndex].url"
-          :src="baseUrl + session.photos[selectedPhotoIndex].url"
-          :style="{
-            backgroundImage: `url(${baseUrl + (session.photos[selectedPhotoIndex].thumbnail || session.photos[selectedPhotoIndex].url)})`,
-            backgroundSize: 'contain',
-            backgroundRepeat: 'no-repeat',
-            backgroundPosition: 'center'
-          }"
-          alt="Photo"
-          class="lightbox-img"
-          @load="$event.target.classList.add('loaded')"
-        />
+        <div class="lightbox-img-wrap">
+          <img
+            v-if="lightboxThumb"
+            :src="lightboxThumb"
+            class="lightbox-thumb"
+            :class="{ 'thumb-hidden': lightboxLoaded }"
+            aria-hidden="true"
+          />
+          <img
+            :src="lightboxFullSrc"
+            class="lightbox-img"
+            :class="{ 'lb-loaded': lightboxLoaded }"
+            alt="Photo"
+            @load="onLightboxLoad"
+          />
+        </div>
 
         <button v-if="selectedPhotoIndex < session.photos.length - 1" class="lightbox-nav-btn lightbox-next" :class="{ 'hidden-control': !showControls }" @click.stop="nextPhoto(); resetControlsTimeout()">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -158,6 +161,36 @@ watch(selectedPhotoIndex, (newVal) => {
     resetControlsTimeout()
   } else {
     if (controlsTimeout !== null) window.clearTimeout(controlsTimeout)
+  }
+})
+
+const lightboxLoaded = ref(false)
+
+const lightboxFullSrc = computed(() => {
+  if (selectedPhotoIndex.value === null || !session.value) return ''
+  return baseUrl + session.value.photos[selectedPhotoIndex.value].url
+})
+
+const lightboxThumb = computed(() => {
+  if (selectedPhotoIndex.value === null || !session.value) return ''
+  const photo = session.value.photos[selectedPhotoIndex.value]
+  return baseUrl + (photo.thumbnail || photo.url)
+})
+
+function onLightboxLoad() {
+  lightboxLoaded.value = true
+}
+
+watch(selectedPhotoIndex, (idx) => {
+  lightboxLoaded.value = false
+  if (idx === null || !session.value) return
+  const toPreload = [idx + 1, idx - 1].filter(i => i >= 0 && i < session.value!.photos.length)
+  for (const i of toPreload) {
+    const photo = session.value!.photos[i]
+    if (photo) {
+      const img = new Image()
+      img.src = baseUrl + photo.url
+    }
   }
 })
 
@@ -595,15 +628,42 @@ async function downloadAll() {
   .lightbox-next { right: 0.5rem; padding: 0.5rem; }
 }
 
+.lightbox-img-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 90vw;
+  max-height: 80vh;
+}
+
+.lightbox-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  transition: opacity 0.3s ease;
+}
+
+.lightbox-thumb.thumb-hidden {
+  opacity: 0;
+}
+
 .lightbox-img {
   max-width: 90vw;
   max-height: 80vh;
   border-radius: 8px;
-  filter: blur(10px);
-  will-change: filter;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  will-change: opacity;
+  position: relative;
+  z-index: 1;
 }
-.lightbox-img.loaded {
-  filter: blur(0);
+
+.lightbox-img.lb-loaded {
+  opacity: 1;
 }
 
 .contact-link {

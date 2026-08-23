@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { authMiddleware } from '../middleware/authMiddleware'
-import { getEvent, getPhotoSessionByShareId, getPhotoSession, logShareAnalytics, getSessionUploadStatus } from '../db'
+import { getEvent, getPhotoSessionByShareId, getPhotoSession, logShareAnalytics, getSessionUploadStatus, getSessionDimensions } from '../db'
 import { UAParser } from 'ua-parser-js'
 import { getActiveFrames } from '../utils/frames'
 
@@ -185,6 +185,7 @@ router.get('/:token', async (req: Request, res: Response) => {
           const thumbIdToUse = isObfuscated ? `framed_idx_${i}_thumb` : thumbName
           const jpegIdToUse = isObfuscated ? `framed_idx_${i}_jpeg` : jpegName
 
+          const matchingFrame = activeFrames.find(f => f.id === frameId)
           return {
             id: idToUse,
             frameId,
@@ -193,8 +194,8 @@ router.get('/:token', async (req: Request, res: Response) => {
             thumbnail: thumbExists ? `/api/share/${token}/photo/${thumbIdToUse}` : null,
             downloadUrl: jpegExists ? `/api/share/${token}/photo/${jpegIdToUse}` : `/api/share/${token}/photo/${idToUse}`,
             size: stat.size,
-            width: 0,
-            height: 0,
+            width: matchingFrame?.config?.canvasWidth || 0,
+            height: matchingFrame?.config?.canvasHeight || 0,
             timestamp: stat.birthtime.toISOString(),
           }
         })
@@ -226,14 +227,15 @@ router.get('/:token', async (req: Request, res: Response) => {
           const idToUse = isObfuscated ? `idx_${i}` : name
           const thumbIdToUse = isObfuscated ? `idx_${i}_thumb` : thumbName
 
+          const sessionDim = getSessionDimensions(isSessionToken ? sessionFilter : extractSessionId(name) || '')
           return {
             id: idToUse,
             url: `/api/share/${token}/photo/${idToUse}`,
             thumbnail: thumbExists ? `/api/share/${token}/photo/${thumbIdToUse}` : null,
             downloadUrl: `/api/share/${token}/photo/${idToUse}`,
             size: stat.size,
-            width: 0,
-            height: 0,
+            width: sessionDim.width,
+            height: sessionDim.height,
             timestamp: stat.birthtime.toISOString(),
             frameId: 'unframed',
             frameName: 'Original Photos'

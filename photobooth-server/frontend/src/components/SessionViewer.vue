@@ -18,7 +18,12 @@
         <div class="viewer-body">
 
         <div v-if="isLoadingPhotos" class="photo-grid">
-          <div v-for="i in 4" :key="'skeleton-'+i" class="grid-img skeleton-pulse" style="width: 100%; aspect-ratio: 2/3;"></div>
+          <div 
+            v-for="i in (props.session.photoCount || 4)" 
+            :key="'skeleton-'+i" 
+            class="grid-img skeleton-pulse" 
+            :style="skeletonStyle"
+          ></div>
         </div>
         <div v-else-if="displayPhotos.length > 0" class="photo-grid">
           <img
@@ -84,19 +89,23 @@
         </button>
       </transition>
       
-      <img
-        :key="displayPhotos[fullscreenPhotoIndex]?.url"
-        :src="baseUrl + (displayPhotos[fullscreenPhotoIndex]?.url || '')"
-        :style="{
-          backgroundImage: `url(${baseUrl + (displayPhotos[fullscreenPhotoIndex]?.thumbnail || displayPhotos[fullscreenPhotoIndex]?.url || '')})`,
-          backgroundSize: 'contain',
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center'
-        }"
-        class="fs-image"
-        :alt="'Fullscreen Photo ' + (fullscreenPhotoIndex + 1)"
-        @load="$event.target.classList.add('loaded')"
-      />
+      <div class="fs-image-wrap">
+        <img
+          v-if="currentThumb"
+          :src="currentThumb"
+          class="fs-thumb"
+          :class="{ 'thumb-hidden': fsImageLoaded }"
+          aria-hidden="true"
+        />
+        <img
+          ref="fsImgRef"
+          :src="currentFullSrc"
+          class="fs-image"
+          :class="{ 'fs-loaded': fsImageLoaded }"
+          :alt="'Fullscreen Photo ' + (fullscreenPhotoIndex !== null ? fullscreenPhotoIndex + 1 : '')"
+          @load="onFsImageLoad"
+        />
+      </div>
       
       <transition name="fade">
         <button v-show="showControls && fullscreenPhotoIndex < displayPhotos.length - 1" class="fs-nav-btn fs-next" @click.stop="nextPhoto">
@@ -183,7 +192,7 @@
 
 <script setup lang="ts">
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import QRCode from 'qrcode'
 import axios from 'axios'
 import { toast } from 'vue3-toastify'
@@ -197,6 +206,14 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ close: [] }>()
+
+const skeletonStyle = computed(() => ({
+  width: '100%',
+  aspectRatio: props.session.photoWidth && props.session.photoHeight
+    ? `${props.session.photoWidth}/${props.session.photoHeight}`
+    : '2/3'
+}))
+
 
 const photosStore = usePhotosStore()
 const linkCopied = ref(false)
@@ -329,6 +346,38 @@ async function applyAllActiveFrames() {
 }
 
 const fullscreenPhotoIndex = ref<number | null>(null)
+
+const fsImgRef = ref<HTMLImageElement | null>(null)
+const fsImageLoaded = ref(false)
+
+const currentFullSrc = computed(() => {
+  if (fullscreenPhotoIndex.value === null) return ''
+  return baseUrl + (displayPhotos.value[fullscreenPhotoIndex.value]?.url || '')
+})
+
+const currentThumb = computed(() => {
+  if (fullscreenPhotoIndex.value === null) return ''
+  const photo = displayPhotos.value[fullscreenPhotoIndex.value]
+  return photo ? baseUrl + (photo.thumbnail || photo.url) : ''
+})
+
+function onFsImageLoad() {
+  fsImageLoaded.value = true
+}
+
+watch(fullscreenPhotoIndex, (idx) => {
+  fsImageLoaded.value = false
+  if (idx === null) return
+  const toPreload = [idx + 1, idx - 1].filter(i => i >= 0 && i < displayPhotos.value.length)
+  for (const i of toPreload) {
+    const photo = displayPhotos.value[i]
+    if (photo) {
+      const img = new Image()
+      img.src = baseUrl + photo.url
+    }
+  }
+})
+
 let touchStartX = 0
 
 const showControls = ref(true)
@@ -666,15 +715,17 @@ function formatTime(ts: string) {
   min-width: 0;
   border-radius: 12px;
   cursor: pointer;
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition: transform 0.2s ease, opacity 0.3s ease;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   object-fit: contain;
   background-color: #333;
   animation: pulse 1.5s infinite ease-in-out;
+  opacity: 0;
 }
 .grid-img.loaded {
   animation: none;
   background-color: transparent;
+  opacity: 1;
 }
 
 .grid-img:hover {
@@ -1023,17 +1074,41 @@ function formatTime(ts: string) {
   opacity: 0;
 }
 
-.fs-image {
-  width: 100vw;
-  height: 100vh;
-  max-width: 100vw;
-  max-height: 100vh;
-  object-fit: contain;
-  user-select: none;
-  filter: blur(10px);
-  will-change: filter;
+.fs-image-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 90vw;
+  max-height: 80vh;
 }
-.fs-image.loaded {
-  filter: blur(0);
+
+.fs-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  transition: opacity 0.3s ease;
+}
+
+.fs-thumb.thumb-hidden {
+  opacity: 0;
+}
+
+.fs-image {
+  max-width: 90vw;
+  max-height: 80vh;
+  border-radius: 8px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  will-change: opacity;
+  position: relative;
+  z-index: 1;
+}
+
+.fs-image.fs-loaded {
+  opacity: 1;
 }
 </style>
