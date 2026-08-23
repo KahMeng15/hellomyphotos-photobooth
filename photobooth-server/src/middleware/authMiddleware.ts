@@ -56,24 +56,43 @@ export function requireRole(...roles: string[]) {
   }
 }
 
-export function rateLimitLogin(req: Request, res: Response, next: NextFunction) {
+const LOCKOUT_INITIAL_MS = 30 * 1000 // 30s
+const MAX_ATTEMPTS = 5
+
+export function checkLoginLockout(req: Request, res: Response, next: NextFunction) {
   const ip = req.ip || req.socket.remoteAddress || 'unknown'
   const now = Date.now()
-
   const attempts = loginAttempts.get(ip)
 
-  if (!attempts || now > attempts.resetTime) {
-    loginAttempts.set(ip, { count: 1, resetTime: now + config.rateLimit.login.windowMs })
-    return next()
+  if (attempts && attempts.count >= MAX_ATTEMPTS) {
+    if (now < attempts.resetTime) {
+      const waitSec = Math.ceil((attempts.resetTime - now) / 1000)
+      return res.status(429).json({ error: `Too many failed attempts. Try again in ${waitSec}s.` })
+    }
   }
-
-  if (attempts.count >= config.rateLimit.login.max) {
-    logger.warn(`Login rate limit exceeded for IP: ${ip}`)
-    return res.status(429).json({ error: 'Too many login attempts. Try again later.' })
-  }
-
-  attempts.count++
   next()
+}
+
+export function recordFailedLogin(req: Request) {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown'
+  const now = Date.now()
+  const attempts = loginAttempts.get(ip) || { count: 0, resetTime: 0 }
+
+  attempts.count += 1
+
+  if (attempts.count >= MAX_ATTEMPTS) {
+    const penaltyMultiplier = Math.pow(2, attempts.count - MAX_ATTEMPTS)
+    const penaltyMs = Math.min(LOCKOUT_INITIAL_MS * penaltyMultiplier, 24 * 60 * 60 * 1000) // cap 24h
+    attempts.resetTime = now + penaltyMs
+    logger.warn(`IP ${ip} locked out of login for ${penaltyMs / 1000}s (Attempt ${attempts.count})`)
+  }
+
+  loginAttempts.set(ip, attempts)
+}
+
+export function clearFailedLogin(req: Request) {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown'
+  loginAttempts.delete(ip)
 }
 
 export function checkOtpRateLimit(req: Request, res: Response): boolean {

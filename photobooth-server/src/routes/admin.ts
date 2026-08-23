@@ -14,7 +14,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { applyFrame } from '../pipeline'
 import { io } from '../server'
 import bcrypt from 'bcryptjs'
-import { requireRole } from '../middleware/authMiddleware'
+import { requireRole, checkLoginLockout, recordFailedLogin, clearFailedLogin } from '../middleware/authMiddleware'
 import {
   createEvent, updateEventById, getEvent, listEvents,
   endEvent, deleteEvent, listEventPhotoSessions,
@@ -37,12 +37,21 @@ router.get('/users', requireRole('admin'), (req: Request, res: Response) => {
   }
 })
 
+import { z } from 'zod'
+
+const createUserSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(128),
+  role: z.enum(['admin', 'operator']),
+})
+
 router.post('/users', requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const { email, password, role } = req.body
-    if (!email || !password || !role) {
-      return res.status(400).json({ error: 'Email, password, and role are required' })
+    const parseResult = createUserSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.issues[0].message })
     }
+    const { email, password, role } = parseResult.data
     
     if (findUserByEmail(email)) {
       return res.status(400).json({ error: 'User already exists' })
@@ -354,10 +363,28 @@ router.get('/events', async (req: Request, res: Response) => {
   }
 })
 
+const createEventSchema = z.object({
+  name: z.string().min(1, 'Event name required').max(200),
+  date: z.string().optional(),
+  description: z.string().max(1000).optional(),
+  photoCount: z.number().min(1).max(10).optional(),
+  countdown: z.number().min(1).max(30).optional(),
+  captureInterval: z.number().min(0).max(30).optional(),
+  postCapturePreview: z.number().min(1).max(30).optional(),
+  dslrIso: z.string().max(20).optional(),
+  dslrShutterSpeed: z.string().max(20).optional(),
+  dslrAperture: z.string().max(20).optional(),
+  dslrFocusMode: z.string().max(20).optional(),
+  dslrWhiteBalance: z.string().max(20).optional(),
+})
+
 router.post('/events', requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance } = req.body
-    if (!name) return res.status(400).json({ error: 'Event name required' })
+    const parseResult = createEventSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.issues[0].message })
+    }
+    const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance } = parseResult.data
 
     const { id, otp } = createEvent(name, date || new Date().toISOString().split('T')[0], description || '', { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance })
     const event = getEvent(id)
@@ -368,15 +395,33 @@ router.post('/events', requireRole('admin'), async (req: Request, res: Response)
   }
 })
 
-router.post('/verify-password', requireRole('admin'), async (req: Request, res: Response) => {
+const verifyPasswordSchema = z.object({
+  password: z.string().min(1, 'Password required'),
+})
+
+router.post('/verify-password', requireRole('admin'), checkLoginLockout, async (req: Request, res: Response) => {
   try {
-    const { password } = req.body
-    if (!password) return res.status(400).json({ error: 'Password required' })
+    const parseResult = verifyPasswordSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      recordFailedLogin(req)
+      return res.status(400).json({ error: parseResult.error.issues[0].message })
+    }
+    const { password } = parseResult.data
+
     const userEmail = (req as any).user.email
     const user = findUserByEmail(userEmail)
-    if (!user) return res.status(401).json({ error: 'User not found' })
+    if (!user) {
+      recordFailedLogin(req)
+      return res.status(401).json({ error: 'User not found' })
+    }
+    
     const isValid = await bcrypt.compare(password, user.password_hash)
-    if (!isValid) return res.status(401).json({ error: 'Invalid password' })
+    if (!isValid) {
+      recordFailedLogin(req)
+      return res.status(401).json({ error: 'Invalid password' })
+    }
+    
+    clearFailedLogin(req)
     res.json({ success: true })
   } catch (error: any) {
     res.status(500).json({ error: error.message })
@@ -394,12 +439,19 @@ router.get('/events/:id/operators', requireRole('admin'), async (req: Request, r
 
 import crypto from 'crypto'
 
+const createOperatorSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100),
+  operatorPassword: z.string().min(4, 'Operator password must be at least 4 characters').max(128),
+  adminPassword: z.string().min(1, 'Admin password is required'),
+})
+
 router.post('/events/:id/operators', requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const { name, operatorPassword, adminPassword } = req.body
-    if (!name || !operatorPassword || !adminPassword) {
-      return res.status(400).json({ error: 'Missing required fields' })
+    const parseResult = createOperatorSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.issues[0].message })
     }
+    const { name, operatorPassword, adminPassword } = parseResult.data
 
     const userEmail = (req as any).user.email
     const user = findUserByEmail(userEmail)
@@ -452,16 +504,40 @@ router.get('/events/:id/analytics', async (req: Request, res: Response) => {
   }
 })
 
+const updateEventSchema = z.object({
+  name: z.string().max(200).optional(),
+  date: z.string().optional(),
+  description: z.string().max(1000).optional(),
+  photoCount: z.number().min(1).max(10).optional(),
+  countdown: z.number().min(1).max(30).optional(),
+  captureInterval: z.number().min(0).max(30).optional(),
+  postCapturePreview: z.number().min(1).max(30).optional(),
+  dslrIso: z.string().max(20).optional(),
+  dslrShutterSpeed: z.string().max(20).optional(),
+  dslrAperture: z.string().max(20).optional(),
+  dslrFocusMode: z.string().max(20).optional(),
+  dslrWhiteBalance: z.string().max(20).optional(),
+  obfuscateLinks: z.boolean().optional(),
+  expiryType: z.enum(['relative', 'absolute', 'never']).optional(),
+  expiryValue: z.string().max(100).optional(),
+  organizer: z.string().max(200).optional(),
+  contactInfo: z.string().max(500).optional(),
+})
+
   router.patch('/events/:id', async (req: Request, res: Response) => {
     try {
       const event = getEvent(req.params.id)
       if (!event) return res.status(404).json({ error: 'Event not found' })
-      const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, obfuscateLinks, expiryType, expiryValue, organizer, contactInfo } = req.body
+      const parseResult = updateEventSchema.safeParse(req.body)
+      if (!parseResult.success) {
+        return res.status(400).json({ error: parseResult.error.issues[0].message })
+      }
+      const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, obfuscateLinks, expiryType, expiryValue, organizer, contactInfo } = parseResult.data
       updateEventById(req.params.id,
         name ?? event.name,
         date ?? event.date,
         description ?? event.description,
-        { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, obfuscateLinks, expiryType, expiryValue, organizer, contactInfo }
+        { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, obfuscateLinks: obfuscateLinks !== undefined ? (obfuscateLinks ? 1 : 0) : undefined, expiryType, expiryValue, organizer, contactInfo }
       )
 
       // If settings changed, push settings-update command to booth

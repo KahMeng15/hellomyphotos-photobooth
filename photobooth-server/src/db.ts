@@ -78,6 +78,29 @@ db.exec(`
   )
 `)
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_email TEXT,
+    action TEXT NOT NULL,
+    ip_address TEXT,
+    details TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`)
+
+export function logAuditAction(userEmail: string, action: string, ipAddress: string, details?: string) {
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO audit_log (user_email, action, ip_address, details)
+      VALUES (?, ?, ?, ?)
+    `)
+    stmt.run(userEmail, action, ipAddress, details ? JSON.stringify(details) : null)
+  } catch (error) {
+    logger.error('Failed to write audit log', { error })
+  }
+}
+
 // Add new columns if missing (for existing DBs)
 try { db.exec(`ALTER TABLE events ADD COLUMN photo_count INTEGER NOT NULL DEFAULT 4`) } catch {}
 try { db.exec(`ALTER TABLE events ADD COLUMN countdown INTEGER NOT NULL DEFAULT 5`) } catch {}
