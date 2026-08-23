@@ -4,6 +4,7 @@
       <div class="viewer">
         <button class="close-btn" @click="$emit('close')">✕</button>
         <div class="image-wrap">
+          <div class="blur-bg" :style="{ backgroundImage: `url(${baseUrl + photo.url})` }"></div>
           <div class="image-skeleton skeleton-pulse" :class="{ 'thumb-hidden': photoLoaded }"></div>
           <img 
             :src="baseUrl + photo.url" 
@@ -136,10 +137,12 @@ function formatTime(ts: string) {
   background: #1a1a1a;
   border-radius: 12px;
   padding: 1.5rem;
-  max-width: 90vw;
-  max-height: 90vh;
-  overflow-y: auto;
+  width: 90vw;
+  max-width: 800px;
+  height: 90vh; /* Fixed height to anchor bottom */
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .close-btn {
@@ -163,7 +166,21 @@ function formatTime(ts: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.blur-bg {
+  position: absolute;
+  inset: -20px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(15px);
+  opacity: 0.4;
+  z-index: 0;
 }
 
 .image-skeleton {
@@ -190,7 +207,8 @@ function formatTime(ts: string) {
 
 .full-image {
   max-width: 100%;
-  max-height: 70vh;
+  max-height: 100%;
+  object-fit: contain;
   border-radius: 8px;
   display: block;
   opacity: 0;
@@ -213,7 +231,9 @@ function formatTime(ts: string) {
 
 .viewer-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
+  margin-top: auto;
 }
 
 .btn-action {

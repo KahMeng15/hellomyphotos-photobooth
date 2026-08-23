@@ -35,7 +35,10 @@
 
         <div class="photo-grid">
           <div v-for="(photo, i) in session.photos" :key="photo.id" class="photo-card">
-            <img :src="baseUrl + (photo.thumbnail || photo.url)" :alt="'Photo'" loading="lazy" class="share-img" @load="$event.target.classList.add('loaded')" @click="openPhoto(i)" />
+            <div class="card-img-wrap">
+              <div class="blur-bg" :style="{ backgroundImage: `url(${baseUrl + (photo.thumbnail || photo.url)})` }"></div>
+              <img :src="baseUrl + (photo.thumbnail || photo.url)" :alt="'Photo'" loading="lazy" class="share-img" @load="$event.target.classList.add('loaded')" @click="openPhoto(i)" />
+            </div>
             <a :href="downloadUrl(photo.id)" class="download-btn" download>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Download JPEG
@@ -70,6 +73,7 @@
         </button>
 
         <div class="lightbox-img-wrap">
+          <div class="blur-bg" v-if="lightboxThumb" :style="{ backgroundImage: `url(${lightboxThumb})` }"></div>
           <img
             v-if="lightboxThumb"
             :src="lightboxThumb"
@@ -450,8 +454,9 @@ async function downloadAll() {
 }
 
 .photo-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 1.5rem;
   padding: 2rem;
   max-width: 1000px;
@@ -459,32 +464,49 @@ async function downloadAll() {
 }
 
 .photo-card {
+  width: 280px;
+  max-width: 100%;
   background: #1a1a1a;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid #2a2a2a;
   transition: transform 0.15s;
+  display: flex;
+  flex-direction: column;
 }
 
 .photo-card:hover {
   transform: translateY(-2px);
 }
 
-.photo-card img {
+.card-img-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.photo-card .share-img {
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: contain;
   display: block;
   cursor: pointer;
-  background-color: #222;
+  background-color: transparent;
   filter: blur(10px);
   transform: scale(1.05);
   transition: transform 0.4s ease-out;
   will-change: filter, transform;
 }
 
-.photo-card img.loaded {
+.photo-card .share-img.loaded {
   filter: blur(0);
   transform: scale(1);
+  position: relative;
+  z-index: 1;
 }
 
 .download-btn {
@@ -499,6 +521,7 @@ async function downloadAll() {
   font-size: 0.8125rem;
   font-weight: 500;
   transition: background 0.15s, color 0.15s;
+  margin-top: auto;
 }
 
 .download-btn:hover {
@@ -617,7 +640,6 @@ async function downloadAll() {
   }
   .photo-grid {
     order: 3;
-    grid-template-columns: 1fr;
     padding: 1rem;
     gap: 1rem;
   }
@@ -635,6 +657,18 @@ async function downloadAll() {
   justify-content: center;
   max-width: 90vw;
   max-height: 80vh;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.blur-bg {
+  position: absolute;
+  inset: -20px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(15px);
+  opacity: 0.4;
+  z-index: 0;
 }
 
 .lightbox-thumb {

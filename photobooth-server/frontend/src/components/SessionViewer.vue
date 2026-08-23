@@ -90,6 +90,7 @@
       </transition>
       
       <div class="fs-image-wrap">
+        <div class="fs-blur-bg" v-if="currentThumb" :style="{ backgroundImage: `url(${currentThumb})` }"></div>
         <img
           v-if="currentThumb"
           :src="currentThumb"
@@ -1081,6 +1082,18 @@ function formatTime(ts: string) {
   justify-content: center;
   max-width: 90vw;
   max-height: 80vh;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.fs-blur-bg {
+  position: absolute;
+  inset: -20px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(15px);
+  opacity: 0.4;
+  z-index: 0;
 }
 
 .fs-thumb {
