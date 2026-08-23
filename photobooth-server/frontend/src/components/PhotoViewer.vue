@@ -55,11 +55,12 @@ const showQrCode = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const sessionLinkCopied = ref(false)
 
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
 const downloadUrl = computed(() => {
   if (props.eventId) {
-    return `/api/admin/events/${props.eventId}/photo/${props.photo.id}?download=1`
+    return `${baseUrl}/api/admin/events/${props.eventId}/photo/${props.photo.id}?download=1`
   }
-  return `/api/admin/photos/${props.photo.id}/download`
+  return `${baseUrl}/api/admin/photos/${props.photo.id}/download`
 })
 
 async function sharePhoto() {

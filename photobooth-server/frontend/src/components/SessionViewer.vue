@@ -544,9 +544,9 @@ async function downloadAll() {
     if (photo.downloadUrl) {
       href = photo.downloadUrl + '?download=1'
     } else if (props.eventId) {
-      href = `/api/admin/events/${props.eventId}/photo/${photo.id}?download=1`
+      href = `${baseUrl}/api/admin/events/${props.eventId}/photo/${photo.id}?download=1`
     } else {
-      href = `/api/admin/photos/${photo.id}/download`
+      href = `${baseUrl}/api/admin/photos/${photo.id}/download`
     }
     const link = document.createElement('a')
     link.href = href

@@ -255,7 +255,8 @@ function requestClose() {
   }
 }
 
-const imageUrl = computed(() => `/api/admin/events/${props.eventId}/frames/${draftFrame.value.id}/image?t=${Date.now()}`)
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
+const imageUrl = computed(() => `${baseUrl}/api/admin/events/${props.eventId}/frames/${draftFrame.value.id}/image?t=${Date.now()}`)
 
 const saving = ref(false)
 

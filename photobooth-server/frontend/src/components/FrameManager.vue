@@ -18,10 +18,10 @@
     <div v-else class="frame-grid">
       <div v-for="frame in frames" :key="frame.id" class="frame-card">
         <div class="frame-preview" :class="{ 'is-disabled': frame.disabled }">
-          <img v-if="!frame.isSpecial" :src="`/api/admin/events/${eventId}/frames/${frame.id}/image`" class="frame-preview-blur" />
+          <img v-if="!frame.isSpecial" :src="`${baseUrl}/api/admin/events/${eventId}/frames/${frame.id}/image`" class="frame-preview-blur" />
           <svg v-if="!frame.isSpecial" :viewBox="`0 0 ${frame.canvasWidth || 1000} ${frame.canvasHeight || 1000}`" class="frame-svg-preview">
             <template v-if="frame.layering === 'background'">
-              <image :href="`/api/admin/events/${eventId}/frames/${frame.id}/image`" x="0" y="0" :width="frame.canvasWidth" :height="frame.canvasHeight" />
+              <image :href="`${baseUrl}/api/admin/events/${eventId}/frames/${frame.id}/image`" x="0" y="0" :width="frame.canvasWidth" :height="frame.canvasHeight" />
               <g v-for="(ph, i) in frame.placeholders" :key="i">
                 <rect :x="ph.x" :y="ph.y" :width="ph.width" :height="ph.height" fill="rgba(33, 150, 243, 0.7)" stroke="#2196F3" :stroke-width="Math.max(4, Math.min(ph.width, ph.height) * 0.02)" />
                 <text :x="ph.x + ph.width/2" :y="ph.y + ph.height/2" fill="#fff" :font-size="Math.max(24, Math.min(ph.width, ph.height) * 0.3)" font-family="sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="middle">{{ i + 1 }}</text>
@@ -32,7 +32,7 @@
                 <rect :x="ph.x" :y="ph.y" :width="ph.width" :height="ph.height" fill="rgba(33, 150, 243, 0.7)" stroke="#2196F3" :stroke-width="Math.max(4, Math.min(ph.width, ph.height) * 0.02)" />
                 <text :x="ph.x + ph.width/2" :y="ph.y + ph.height/2" fill="#fff" :font-size="Math.max(24, Math.min(ph.width, ph.height) * 0.3)" font-family="sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="middle">{{ i + 1 }}</text>
               </g>
-              <image :href="`/api/admin/events/${eventId}/frames/${frame.id}/image`" x="0" y="0" :width="frame.canvasWidth" :height="frame.canvasHeight" />
+              <image :href="`${baseUrl}/api/admin/events/${eventId}/frames/${frame.id}/image`" x="0" y="0" :width="frame.canvasWidth" :height="frame.canvasHeight" />
             </template>
           </svg>
           <svg v-else viewBox="0 0 1000 1000" class="frame-svg-preview">
@@ -89,6 +89,8 @@ import axios from 'axios'
 import draggable from 'vuedraggable'
 import { toast } from 'vue3-toastify'
 import FrameEditor from './FrameEditor.vue'
+
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
 
 const props = defineProps<{ eventId: string }>()
 const emit = defineEmits<{ (e: 'edit', frame: any): void }>()

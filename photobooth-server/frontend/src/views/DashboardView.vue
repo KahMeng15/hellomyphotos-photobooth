@@ -119,11 +119,12 @@ onMounted(async () => {
   socket.on('new-media', async (data: any) => {
     await photosStore.fetchSessions()
     if (data.results) {
+      const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
       data.results.forEach((r: any) => {
         photosStore.addPhoto({
           id: r.output || r.thumbnail,
-          url: `/api/photos/${r.output}`,
-          thumbnail: `/api/photos/${r.thumbnail}`,
+          url: `${baseUrl}/api/photos/${r.output}`,
+          thumbnail: `${baseUrl}/api/photos/${r.thumbnail}`,
           size: 0,
           timestamp: data.timestamp,
           sessionId: data.sessionId,
