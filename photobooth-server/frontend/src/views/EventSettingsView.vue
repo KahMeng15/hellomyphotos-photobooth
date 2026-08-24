@@ -58,66 +58,73 @@
         </div>
 
         <div class="settings-box" v-if="authStore.user?.role === 'admin'" style="margin-top: 1.5rem;">
-          <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Operator Access</h2>
+          <h2 style="margin-bottom: 1rem; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center;">
+            <span>Operator Access</span>
+            <svg v-if="!operatorAccessUnlocked" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+            </svg>
+          </h2>
           
-          <div v-if="!operatorAccessUnlocked" style="text-align: center; padding: 2rem 0;">
-            <p style="color: #ccc; margin-bottom: 1rem; font-size: 0.9rem;">Enter your Admin Password to unlock Operator Management.</p>
-            <input type="password" v-model="adminUnlockPassword" placeholder="Admin Password" class="text-input" style="width: 100%; max-width: 300px; background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px; margin-bottom: 1rem;" />
-            <br>
-            <button @click="unlockOperatorAccess" class="btn-primary" style="padding: 0.5rem 1.5rem;">Unlock</button>
+          <p style="color: #ccc; margin-bottom: 1rem; font-size: 0.9rem;">Manage dedicated operator accounts for this event.</p>
+          
+          <table v-if="operators.length > 0" style="width: 100%; border-collapse: collapse; text-align: left; margin-bottom: 1rem;">
+            <thead>
+              <tr style="border-bottom: 1px solid #444;">
+                <th style="padding: 0.5rem; color: #888; font-size: 0.8rem;">Name</th>
+                <th style="padding: 0.5rem; color: #888; font-size: 0.8rem;">Link</th>
+                <th style="padding: 0.5rem; color: #888; font-size: 0.8rem;" v-if="operatorAccessUnlocked">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="op in operators" :key="op.id" style="border-bottom: 1px solid #333;">
+                <td style="padding: 0.75rem 0.5rem;">{{ op.name }}</td>
+                <td style="padding: 0.75rem 0.5rem;">
+                  <div style="display:flex; gap:0.5rem;">
+                    <input type="text" readonly :value="operatorAccessUnlocked ? getOperatorLink(op.access_token) : '••••••••••••••••••••'" @click="operatorAccessUnlocked && $event.target.select()" style="font-family: monospace; background: #222; border: 1px solid #444; padding: 0.25rem; border-radius: 4px; color: #fff; width: 200px;" />
+                  </div>
+                </td>
+                <td style="padding: 0.75rem 0.5rem;" v-if="operatorAccessUnlocked">
+                  <div style="display:flex; gap:0.5rem;">
+                    <button @click="copyOperatorLink(op)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">Copy</button>
+                    <button @click="deleteOperator(op.id)" class="btn-icon" style="color: #ff4444;" title="Delete Operator">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else style="color: #888; text-align: center; padding: 1rem;">No operators created yet.</p>
+
+          <div v-if="!operatorAccessUnlocked" style="background: #2a2a2a; border-radius: 6px; padding: 1.5rem; text-align: center;">
+            <p style="color: #ccc; margin-bottom: 1rem; font-size: 0.9rem;">Enter Admin Password to view links and add operators.</p>
+            <div style="display: flex; gap: 0.5rem; justify-content: center; max-width: 400px; margin: 0 auto;">
+              <input type="password" v-model="adminUnlockPassword" @keyup.enter="unlockOperatorAccess" placeholder="Admin Password" class="text-input" style="flex: 1; background:#1f1f1f;color:#fff;border:1px solid #444;padding:0.5rem;border-radius:4px;" />
+              <button @click="unlockOperatorAccess" class="btn-primary" style="padding: 0.5rem 1rem;">Unlock</button>
+            </div>
           </div>
 
-          <div v-else>
-            <p style="color: #ccc; margin-bottom: 1rem; font-size: 0.9rem;">Manage dedicated operator accounts for this event.</p>
-            
-            <div style="background: #2a2a2a; border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
-              <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem;">Add New Operator</h3>
-              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <input v-model="newOperatorName" placeholder="Operator Name (e.g. Attendant A)" class="text-input" style="flex: 1; min-width: 200px; background:#1f1f1f;color:#fff;border:1px solid #444;padding:0.5rem;border-radius:4px;" />
-                <input v-model="newOperatorPassword" placeholder="Set Password" class="text-input" style="flex: 1; min-width: 150px; background:#1f1f1f;color:#fff;border:1px solid #444;padding:0.5rem;border-radius:4px;" />
-                <button @click="addOperator" class="btn-primary" style="padding: 0.5rem 1rem;">Add</button>
-              </div>
-              <div v-if="lastAddedOperator" style="margin-top: 1rem; background: #333; padding: 1rem; border-radius: 6px; border: 1px solid #444;">
-                <p style="font-size: 0.85rem; margin-bottom: 0.5rem; color: #4ade80;">Successfully created! Save these details now (the password won't be shown again):</p>
-                <div style="font-family: monospace; font-size: 0.85rem; color: #ccc; margin-bottom: 0.5rem;">
-                  <div>Name: {{ lastAddedOperator.name }}</div>
-                  <div>Link: {{ lastAddedOperator.link }}</div>
-                  <div>Password: {{ lastAddedOperator.password }}</div>
-                </div>
-                <button @click="copyFullMessage" class="btn-secondary btn-sm" style="width: 100%;">Copy Full Message</button>
-              </div>
+          <div v-else style="background: #2a2a2a; border-radius: 6px; padding: 1rem;">
+            <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem;">Add New Operator</h3>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <input v-model="newOperatorName" placeholder="Operator Name (e.g. Attendant A)" class="text-input" style="flex: 1; min-width: 200px; background:#1f1f1f;color:#fff;border:1px solid #444;padding:0.5rem;border-radius:4px;" />
+              <input v-model="newOperatorPassword" placeholder="Set Password" class="text-input" style="flex: 1; min-width: 150px; background:#1f1f1f;color:#fff;border:1px solid #444;padding:0.5rem;border-radius:4px;" />
+              <button @click="addOperator" class="btn-primary" style="padding: 0.5rem 1rem;">Add</button>
             </div>
-
-            <table v-if="operators.length > 0" style="width: 100%; border-collapse: collapse; text-align: left;">
-              <thead>
-                <tr style="border-bottom: 1px solid #444;">
-                  <th style="padding: 0.5rem; color: #888; font-size: 0.8rem;">Name</th>
-                  <th style="padding: 0.5rem; color: #888; font-size: 0.8rem;">Link</th>
-                  <th style="padding: 0.5rem; color: #888; font-size: 0.8rem;">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="op in operators" :key="op.id" style="border-bottom: 1px solid #333;">
-                  <td style="padding: 0.75rem 0.5rem;">{{ op.name }}</td>
-                  <td style="padding: 0.75rem 0.5rem;">
-                    <div style="display:flex; gap:0.5rem;">
-                      <input type="text" readonly :value="getOperatorLink(op.access_token)" @click="$event.target.select()" style="font-family: monospace; background: #222; border: 1px solid #444; padding: 0.25rem; border-radius: 4px; color: #fff; width: 200px;" />
-                    </div>
-                  </td>
-                  <td style="padding: 0.75rem 0.5rem;">
-                    <div style="display:flex; gap:0.5rem;">
-                      <button @click="copyOperatorLink(op)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">Copy</button>
-                      <button @click="deleteOperator(op.id)" class="btn-icon" style="color: #ff4444;" title="Delete Operator">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        </svg>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <p v-else style="color: #888; text-align: center; padding: 1rem;">No operators created yet.</p>
+            <div v-if="lastAddedOperator" style="margin-top: 1rem; background: #333; padding: 1rem; border-radius: 6px; border: 1px solid #444;">
+              <p style="font-size: 0.85rem; margin-bottom: 0.5rem; color: #4ade80;">Successfully created! Save these details now (the password won't be shown again):</p>
+              <div style="font-family: monospace; font-size: 0.85rem; color: #ccc; margin-bottom: 0.5rem;">
+                <div>Name: {{ lastAddedOperator.name }}</div>
+                <div>Link: {{ lastAddedOperator.link }}</div>
+                <div>Password: {{ lastAddedOperator.password }}</div>
+              </div>
+              <button @click="copyFullMessage" class="btn-secondary btn-sm" style="width: 100%;">Copy Full Message</button>
+            </div>
           </div>
         </div>
 
@@ -275,6 +282,10 @@ onMounted(async () => {
   } catch (err) {
     console.error('Failed to load event', err)
     toast.error('Failed to load event settings')
+  }
+  
+  if (authStore.user?.role === 'admin') {
+    await fetchOperators()
   }
 })
 

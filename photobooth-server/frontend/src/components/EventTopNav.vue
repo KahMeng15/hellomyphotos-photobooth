@@ -1,7 +1,7 @@
 <template>
   <header class="dashboard-header">
     <div class="header-left">
-      <button @click="router.push(`/events/${event.id}`)" class="btn-back" title="Back to event">
+      <button v-if="currentTitle || authStore.user?.role === 'admin'" @click="navigateBack" class="btn-back" :title="currentTitle ? 'Back to event' : 'Back to event list'">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="15 18 9 12 15 6"/>
         </svg>
@@ -91,6 +91,14 @@ const authStore = useAuthStore()
 async function handleLogout() {
   await authStore.logout()
   router.push('/login')
+}
+
+function navigateBack() {
+  if (props.currentTitle) {
+    router.push(`/events/${props.event.id}`)
+  } else if (authStore.user?.role === 'admin') {
+    router.push('/events')
+  }
 }
 
 const currentRoute = computed(() => {

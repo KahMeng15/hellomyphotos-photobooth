@@ -55,7 +55,7 @@ const showQrCode = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const sessionLinkCopied = ref(false)
 
-const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
+
 const downloadUrl = computed(() => {
   if (props.eventId) {
     return `${baseUrl}/api/admin/events/${props.eventId}/photo/${props.photo.id}?download=1`
@@ -119,7 +119,10 @@ async function deleteSession() {
 }
 
 function formatTime(ts: string) {
-  return new Date(ts).toLocaleString()
+  const d = new Date(ts)
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })
+  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  return `${time}, ${date}`
 }
 </script>
 

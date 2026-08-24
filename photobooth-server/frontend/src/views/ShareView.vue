@@ -312,7 +312,6 @@ async function downloadAll() {
   if (!session.value) return
   const token = route.params.token as string
   const link = document.createElement('a')
-  const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
   link.href = `${baseUrl}/api/share/${token}/download-all`
   link.download = ''
   document.body.appendChild(link)
