@@ -5,24 +5,24 @@
     <div class="page-content" style="padding: 2rem; display: flex; justify-content: center;">
       <div class="settings-container">
         <div class="settings-box">
-          <div class="field-row" style="margin-bottom:1rem; border-bottom: 1px solid #2a2a2a; padding-bottom: 1rem;">
-            <label style="display:block;margin-bottom:0.5rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: #888;">Event Name</label>
-            <input type="text" v-model="eventSettings.name" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;" />
+          <div class="field-row" style="margin-bottom:1rem; border-bottom: 1px solid var(--color-border); padding-bottom: 1rem;">
+            <label style="display:block;margin-bottom:0.5rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--color-text-sub);">Event Name</label>
+            <input type="text" v-model="eventSettings.name" class="text-input" style="width:100%;background:var(--color-border);color:var(--color-text);border:1px solid var(--color-border);padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;" />
           </div>
           <div class="field-row" style="display:flex; justify-content:space-between; align-items:center;">
             <div>
-              <label style="display:block;margin-bottom:0.25rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: #888;">Obfuscate Links</label>
-              <span style="font-size:0.8rem;color:#888;">Hide original filenames in shared links</span>
+              <label style="display:block;margin-bottom:0.25rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--color-text-sub);">Obfuscate Links</label>
+              <span style="font-size:0.8rem;color:var(--color-text-sub);">Hide original filenames in shared links</span>
             </div>
-            <div class="focus-toggle" style="display:flex; background:#2a2a2a; border-radius:100px; padding:2px;">
-              <button :class="['focus-btn', eventSettings.obfuscateLinks ? 'focus-active' : '']" @click="eventSettings.obfuscateLinks = true" style="padding:0.25rem 1rem; border-radius:100px; border:none; background:transparent; color:#888; cursor:pointer;">ON</button>
-              <button :class="['focus-btn', !eventSettings.obfuscateLinks ? 'focus-active' : '']" @click="eventSettings.obfuscateLinks = false" style="padding:0.25rem 1rem; border-radius:100px; border:none; background:transparent; color:#888; cursor:pointer;">OFF</button>
+            <div class="focus-toggle" style="display:flex; background:var(--color-border); border-radius:100px; padding:2px;">
+              <button :class="['focus-btn', eventSettings.obfuscateLinks ? 'focus-active' : '']" @click="eventSettings.obfuscateLinks = true" style="padding:0.25rem 1rem; border-radius:100px; border:none; background:transparent; color:var(--color-text-sub); cursor:pointer;">ON</button>
+              <button :class="['focus-btn', !eventSettings.obfuscateLinks ? 'focus-active' : '']" @click="eventSettings.obfuscateLinks = false" style="padding:0.25rem 1rem; border-radius:100px; border:none; background:transparent; color:var(--color-text-sub); cursor:pointer;">OFF</button>
             </div>
           </div>
           
           <div class="field-row" style="margin-top:1.5rem;">
-            <label style="display:block;margin-bottom:0.5rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: #888;">Link Expiry</label>
-            <select v-model="eventSettings.expiryType" class="custom-select" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;">
+            <label style="display:block;margin-bottom:0.5rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--color-text-sub);">Link Expiry</label>
+            <select v-model="eventSettings.expiryType" class="custom-select" style="width:100%;background:var(--color-border);color:var(--color-text);border:1px solid var(--color-border);padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;">
               <option value="none">No Expiry</option>
               <option value="relative">Relative Duration</option>
               <option value="absolute">Specific Date & Time</option>
@@ -30,8 +30,8 @@
           </div>
           
           <div class="field-row" v-if="eventSettings.expiryType === 'relative'" style="margin-top:1rem;">
-            <label style="display:block;margin-bottom:0.5rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: #888;">Expires In (from creation)</label>
-            <select v-model="eventSettings.expiryValue" class="custom-select" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;">
+            <label style="display:block;margin-bottom:0.5rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--color-text-sub);">Expires In (from creation)</label>
+            <select v-model="eventSettings.expiryValue" class="custom-select" style="width:100%;background:var(--color-border);color:var(--color-text);border:1px solid var(--color-border);padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;">
               <option value="1_day">1 Day</option>
               <option value="3_days">3 Days</option>
               <option value="1_week">1 Week</option>
@@ -42,25 +42,25 @@
           </div>
           
           <div class="field-row" v-if="eventSettings.expiryType === 'absolute'" style="margin-top:1rem;">
-            <label style="display:block;margin-bottom:0.5rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: #888;">Date & Time</label>
-            <input type="datetime-local" v-model="eventSettings.expiryValue" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;" />
+            <label style="display:block;margin-bottom:0.5rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--color-text-sub);">Date & Time</label>
+            <input type="datetime-local" v-model="eventSettings.expiryValue" class="text-input" style="width:100%;background:var(--color-border);color:var(--color-text);border:1px solid var(--color-border);padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;" />
           </div>
 
           <div class="field-row" style="margin-top:1rem;">
-            <label style="display:block;margin-bottom:0.5rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: #888;">Organizer</label>
-            <input type="text" v-model="eventSettings.organizer" class="text-input" style="width:100%;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;" />
+            <label style="display:block;margin-bottom:0.5rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--color-text-sub);">Organizer</label>
+            <input type="text" v-model="eventSettings.organizer" class="text-input" style="width:100%;background:var(--color-border);color:var(--color-text);border:1px solid var(--color-border);padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;" />
           </div>
 
           <div class="field-row" style="margin-top:1rem;">
-            <label style="display:block;margin-bottom:0.5rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: #888;">Contact Info</label>
-            <textarea v-model="eventSettings.contactInfo" class="text-input" style="width:100%;height:100px;background:#2a2a2a;color:#fff;border:1px solid #444;padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;resize:vertical;"></textarea>
+            <label style="display:block;margin-bottom:0.5rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--color-text-sub);">Contact Info</label>
+            <textarea v-model="eventSettings.contactInfo" class="text-input" style="width:100%;height:100px;background:var(--color-border);color:var(--color-text);border:1px solid var(--color-border);padding:0.75rem;border-radius:6px;font-size:1rem;color-scheme:dark;resize:vertical;"></textarea>
           </div>
         </div>
 
         <div class="settings-box" v-if="authStore.user?.role === 'admin'" style="margin-top: 1.5rem;">
           <h2 style="margin-bottom: 1rem; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center;">
             <span>Operator Access</span>
-            <svg v-if="!operatorAccessUnlocked" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg v-if="!operatorAccessUnlocked" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-sub)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
             </svg>
             <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -68,22 +68,22 @@
             </svg>
           </h2>
           
-          <p style="color: #ccc; margin-bottom: 1rem; font-size: 0.9rem;">Manage dedicated operator accounts for this event.</p>
+          <p style="color: var(--color-text); margin-bottom: 1rem; font-size: 0.9rem;">Manage dedicated operator accounts for this event.</p>
           
           <table v-if="operators.length > 0" style="width: 100%; border-collapse: collapse; text-align: left; margin-bottom: 1rem;">
             <thead>
-              <tr style="border-bottom: 1px solid #444;">
-                <th style="padding: 0.5rem; color: #888; font-size: 0.8rem;">Name</th>
-                <th style="padding: 0.5rem; color: #888; font-size: 0.8rem;">Link</th>
-                <th style="padding: 0.5rem; color: #888; font-size: 0.8rem;" v-if="operatorAccessUnlocked">Actions</th>
+              <tr style="border-bottom: 1px solid var(--color-border);">
+                <th style="padding: 0.5rem; color: var(--color-text-sub); font-size: 0.8rem;">Name</th>
+                <th style="padding: 0.5rem; color: var(--color-text-sub); font-size: 0.8rem;">Link</th>
+                <th style="padding: 0.5rem; color: var(--color-text-sub); font-size: 0.8rem;" v-if="operatorAccessUnlocked">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="op in operators" :key="op.id" style="border-bottom: 1px solid #333;">
+              <tr v-for="op in operators" :key="op.id" style="border-bottom: 1px solid var(--color-border);">
                 <td style="padding: 0.75rem 0.5rem;">{{ op.name }}</td>
                 <td style="padding: 0.75rem 0.5rem;">
                   <div style="display:flex; gap:0.5rem;">
-                    <input type="text" readonly :value="operatorAccessUnlocked ? getOperatorLink(op.access_token) : '••••••••••••••••••••'" @click="operatorAccessUnlocked && $event.target.select()" style="font-family: monospace; background: #222; border: 1px solid #444; padding: 0.25rem; border-radius: 4px; color: #fff; width: 200px;" />
+                    <input type="text" readonly :value="operatorAccessUnlocked ? getOperatorLink(op.access_token) : '••••••••••••••••••••'" @click="operatorAccessUnlocked && $event.target.select()" style="font-family: monospace; background: var(--color-surface-alt); border: 1px solid var(--color-border); padding: 0.25rem; border-radius: var(--radius-sm); color: var(--color-text); width: 200px;" />
                   </div>
                 </td>
                 <td style="padding: 0.75rem 0.5rem;" v-if="operatorAccessUnlocked">
@@ -99,26 +99,26 @@
               </tr>
             </tbody>
           </table>
-          <p v-else style="color: #888; text-align: center; padding: 1rem;">No operators created yet.</p>
+          <p v-else style="color: var(--color-text-sub); text-align: center; padding: 1rem;">No operators created yet.</p>
 
-          <div v-if="!operatorAccessUnlocked" style="background: #2a2a2a; border-radius: 6px; padding: 1.5rem; text-align: center;">
-            <p style="color: #ccc; margin-bottom: 1rem; font-size: 0.9rem;">Enter Admin Password to view links and add operators.</p>
+          <div v-if="!operatorAccessUnlocked" style="background: var(--color-border); border-radius: var(--radius-sm); padding: 1.5rem; text-align: center;">
+            <p style="color: var(--color-text); margin-bottom: 1rem; font-size: 0.9rem;">Enter Admin Password to view links and add operators.</p>
             <div style="display: flex; gap: 0.5rem; justify-content: center; max-width: 400px; margin: 0 auto;">
-              <input type="password" v-model="adminUnlockPassword" @keyup.enter="unlockOperatorAccess" placeholder="Admin Password" class="text-input" style="flex: 1; background:#1f1f1f;color:#fff;border:1px solid #444;padding:0.5rem;border-radius:4px;" />
+              <input type="password" v-model="adminUnlockPassword" @keyup.enter="unlockOperatorAccess" placeholder="Admin Password" class="text-input" style="flex: 1; background:#1f1f1f;color:var(--color-text);border:1px solid var(--color-border);padding:0.5rem;border-radius:4px;" />
               <button @click="unlockOperatorAccess" class="btn-primary" style="padding: 0.5rem 1rem;">Unlock</button>
             </div>
           </div>
 
-          <div v-else style="background: #2a2a2a; border-radius: 6px; padding: 1rem;">
+          <div v-else style="background: var(--color-border); border-radius: var(--radius-sm); padding: 1rem;">
             <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem;">Add New Operator</h3>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-              <input v-model="newOperatorName" placeholder="Operator Name (e.g. Attendant A)" class="text-input" style="flex: 1; min-width: 200px; background:#1f1f1f;color:#fff;border:1px solid #444;padding:0.5rem;border-radius:4px;" />
-              <input v-model="newOperatorPassword" placeholder="Set Password" class="text-input" style="flex: 1; min-width: 150px; background:#1f1f1f;color:#fff;border:1px solid #444;padding:0.5rem;border-radius:4px;" />
+              <input v-model="newOperatorName" placeholder="Operator Name (e.g. Attendant A)" class="text-input" style="flex: 1; min-width: 200px; background:#1f1f1f;color:var(--color-text);border:1px solid var(--color-border);padding:0.5rem;border-radius:4px;" />
+              <input v-model="newOperatorPassword" placeholder="Set Password" class="text-input" style="flex: 1; min-width: 150px; background:#1f1f1f;color:var(--color-text);border:1px solid var(--color-border);padding:0.5rem;border-radius:4px;" />
               <button @click="addOperator" class="btn-primary" style="padding: 0.5rem 1rem;">Add</button>
             </div>
-            <div v-if="lastAddedOperator" style="margin-top: 1rem; background: #333; padding: 1rem; border-radius: 6px; border: 1px solid #444;">
+            <div v-if="lastAddedOperator" style="margin-top: 1rem; background: var(--color-border); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--color-border);">
               <p style="font-size: 0.85rem; margin-bottom: 0.5rem; color: #4ade80;">Successfully created! Save these details now (the password won't be shown again):</p>
-              <div style="font-family: monospace; font-size: 0.85rem; color: #ccc; margin-bottom: 0.5rem;">
+              <div style="font-family: monospace; font-size: 0.85rem; color: var(--color-text); margin-bottom: 0.5rem;">
                 <div>Name: {{ lastAddedOperator.name }}</div>
                 <div>Link: {{ lastAddedOperator.link }}</div>
                 <div>Password: {{ lastAddedOperator.password }}</div>
@@ -129,7 +129,7 @@
         </div>
 
 
-        <button @click="saveSettings" style="margin-top: 1.5rem; width: 100%; background: #fff; color: #000; border: none; padding: 0.75rem 1.5rem; font-weight: 600; border-radius: 6px; cursor: pointer;" :disabled="settingsSaving">
+        <button @click="saveSettings" style="margin-top: 1.5rem; width: 100%; background: var(--color-text); color: var(--color-bg); border: none; padding: 0.75rem 1.5rem; font-weight: 600; border-radius: var(--radius-sm); cursor: pointer;" :disabled="settingsSaving">
           {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
         </button>
       </div>
@@ -314,19 +314,19 @@ async function saveSettings() {
 
 <style scoped>
 .page-wrapper {
-  background: #0f0f0f;
+  background: var(--color-bg);
   min-height: 100vh;
-  color: #fff;
+  color: var(--color-text);
   display: flex;
   flex-direction: column;
 }
 .settings-container {
   width: 100%;
   max-width: 600px;
-  background: #0f0f0f;
+  background: var(--color-bg);
   padding: 1.5rem;
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   margin: 2rem auto;
 }
 </style>

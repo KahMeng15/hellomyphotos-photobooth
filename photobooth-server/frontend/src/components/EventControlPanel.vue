@@ -255,8 +255,8 @@ function copyOtp() {
 
 <style scoped>
 .control-panel {
-  background: #1a1a1a;
-  border-left: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -267,7 +267,7 @@ function copyOtp() {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: #0f0f0f;
+  background: var(--color-bg);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -276,7 +276,7 @@ function copyOtp() {
 }
 
 .modal-page {
-  background: #0f0f0f;
+  background: var(--color-bg);
   border-radius: 0;
   width: 100%;
   max-width: 800px;
@@ -292,7 +292,7 @@ function copyOtp() {
   justify-content: flex-start;
   gap: 1rem;
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .modal-header h2 {
@@ -304,19 +304,19 @@ function copyOtp() {
 .back-btn {
   background: none;
   border: none;
-  color: #888;
+  color: var(--color-text-sub);
   cursor: pointer;
   padding: 0.25rem;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.back-btn:hover { color: #fff; }
+.back-btn:hover { color: var(--color-text); }
 
 .close-btn {
   background: none;
   border: none;
-  color: #888;
+  color: var(--color-text-sub);
   font-size: 1.25rem;
   cursor: pointer;
   padding: 0.25rem;
@@ -332,11 +332,11 @@ function copyOtp() {
 }
 
 .panel-section h3 {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #666;
+  color: var(--color-text-muted);
   margin: 0 0 0.75rem;
 }
 
@@ -344,7 +344,7 @@ function copyOtp() {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   text-transform: capitalize;
 }
 
@@ -358,22 +358,22 @@ function copyOtp() {
 
 .retry-hint {
   font-size: 0.6875rem;
-  color: #888;
+  color: var(--color-text-sub);
   text-transform: none;
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
 }
 
 .status-dot.connected {
-  background: #4caf50;
+  background: var(--color-success);
 }
 
 .status-dot.disconnected {
-  background: #f44336;
+  background: var(--color-error);
 }
 
 .otp-section {
@@ -385,21 +385,21 @@ function copyOtp() {
 
 .otp-label {
   font-size: 0.6875rem;
-  color: #888;
+  color: var(--color-text-sub);
 }
 
 .otp-code {
   font-size: 1.25rem;
   font-family: monospace;
   letter-spacing: 0.25rem;
-  color: #fff;
+  color: var(--color-text);
 }
 
 .btn-tiny {
-  background: #2a2a2a;
-  color: #ccc;
+  background: var(--color-border);
+  color: var(--color-text);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 0.25rem 0.5rem;
   font-size: 0.6875rem;
   cursor: pointer;
@@ -414,23 +414,23 @@ function copyOtp() {
 }
 
 .control-field label {
-  font-size: 0.75rem;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--color-text-sub);
 }
 
 .control-field select {
   padding: 0.5rem;
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
-  background: #111;
-  color: #fff;
-  font-size: 0.8125rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
   outline: none;
 }
 
 .settings-box {
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -442,7 +442,7 @@ function copyOtp() {
 }
 
 .field-row:nth-child(odd) {
-  background: #111;
+  background: var(--color-surface);
 }
 
 .field-row:nth-child(even) {
@@ -454,19 +454,19 @@ function copyOtp() {
 }
 
 .field-row label {
-  font-size: 0.8125rem;
-  color: #ccc;
+  font-size: var(--text-sm);
+  color: var(--color-text);
   font-weight: 500;
 }
 
 .num-input {
   width: 60px;
   padding: 0.375rem 0.5rem;
-  border: 1px solid #333;
-  border-radius: 6px;
-  background: #0f0f0f;
-  color: #fff;
-  font-size: 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
   font-weight: 600;
   outline: none;
   text-align: center;
@@ -474,18 +474,18 @@ function copyOtp() {
 }
 
 .num-input:focus {
-  border-color: #666;
-  box-shadow: 0 0 0 1px #555;
+  border-color: var(--color-text-muted);
+  box-shadow: 0 0 0 1px var(--color-text-muted);
 }
 
 .str-input {
   width: 120px;
   padding: 0.375rem 0.5rem;
-  border: 1px solid #333;
-  border-radius: 6px;
-  background: #0f0f0f;
-  color: #fff;
-  font-size: 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
   font-weight: 600;
   outline: none;
   text-align: center;
@@ -493,8 +493,8 @@ function copyOtp() {
 }
 
 .str-input:focus {
-  border-color: #666;
-  box-shadow: 0 0 0 1px #555;
+  border-color: var(--color-text-muted);
+  box-shadow: 0 0 0 1px var(--color-text-muted);
 }
 
 .slider-wrapper {
@@ -511,21 +511,21 @@ function copyOtp() {
 }
 
 .slider-val {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
-  color: #fff;
+  color: var(--color-text);
   min-width: 50px;
   text-align: right;
 }
 
 .custom-select {
   width: 100%;
-  background: #2a2a2a;
-  color: #fff;
-  border: 1px solid #444;
+  background: var(--color-border);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
   padding: 0.75rem;
-  border-radius: 6px;
-  font-size: 1rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
   appearance: none;
   -webkit-appearance: none;
   outline: none;
@@ -536,51 +536,51 @@ function copyOtp() {
   cursor: pointer;
 }
 .custom-select:focus {
-  border-color: #666;
+  border-color: var(--color-text-muted);
 }
 
 .focus-toggle {
   display: flex;
-  border: 1px solid #333;
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .focus-btn {
   padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   border: none;
   cursor: pointer;
-  background: #111;
-  color: #888;
+  background: var(--color-surface);
+  color: var(--color-text-sub);
 }
 
 .focus-btn.focus-active {
-  background: #fff;
-  color: #000;
+  background: var(--color-text);
+  color: var(--color-bg);
 }
 
 .msg-success {
   display: block;
   margin-top: 0.375rem;
-  font-size: 0.75rem;
-  color: #4caf50;
+  font-size: var(--text-xs);
+  color: var(--color-success);
 }
 
 .msg-error {
   display: block;
   margin-top: 0.375rem;
-  font-size: 0.75rem;
-  color: #f44336;
+  font-size: var(--text-xs);
+  color: var(--color-error);
 }
 
 .btn-control {
   width: 100%;
   padding: 0.625rem;
   border: none;
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   margin-bottom: 0.5rem;
@@ -592,33 +592,33 @@ function copyOtp() {
 }
 
 .btn-primary {
-  background: #2196F3;
-  color: #fff;
+  background: var(--color-info);
+  color: var(--color-text);
 }
 
 .btn-pause {
   background: #ff9800;
-  color: #fff;
+  color: var(--color-text);
 }
 
 .btn-resume {
-  background: #4caf50;
-  color: #fff;
+  background: var(--color-success);
+  color: var(--color-text);
 }
 
 .btn-warning {
   background: #ff9800;
-  color: #fff;
+  color: var(--color-text);
 }
 
 .btn-secondary {
-  background: #2a2a2a;
-  color: #ccc;
+  background: var(--color-border);
+  color: var(--color-text);
 }
 
 .btn-danger {
-  background: #3a1a1a;
-  color: #f44336;
+  background: var(--color-border);
+  color: var(--color-error);
 }
 
 .stats-row {
@@ -635,14 +635,14 @@ function copyOtp() {
   gap: 0.125rem;
   padding: 0.5rem;
   background: #151515;
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
 }
 
 .stat-value {
   font-size: 1.125rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text);
   line-height: 1;
 }
 
@@ -650,19 +650,19 @@ function copyOtp() {
   font-size: 0.625rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #888;
+  color: var(--color-text-sub);
 }
 
 .queue-bar {
   height: 4px;
-  background: #2a2a2a;
+  background: var(--color-border);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .queue-fill {
   height: 100%;
-  background: #4caf50;
+  background: var(--color-success);
   transition: width 0.3s;
   border-radius: 3px;
 }

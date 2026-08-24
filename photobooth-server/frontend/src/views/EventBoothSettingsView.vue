@@ -7,48 +7,48 @@
         <div class="settings-box">
           <div class="field-row" style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 0;">
             <label style="font-weight: 500;">Photos per session</label>
-            <input type="number" min="1" max="4" v-model.number="eventSettings.photoCount" style="width: 80px; background: #2a2a2a; border: 1px solid #444; color: #fff; padding: 0.5rem; border-radius: 6px;" />
+            <input type="number" min="1" max="4" v-model.number="eventSettings.photoCount" style="width: 80px; background: var(--color-border); border: 1px solid var(--color-border); color: var(--color-text); padding: 0.5rem; border-radius: var(--radius-sm);" />
           </div>
           <div class="field-row" style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 0;">
             <label style="font-weight: 500;">Countdown</label>
-            <input type="number" min="3" max="10" v-model.number="eventSettings.countdown" style="width: 80px; background: #2a2a2a; border: 1px solid #444; color: #fff; padding: 0.5rem; border-radius: 6px;" />
+            <input type="number" min="3" max="10" v-model.number="eventSettings.countdown" style="width: 80px; background: var(--color-border); border: 1px solid var(--color-border); color: var(--color-text); padding: 0.5rem; border-radius: var(--radius-sm);" />
           </div>
           <div class="field-row" style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 0;">
             <label style="font-weight: 500;">Interval</label>
-            <input type="number" min="0" max="5" v-model.number="eventSettings.captureInterval" style="width: 80px; background: #2a2a2a; border: 1px solid #444; color: #fff; padding: 0.5rem; border-radius: 6px;" />
+            <input type="number" min="0" max="5" v-model.number="eventSettings.captureInterval" style="width: 80px; background: var(--color-border); border: 1px solid var(--color-border); color: var(--color-text); padding: 0.5rem; border-radius: var(--radius-sm);" />
           </div>
           <div class="field-row" style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 0;">
             <label style="font-weight: 500;">Preview</label>
-            <input type="number" min="1" max="5" v-model.number="eventSettings.postCapturePreview" style="width: 80px; background: #2a2a2a; border: 1px solid #444; color: #fff; padding: 0.5rem; border-radius: 6px;" />
+            <input type="number" min="1" max="5" v-model.number="eventSettings.postCapturePreview" style="width: 80px; background: var(--color-border); border: 1px solid var(--color-border); color: var(--color-text); padding: 0.5rem; border-radius: var(--radius-sm);" />
           </div>
         </div>
         
         <div class="settings-box" style="margin-top: 2rem;">
-          <h3 style="margin-top: 0; font-size: 0.9rem; color: #888; text-transform: uppercase;">DSLR Camera Overrides</h3>
+          <h3 style="margin-top: 0; font-size: 0.9rem; color: var(--color-text-sub); text-transform: uppercase;">DSLR Camera Overrides</h3>
           <div class="field-row" style="display:flex; flex-direction:column; gap:0.5rem; padding: 0.5rem 0;">
             <div style="display:flex; justify-content:space-between;">
               <label style="font-weight: 500;">Shutter</label>
-              <span style="color:#888;">{{ eventSettings.dslrShutterSpeed || 'auto' }}</span>
+              <span style="color:var(--color-text-sub);">{{ eventSettings.dslrShutterSpeed || 'auto' }}</span>
             </div>
-            <input type="range" min="0" :max="shutterChoices.length - 1" :value="shutterChoices.indexOf(eventSettings.dslrShutterSpeed) >= 0 ? shutterChoices.indexOf(eventSettings.dslrShutterSpeed) : 0" @input="eventSettings.dslrShutterSpeed = shutterChoices[parseInt(($event.target as HTMLInputElement).value)]" style="width:100%; accent-color:#fff;" />
+            <input type="range" min="0" :max="shutterChoices.length - 1" :value="shutterChoices.indexOf(eventSettings.dslrShutterSpeed) >= 0 ? shutterChoices.indexOf(eventSettings.dslrShutterSpeed) : 0" @input="eventSettings.dslrShutterSpeed = shutterChoices[parseInt(($event.target as HTMLInputElement).value)]" style="width:100%; accent-color:var(--color-text);" />
           </div>
           <div class="field-row" style="display:flex; flex-direction:column; gap:0.5rem; padding: 0.5rem 0;">
             <div style="display:flex; justify-content:space-between;">
               <label style="font-weight: 500;">ISO</label>
-              <span style="color:#888;">{{ eventSettings.dslrIso || 'auto' }}</span>
+              <span style="color:var(--color-text-sub);">{{ eventSettings.dslrIso || 'auto' }}</span>
             </div>
-            <input type="range" min="0" :max="isoChoices.length - 1" :value="isoChoices.indexOf(eventSettings.dslrIso) >= 0 ? isoChoices.indexOf(eventSettings.dslrIso) : 0" @input="eventSettings.dslrIso = isoChoices[parseInt(($event.target as HTMLInputElement).value)]" style="width:100%; accent-color:#fff;" />
+            <input type="range" min="0" :max="isoChoices.length - 1" :value="isoChoices.indexOf(eventSettings.dslrIso) >= 0 ? isoChoices.indexOf(eventSettings.dslrIso) : 0" @input="eventSettings.dslrIso = isoChoices[parseInt(($event.target as HTMLInputElement).value)]" style="width:100%; accent-color:var(--color-text);" />
           </div>
           <div class="field-row" style="display:flex; flex-direction:column; gap:0.5rem; padding: 0.5rem 0;">
             <div style="display:flex; justify-content:space-between;">
               <label style="font-weight: 500;">Aperture</label>
-              <span style="color:#888;">{{ eventSettings.dslrAperture || 'auto' }}</span>
+              <span style="color:var(--color-text-sub);">{{ eventSettings.dslrAperture || 'auto' }}</span>
             </div>
-            <input type="range" min="0" :max="apertureChoices.length - 1" :value="apertureChoices.indexOf(eventSettings.dslrAperture) >= 0 ? apertureChoices.indexOf(eventSettings.dslrAperture) : 0" @input="eventSettings.dslrAperture = apertureChoices[parseInt(($event.target as HTMLInputElement).value)]" style="width:100%; accent-color:#fff;" />
+            <input type="range" min="0" :max="apertureChoices.length - 1" :value="apertureChoices.indexOf(eventSettings.dslrAperture) >= 0 ? apertureChoices.indexOf(eventSettings.dslrAperture) : 0" @input="eventSettings.dslrAperture = apertureChoices[parseInt(($event.target as HTMLInputElement).value)]" style="width:100%; accent-color:var(--color-text);" />
           </div>
           <div class="field-row" style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 0;">
             <label style="font-weight: 500;">Focus Mode</label>
-            <div class="focus-toggle" style="display:flex; background:#2a2a2a; border-radius:100px; padding:2px;">
+            <div class="focus-toggle" style="display:flex; background:var(--color-border); border-radius:100px; padding:2px;">
               <button :class="['focus-btn', eventSettings.dslrFocusMode === 'auto' ? 'focus-active' : '']" @click="eventSettings.dslrFocusMode = 'auto'">AF</button>
               <button :class="['focus-btn', eventSettings.dslrFocusMode === 'manual' ? 'focus-active' : '']" @click="eventSettings.dslrFocusMode = 'manual'">MF</button>
             </div>
@@ -57,7 +57,7 @@
 
 
 
-        <button @click="saveSettings" style="margin-top: 1rem; width: 100%; background: #fff; color: #000; border: none; padding: 0.75rem 1.5rem; font-weight: 600; border-radius: 6px; cursor: pointer;" :disabled="settingsSaving">
+        <button @click="saveSettings" style="margin-top: 1rem; width: 100%; background: var(--color-text); color: var(--color-bg); border: none; padding: 0.75rem 1.5rem; font-weight: 600; border-radius: var(--radius-sm); cursor: pointer;" :disabled="settingsSaving">
           {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
         </button>
       </div>
@@ -143,31 +143,31 @@ async function saveSettings() {
 
 <style scoped>
 .page-wrapper {
-  background: #0f0f0f;
+  background: var(--color-bg);
   min-height: 100vh;
-  color: #fff;
+  color: var(--color-text);
   display: flex;
   flex-direction: column;
 }
 .settings-container {
   width: 100%;
   max-width: 600px;
-  background: #0f0f0f;
+  background: var(--color-bg);
   padding: 1.5rem;
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   margin: 2rem auto;
 }
 .focus-btn {
   padding: 0.25rem 1rem;
-  border-radius: 100px;
+  border-radius: var(--radius-pill);
   border: none;
   background: transparent;
-  color: #888;
+  color: var(--color-text-sub);
   cursor: pointer;
 }
 .focus-btn.focus-active {
-  background: #444;
-  color: #fff;
+  background: var(--color-border);
+  color: var(--color-text);
 }
 </style>

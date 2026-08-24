@@ -1,7 +1,7 @@
 <template>
   <div class="share-page">
     <div v-if="loading" class="share-content skeleton-loader">
-      <header class="share-header skeleton-pulse" style="height: 60px; max-width: 300px; margin: 0 auto 2rem; border-radius: 8px;"></header>
+      <header class="share-header skeleton-pulse" style="height: 60px; max-width: 300px; margin: 0 auto 2rem; border-radius: var(--radius-md);"></header>
       <div class="photo-grid">
         <div v-for="i in 3" :key="i" class="photo-card skeleton-pulse" style="aspect-ratio: 2/3;"></div>
       </div>
@@ -105,7 +105,7 @@
             <h2>Contact Organizer</h2>
           </div>
           <div class="modal-body">
-            <div style="white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; color: #ccc;">{{ session?.contactInfo }}</div>
+            <div style="white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; color: var(--color-text);">{{ session?.contactInfo }}</div>
           </div>
         </div>
       </div>
@@ -323,8 +323,8 @@ async function downloadAll() {
 <style scoped>
 .share-page {
   min-height: 100vh;
-  background: #0f0f0f;
-  color: #fff;
+  background: var(--color-bg);
+  color: var(--color-text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   display: flex;
   flex-direction: column;
@@ -343,8 +343,8 @@ async function downloadAll() {
 }
 
 .expiry-text {
-  color: #888;
-  font-size: 0.75rem;
+  color: var(--color-text-sub);
+  font-size: var(--text-xs);
   margin-top: 0.75rem;
 }
 
@@ -355,15 +355,15 @@ async function downloadAll() {
   justify-content: center;
   min-height: 50vh;
   gap: 1rem;
-  color: #888;
+  color: var(--color-text-sub);
 }
 
 .spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid #2a2a2a;
-  border-top-color: #fff;
-  border-radius: 50%;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-text);
+  border-radius: var(--radius-full);
   animation: spin 0.8s linear infinite;
 }
 
@@ -374,18 +374,18 @@ async function downloadAll() {
 .error {
   text-align: center;
   padding: 4rem 2rem;
-  color: #888;
+  color: var(--color-text-sub);
 }
 
 .error h2 {
-  color: #f44336;
+  color: var(--color-error);
   margin-bottom: 0.5rem;
 }
 
 .share-header {
   text-align: center;
   padding: 2rem 1rem;
-  border-bottom: 1px solid #1a1a1a;
+  border-bottom: 1px solid var(--color-surface);
 }
 
 .share-header h1 {
@@ -396,8 +396,8 @@ async function downloadAll() {
 }
 
 .subtitle {
-  color: #666;
-  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
   margin: 0;
   margin-top: 0.25rem;
 }
@@ -416,9 +416,9 @@ async function downloadAll() {
   width: 100%;
   max-height: 65vh;
   object-fit: contain;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  border: 1px solid #333;
+  border: 1px solid var(--color-border);
 }
 
 .btn-download-all {
@@ -427,11 +427,11 @@ async function downloadAll() {
   gap: 0.5rem;
   margin-top: 0;
   padding: 0.625rem 1.25rem;
-  background: #fff;
-  color: #000;
+  background: var(--color-text);
+  color: var(--color-bg);
   border: none;
   border-radius: 20px;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.2s;
@@ -447,7 +447,7 @@ async function downloadAll() {
   100% { opacity: 0.6; }
 }
 .skeleton-pulse {
-  background-color: #222;
+  background-color: var(--color-surface-alt);
   animation: pulse 1.5s infinite ease-in-out;
 }
 .skeleton-loader {
@@ -467,10 +467,10 @@ async function downloadAll() {
 .photo-card {
   width: 280px;
   max-width: 100%;
-  background: #1a1a1a;
-  border-radius: 12px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--color-border);
   transition: transform 0.15s;
   display: flex;
   flex-direction: column;
@@ -516,10 +516,10 @@ async function downloadAll() {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.75rem;
-  background: #2a2a2a;
-  color: #ccc;
+  background: var(--color-border);
+  color: var(--color-text);
   text-decoration: none;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   transition: background 0.15s, color 0.15s;
   margin-top: auto;
@@ -527,28 +527,28 @@ async function downloadAll() {
 
 .download-btn:hover {
   background: #3a3a3a;
-  color: #fff;
+  color: var(--color-text);
 }
 
 .share-footer {
   text-align: center;
   padding: 2rem;
-  color: #666;
-  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
   line-height: 1.5;
 }
 
 .share-footer a {
-  color: #aaa;
+  color: var(--color-text-sub);
   text-decoration: underline;
-  text-decoration-color: #444;
+  text-decoration-color: var(--color-border);
   text-underline-offset: 3px;
   transition: color 0.2s, text-decoration-color 0.2s;
 }
 
 .share-footer a:hover {
-  color: #fff;
-  text-decoration-color: #fff;
+  color: var(--color-text);
+  text-decoration-color: var(--color-text);
 }
 
 .lightbox {
@@ -569,7 +569,7 @@ async function downloadAll() {
   right: 1rem;
   background: none;
   border: none;
-  color: #fff;
+  color: var(--color-text);
   font-size: 1.5rem;
   cursor: pointer;
   opacity: 0.6;
@@ -594,7 +594,7 @@ async function downloadAll() {
   color: white;
   padding: 1rem;
   cursor: pointer;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -628,7 +628,7 @@ async function downloadAll() {
     left: 0;
     right: 0;
     height: 160px;
-    background: linear-gradient(to top, #0f0f0f, transparent);
+    background: linear-gradient(to top, var(--color-bg), transparent);
     pointer-events: none;
   }
   .hero-preview img {
@@ -659,7 +659,7 @@ async function downloadAll() {
   max-width: 90vw;
   max-height: 80vh;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .blur-bg {
@@ -678,7 +678,7 @@ async function downloadAll() {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   transition: opacity 0.3s ease;
 }
 
@@ -689,7 +689,7 @@ async function downloadAll() {
 .lightbox-img {
   max-width: 90vw;
   max-height: 80vh;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   opacity: 0;
   transition: opacity 0.3s ease;
   will-change: opacity;
@@ -707,7 +707,7 @@ async function downloadAll() {
   cursor: pointer;
 }
 .contact-link:hover {
-  color: #fff;
+  color: var(--color-text);
 }
 
 .modal-overlay {
@@ -721,8 +721,8 @@ async function downloadAll() {
 }
 
 .modal-page {
-  background: #1a1a1a;
-  border-radius: 12px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
   width: 90%;
   max-width: 400px;
   max-height: 80vh;
@@ -736,28 +736,28 @@ async function downloadAll() {
   display: flex;
   align-items: center;
   padding: 1rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .modal-header h2 {
   font-size: 1.1rem;
   font-weight: 600;
   margin: 0 0 0 1rem;
-  color: #fff;
+  color: var(--color-text);
 }
 
 .back-btn {
   background: none;
   border: none;
-  color: #ccc;
+  color: var(--color-text);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0.25rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
-.back-btn:hover { background: #333; color: #fff; }
+.back-btn:hover { background: var(--color-border); color: var(--color-text); }
 
 .modal-body {
   padding: 1.5rem;

@@ -3,13 +3,13 @@
     <div v-if="activeBoothError" class="error-overlay">
       <div class="error-modal">
         <div style="margin-bottom:1rem;">
-          <svg v-if="activeBoothError.type === 'dslr'" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f44336" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg v-if="activeBoothError.type === 'dslr'" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-error)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="2" y1="2" x2="22" y2="22"/>
             <path d="M7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16"/>
             <path d="M9.5 4h5L17 7h3a2 2 0 0 1 2 2v7.5"/>
             <path d="M14.12 15.12A3 3 0 1 1 9.88 10.88"/>
           </svg>
-          <svg v-else width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f44336" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg v-else width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-error)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="12" y1="8" x2="12" y2="12"></line>
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
@@ -432,16 +432,16 @@ function formatTime(ts: string) {
   z-index: 10000;
 }
 .confirm-modal {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
   max-width: 360px;
   width: 100%;
 }
 .confirm-modal p {
-  font-size: 0.9375rem;
-  color: #ccc;
+  font-size: var(--text-base);
+  color: var(--color-text);
   margin: 0 0 1.25rem;
   line-height: 1.4;
 }
@@ -451,8 +451,8 @@ function formatTime(ts: string) {
   justify-content: flex-end;
 }
 .frames-modal {
-  background: #0f0f0f;
-  border-radius: 12px;
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
   width: 90vw;
   height: 90vh;
   position: relative;
@@ -467,21 +467,21 @@ function formatTime(ts: string) {
   right: 1.5rem;
   background: none;
   border: none;
-  color: #888;
+  color: var(--color-text-sub);
   font-size: 1.25rem;
   cursor: pointer;
   z-index: 100;
 }
 .frames-modal .close-btn:hover {
-  color: #fff;
+  color: var(--color-text);
 }
 .btn-confirm {
   padding: 0.5rem 1rem;
-  background: #f44336;
-  color: #fff;
+  background: var(--color-error);
+  color: var(--color-text);
   border: none;
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
 }
@@ -491,15 +491,15 @@ function formatTime(ts: string) {
 .btn-cancel-modal {
   padding: 0.5rem 1rem;
   background: transparent;
-  color: #888;
-  border: 1px solid #333;
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  color: var(--color-text-sub);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 .btn-cancel-modal:hover {
-  border-color: #555;
-  color: #ccc;
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
 }
 </style>
 
@@ -508,8 +508,8 @@ function formatTime(ts: string) {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #0f0f0f;
-  color: #fff;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 .dashboard-header {
@@ -517,8 +517,8 @@ function formatTime(ts: string) {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1.5rem;
-  background: #1a1a1a;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .header-left {
@@ -538,17 +538,17 @@ function formatTime(ts: string) {
   font-size: 0.6875rem;
   text-transform: uppercase;
   padding: 0.125rem 0.5rem;
-  border-radius: 100px;
+  border-radius: var(--radius-pill);
 }
 
 .status-active {
   background: #1a3a2a;
-  color: #4caf50;
+  color: var(--color-success);
 }
 
 .status-ended {
-  background: #3a1a1a;
-  color: #f44336;
+  background: var(--color-border);
+  color: var(--color-error);
 }
 
 .header-right {
@@ -558,29 +558,29 @@ function formatTime(ts: string) {
 }
 
 .user-email {
-  font-size: 0.8125rem;
-  color: #888;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
 }
 
 .btn-icon {
   background: none;
-  border: 1px solid #2a2a2a;
-  color: #ccc;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
   padding: 0.375rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   line-height: 0;
 }
 
 .btn-icon:hover {
-  border-color: #555;
-  color: #fff;
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .btn-icon.active {
-  background: #2a2a2a;
-  color: #fff;
-  border-color: #2196F3;
+  background: var(--color-border);
+  color: var(--color-text);
+  border-color: var(--color-info);
 }
 
 .dashboard-grid {
@@ -604,7 +604,7 @@ function formatTime(ts: string) {
 }
 
 .feed-header h2 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0;
 }
@@ -618,29 +618,29 @@ function formatTime(ts: string) {
 .view-toggle {
   display: flex;
   gap: 2px;
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   padding: 2px;
 }
 
 .btn-view {
   background: none;
   border: none;
-  color: #666;
+  color: var(--color-text-muted);
   padding: 0.25rem 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   line-height: 0;
 }
 
 .btn-view:hover {
-  color: #ccc;
+  color: var(--color-text);
 }
 
 .btn-view.active {
-  background: #2a2a2a;
-  color: #fff;
+  background: var(--color-border);
+  color: var(--color-text);
 }
 
 .selection-bar {
@@ -651,11 +651,11 @@ function formatTime(ts: string) {
   margin-bottom: 0.75rem;
   background: #1a2a3a;
   border: 1px solid #2a4a6a;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .selection-count {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   color: #88c8ff;
   margin-right: auto;
 }
@@ -664,14 +664,14 @@ function formatTime(ts: string) {
   padding: 0.375rem 0.75rem;
   border: none;
   border-radius: 5px;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   cursor: pointer;
 }
 
 .btn-archive {
   background: #2a3a2a;
-  color: #4caf50;
+  color: var(--color-success);
 }
 
 .btn-archive:hover {
@@ -679,8 +679,8 @@ function formatTime(ts: string) {
 }
 
 .btn-delete {
-  background: #3a1a1a;
-  color: #f44336;
+  background: var(--color-border);
+  color: var(--color-error);
 }
 
 .btn-delete:hover {
@@ -688,12 +688,12 @@ function formatTime(ts: string) {
 }
 
 .btn-cancel {
-  background: #2a2a2a;
-  color: #888;
+  background: var(--color-border);
+  color: var(--color-text-sub);
 }
 
 .btn-cancel:hover {
-  color: #ccc;
+  color: var(--color-text);
 }
 
 .session-list {
@@ -714,8 +714,8 @@ function formatTime(ts: string) {
 }
 
 .session-card {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   cursor: pointer;
   overflow: hidden;
@@ -723,19 +723,19 @@ function formatTime(ts: string) {
 }
 
 .session-card:hover {
-  border-color: #555;
+  border-color: var(--color-text-muted);
 }
 
 .session-card.selected {
-  border-color: #2196F3;
-  box-shadow: 0 0 0 1px #2196F3;
+  border-color: var(--color-info);
+  box-shadow: 0 0 0 1px var(--color-info);
 }
 
 .session-thumb {
   position: relative;
   aspect-ratio: 3/2;
   overflow: hidden;
-  background: #111;
+  background: var(--color-surface);
 }
 
 .session-list.list .session-thumb {
@@ -760,7 +760,7 @@ function formatTime(ts: string) {
   height: 100%;
   object-fit: cover;
   display: block;
-  background-color: #222;
+  background-color: var(--color-surface-alt);
   filter: blur(10px);
   transform: scale(1.05);
   transition: transform 0.4s ease-out;
@@ -772,7 +772,7 @@ function formatTime(ts: string) {
 }
 
 .thumb-skeleton {
-  background-color: #222;
+  background-color: var(--color-surface-alt);
 }
 @keyframes skeleton-pulse {
   0% { opacity: 0.6; }
@@ -789,7 +789,7 @@ function formatTime(ts: string) {
   left: 0.375rem;
   width: 20px;
   height: 20px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 2px solid rgba(255,255,255,0.5);
   background: rgba(0,0,0,0.4);
   display: flex;
@@ -805,8 +805,8 @@ function formatTime(ts: string) {
 
 .session-check.checked {
   opacity: 1;
-  background: #2196F3;
-  border-color: #2196F3;
+  background: var(--color-info);
+  border-color: var(--color-info);
 }
 
 .session-meta {
@@ -817,20 +817,20 @@ function formatTime(ts: string) {
 }
 
 .session-time {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
 .session-count {
   font-size: 0.6875rem;
-  color: #888;
+  color: var(--color-text-sub);
 }
 
 .empty-state {
   grid-column: 1 / -1;
   text-align: center;
   padding: 4rem 2rem;
-  color: #666;
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 768px) {
@@ -859,10 +859,10 @@ function formatTime(ts: string) {
   z-index: 9999;
 }
 .error-modal {
-  background: #1a1a1a;
-  border: 1px solid #3a1a1a;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   padding: 2rem;
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   max-width: 400px;
   width: 90%;
   text-align: center;
@@ -871,11 +871,11 @@ function formatTime(ts: string) {
   font-size: 1.25rem;
   font-weight: 700;
   margin: 0 0 0.5rem;
-  color: #fff;
+  color: var(--color-text);
 }
 .error-modal p {
-  font-size: 0.875rem;
-  color: #888;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
   margin: 0 0 1.5rem;
   line-height: 1.5;
   word-break: break-word;
@@ -887,21 +887,21 @@ function formatTime(ts: string) {
 }
 .btn-error-primary {
   padding: 0.75rem 2rem;
-  background: #fff;
-  color: #000;
+  background: var(--color-text);
+  color: var(--color-bg);
   border: none;
-  border-radius: 100px;
-  font-size: 1rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-base);
   font-weight: 700;
   cursor: pointer;
 }
 .btn-error-secondary {
   padding: 0.75rem 2rem;
   background: transparent;
-  color: #888;
-  border: 1px solid #333;
-  border-radius: 100px;
-  font-size: 1rem;
+  color: var(--color-text-sub);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-base);
   cursor: pointer;
 }
 </style>

@@ -171,8 +171,8 @@ function formatTime(ts: string) {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #0f0f0f;
-  color: #fff;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 .dashboard-header {
@@ -180,8 +180,8 @@ function formatTime(ts: string) {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1.5rem;
-  background: #1a1a1a;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .header-left {
@@ -203,24 +203,24 @@ function formatTime(ts: string) {
 }
 
 .user-email {
-  font-size: 0.8125rem;
-  color: #888;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
 }
 
 .btn-icon {
   background: none;
-  border: 1px solid #2a2a2a;
-  color: #ccc;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
   padding: 0.375rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   line-height: 0;
   transition: all 0.15s;
 }
 
 .btn-icon:hover {
-  border-color: #555;
-  color: #fff;
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .dashboard-grid {
@@ -244,14 +244,14 @@ function formatTime(ts: string) {
 }
 
 .feed-header h2 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0;
 }
 
 .photo-count {
-  font-size: 0.8125rem;
-  color: #888;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
 }
 
 .session-list {
@@ -261,8 +261,8 @@ function formatTime(ts: string) {
 }
 
 .session-card {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   cursor: pointer;
   overflow: hidden;
@@ -270,13 +270,13 @@ function formatTime(ts: string) {
 }
 
 .session-card:hover {
-  border-color: #444;
+  border-color: var(--color-border);
 }
 
 .session-thumb {
   aspect-ratio: 3/2;
   overflow: hidden;
-  background: #111;
+  background: var(--color-surface);
 }
 
 .thumb-img {
@@ -294,19 +294,19 @@ function formatTime(ts: string) {
 }
 
 .session-time {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
 .session-count {
   font-size: 0.6875rem;
-  color: #888;
+  color: var(--color-text-sub);
 }
 
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
-  color: #666;
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 768px) {

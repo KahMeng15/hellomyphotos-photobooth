@@ -72,13 +72,13 @@ async function handleLogin() {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: #0f0f0f;
+  background: var(--color-bg);
 }
 
 .login-card {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 2.5rem;
   width: 100%;
   max-width: 400px;
@@ -92,14 +92,14 @@ async function handleLogin() {
 .login-header h1 {
   font-size: 1.75rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text);
   margin: 0;
 }
 
 .login-header p {
-  color: #888;
+  color: var(--color-text-sub);
   margin: 0.5rem 0 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .login-form {
@@ -115,39 +115,39 @@ async function handleLogin() {
 }
 
 .field label {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 500;
-  color: #aaa;
+  color: var(--color-text-sub);
 }
 
 .field input {
   padding: 0.75rem;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
-  background: #111;
-  color: #fff;
-  font-size: 0.9375rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-base);
   outline: none;
   transition: border-color 0.2s;
 }
 
 .field input:focus {
-  border-color: #555;
+  border-color: var(--color-text-muted);
 }
 
 .error-msg {
-  color: #f44336;
-  font-size: 0.8125rem;
+  color: var(--color-error);
+  font-size: var(--text-sm);
   margin: 0;
 }
 
 .btn-login {
   padding: 0.75rem;
-  background: #fff;
-  color: #000;
+  background: var(--color-text);
+  color: var(--color-bg);
   border: none;
-  border-radius: 8px;
-  font-size: 0.9375rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.2s;

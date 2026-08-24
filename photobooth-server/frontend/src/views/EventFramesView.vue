@@ -46,9 +46,9 @@ function goBack() {
 
 <style scoped>
 .page-wrapper {
-  background: #0f0f0f;
+  background: var(--color-bg);
   min-height: 100vh;
-  color: #fff;
+  color: var(--color-text);
   display: flex;
   flex-direction: column;
 }
@@ -60,9 +60,9 @@ function goBack() {
 .frames-container {
   width: 100%;
   max-width: 1200px;
-  background: #0f0f0f;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 </style>

@@ -23,21 +23,21 @@
             <template v-if="frame.layering === 'background'">
               <image :href="`${baseUrl}/api/admin/events/${eventId}/frames/${frame.id}/image`" x="0" y="0" :width="frame.canvasWidth" :height="frame.canvasHeight" />
               <g v-for="(ph, i) in frame.placeholders" :key="i">
-                <rect :x="ph.x" :y="ph.y" :width="ph.width" :height="ph.height" fill="rgba(33, 150, 243, 0.7)" stroke="#2196F3" :stroke-width="Math.max(4, Math.min(ph.width, ph.height) * 0.02)" />
-                <text :x="ph.x + ph.width/2" :y="ph.y + ph.height/2" fill="#fff" :font-size="Math.max(24, Math.min(ph.width, ph.height) * 0.3)" font-family="sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="middle">{{ i + 1 }}</text>
+                <rect :x="ph.x" :y="ph.y" :width="ph.width" :height="ph.height" fill="rgba(33, 150, 243, 0.7)" stroke="var(--color-info)" :stroke-width="Math.max(4, Math.min(ph.width, ph.height) * 0.02)" />
+                <text :x="ph.x + ph.width/2" :y="ph.y + ph.height/2" fill="var(--color-text)" :font-size="Math.max(24, Math.min(ph.width, ph.height) * 0.3)" font-family="sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="middle">{{ i + 1 }}</text>
               </g>
             </template>
             <template v-else>
               <g v-for="(ph, i) in frame.placeholders" :key="i">
-                <rect :x="ph.x" :y="ph.y" :width="ph.width" :height="ph.height" fill="rgba(33, 150, 243, 0.7)" stroke="#2196F3" :stroke-width="Math.max(4, Math.min(ph.width, ph.height) * 0.02)" />
-                <text :x="ph.x + ph.width/2" :y="ph.y + ph.height/2" fill="#fff" :font-size="Math.max(24, Math.min(ph.width, ph.height) * 0.3)" font-family="sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="middle">{{ i + 1 }}</text>
+                <rect :x="ph.x" :y="ph.y" :width="ph.width" :height="ph.height" fill="rgba(33, 150, 243, 0.7)" stroke="var(--color-info)" :stroke-width="Math.max(4, Math.min(ph.width, ph.height) * 0.02)" />
+                <text :x="ph.x + ph.width/2" :y="ph.y + ph.height/2" fill="var(--color-text)" :font-size="Math.max(24, Math.min(ph.width, ph.height) * 0.3)" font-family="sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="middle">{{ i + 1 }}</text>
               </g>
               <image :href="`${baseUrl}/api/admin/events/${eventId}/frames/${frame.id}/image`" x="0" y="0" :width="frame.canvasWidth" :height="frame.canvasHeight" />
             </template>
           </svg>
           <svg v-else viewBox="0 0 1000 1000" class="frame-svg-preview">
-            <rect x="0" y="0" width="1000" height="1000" fill="rgba(33, 150, 243, 0.7)" stroke="#2196F3" stroke-width="20" />
-            <text x="500" y="500" fill="#fff" font-size="300" font-family="sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="middle">1</text>
+            <rect x="0" y="0" width="1000" height="1000" fill="rgba(33, 150, 243, 0.7)" stroke="var(--color-info)" stroke-width="20" />
+            <text x="500" y="500" fill="var(--color-text)" font-size="300" font-family="sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="middle">1</text>
           </svg>
         </div>
         <div class="frame-info">
@@ -225,15 +225,15 @@ onMounted(() => {
   z-index: 1000;
 }
 .modal-content.confirm-modal {
-  background: #1a1a1a;
+  background: var(--color-surface);
   padding: 1.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   max-width: 400px;
   width: 90%;
-  border: 1px solid #333;
+  border: 1px solid var(--color-border);
 }
 .modal-content.confirm-modal h3 { margin: 0 0 1rem; }
-.modal-content.confirm-modal p { margin: 0 0 1.5rem; color: #aaa; line-height: 1.4; }
+.modal-content.confirm-modal p { margin: 0 0 1.5rem; color: var(--color-text-sub); line-height: 1.4; }
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -242,12 +242,12 @@ onMounted(() => {
 .modal-actions button {
   padding: 0.5rem 1rem;
   border: none;
-  border-radius: 4px;
-  font-size: 0.875rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
 }
-.modal-actions .btn-primary { background: #2196F3; color: #fff; }
+.modal-actions .btn-primary { background: var(--color-info); color: var(--color-text); }
 .modal-actions .btn-primary:hover { background: #1976D2; }
 
 .frame-manager {
@@ -261,11 +261,11 @@ onMounted(() => {
 }
 .header h2 { margin: 0; font-size: 1.25rem; }
 .btn-icon-primary {
-  background: #2196F3;
-  color: #fff;
+  background: var(--color-info);
+  color: var(--color-text);
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -283,14 +283,14 @@ onMounted(() => {
   gap: 1.5rem;
 }
 .frame-card {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 .frame-preview {
   aspect-ratio: 1;
-  background: #111;
+  background: var(--color-surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -335,11 +335,11 @@ onMounted(() => {
 }
 .frame-info h3 {
   margin: 0 0 0.5rem;
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 .meta {
-  color: #888;
-  font-size: 0.8125rem;
+  color: var(--color-text-sub);
+  font-size: var(--text-sm);
   margin: 0 0 1rem;
 }
 .frame-actions {
@@ -351,8 +351,8 @@ onMounted(() => {
   flex: 1;
   padding: 0.375rem;
   border: none;
-  border-radius: 4px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   cursor: pointer;
   font-weight: 500;
 }
@@ -363,26 +363,26 @@ onMounted(() => {
 .btn-more {
   background: none;
   border: none;
-  color: #aaa;
+  color: var(--color-text-sub);
   cursor: pointer;
   padding: 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.btn-more:hover { color: #fff; background: #2a2a2a; }
+.btn-more:hover { color: var(--color-text); background: var(--color-border); }
 .dropdown-content {
   display: none;
   position: absolute;
   right: 0;
   bottom: 100%;
   margin-bottom: 0.25rem;
-  background-color: #2a2a2a;
+  background-color: var(--color-border);
   min-width: 120px;
   box-shadow: 0px -4px 16px rgba(0,0,0,0.5);
   z-index: 10;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 .dropdown:hover .dropdown-content, .dropdown:focus-within .dropdown-content {
@@ -392,26 +392,26 @@ onMounted(() => {
 .btn-dropdown {
   background: none;
   border: none;
-  color: #fff;
+  color: var(--color-text);
   padding: 10px 16px;
   text-align: left;
   cursor: pointer;
   width: 100%;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 .btn-dropdown:hover { background-color: #3a3a3a; }
-.text-danger { color: #f44336 !important; }
+.text-danger { color: var(--color-error) !important; }
 
-.btn-secondary { background: #2a2a2a; color: #fff; }
+.btn-secondary { background: var(--color-border); color: var(--color-text); }
 .btn-secondary:hover { background: #3a3a3a; }
-.btn-enable { background: #1a3a2a; color: #4caf50; }
+.btn-enable { background: #1a3a2a; color: var(--color-success); }
 .btn-enable:hover { background: #2a4a3a; }
 .btn-disable { background: #3a2a1a; color: #ff9800; }
 .btn-disable:hover { background: #4a3a2a; }
 .empty-state {
   grid-column: 1 / -1;
   text-align: center;
-  color: #666;
+  color: var(--color-text-muted);
   padding: 3rem 0;
 }
 </style>

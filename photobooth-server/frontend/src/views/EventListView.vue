@@ -163,8 +163,8 @@ async function handleLogout() {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #0f0f0f;
-  color: #fff;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 .page-header {
@@ -172,8 +172,8 @@ async function handleLogout() {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1.5rem;
-  background: #1a1a1a;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 50;
@@ -192,28 +192,28 @@ async function handleLogout() {
 }
 
 .user-email {
-  font-size: 0.8125rem;
-  color: #888;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
 }
 
 .btn-icon {
   background: none;
-  border: 1px solid #2a2a2a;
-  color: #ccc;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
   padding: 0.375rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   line-height: 0;
 }
 
 .btn-icon:hover {
-  border-color: #555;
-  color: #fff;
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .btn-sm {
   padding: 0.375rem 0.75rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .events-main {
@@ -230,14 +230,14 @@ async function handleLogout() {
 }
 
 .events-header h2 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0;
 }
 
 .event-count {
-  font-size: 0.8125rem;
-  color: #888;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
 }
 
 .event-grid {
@@ -247,8 +247,8 @@ async function handleLogout() {
 }
 
 .event-card {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 1rem;
   cursor: pointer;
@@ -258,23 +258,23 @@ async function handleLogout() {
 }
 
 .event-card:hover {
-  border-color: #444;
+  border-color: var(--color-border);
 }
 
 .event-name {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0;
 }
 
 .event-date {
-  font-size: 0.8125rem;
-  color: #888;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
 }
 
 .event-desc {
-  font-size: 0.8125rem;
-  color: #666;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
   margin: 0.25rem 0 0;
 }
 
@@ -283,12 +283,12 @@ async function handleLogout() {
   justify-content: space-between;
   align-items: center;
   padding-top: 0.5rem;
-  border-top: 1px solid #2a2a2a;
+  border-top: 1px solid var(--color-border);
 }
 
 .event-otp {
-  font-size: 0.75rem;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--color-text-sub);
   font-family: monospace;
 }
 
@@ -296,32 +296,32 @@ async function handleLogout() {
   font-size: 0.6875rem;
   text-transform: uppercase;
   padding: 0.125rem 0.5rem;
-  border-radius: 100px;
+  border-radius: var(--radius-pill);
 }
 
 .status-active {
   background: #1a3a2a;
-  color: #4caf50;
+  color: var(--color-success);
 }
 
 .status-ended {
-  background: #3a1a1a;
-  color: #f44336;
+  background: var(--color-border);
+  color: var(--color-error);
 }
 
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
-  color: #666;
+  color: var(--color-text-muted);
 }
 
 .btn-link {
   margin-top: 1rem;
   background: none;
   border: none;
-  color: #2196F3;
+  color: var(--color-info);
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .modal-overlay {
@@ -336,8 +336,8 @@ async function handleLogout() {
 }
 
 .modal-content {
-  background: #1a1a1a;
-  border-radius: 12px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
   width: 100%;
   max-width: 420px;
@@ -356,18 +356,18 @@ async function handleLogout() {
 }
 
 .form-field label {
-  font-size: 0.75rem;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--color-text-sub);
 }
 
 .form-field input,
 .form-field textarea {
   padding: 0.5rem;
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
-  background: #111;
-  color: #fff;
-  font-size: 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
 }
 
 .form-field textarea {
@@ -376,8 +376,8 @@ async function handleLogout() {
 }
 
 .form-error {
-  color: #f44336;
-  font-size: 0.8125rem;
+  color: var(--color-error);
+  font-size: var(--text-sm);
   margin-bottom: 1rem;
 }
 
@@ -388,13 +388,13 @@ async function handleLogout() {
 }
 
 .btn-primary {
-  background: #2196F3;
-  color: #fff;
+  background: var(--color-info);
+  color: var(--color-text);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 0.5rem 1rem;
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .btn-primary:disabled {
@@ -403,13 +403,13 @@ async function handleLogout() {
 }
 
 .btn-secondary {
-  background: #2a2a2a;
-  color: #ccc;
+  background: var(--color-border);
+  color: var(--color-text);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 0.5rem 1rem;
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .otp-modal {
@@ -421,8 +421,8 @@ async function handleLogout() {
   font-family: monospace;
   letter-spacing: 0.5rem;
   padding: 1rem;
-  background: #111;
-  border-radius: 8px;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
   margin: 1rem 0;
 }
 

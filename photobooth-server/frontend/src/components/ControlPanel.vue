@@ -179,8 +179,8 @@ function goToSettings() {
 
 <style scoped>
 .control-panel {
-  background: #1a1a1a;
-  border-left: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -200,8 +200,8 @@ function goToSettings() {
 }
 
 .modal-page {
-  background: #1a1a1a;
-  border-radius: 12px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
   width: 100%;
   max-width: 480px;
   max-height: 90vh;
@@ -214,7 +214,7 @@ function goToSettings() {
   align-items: center;
   justify-content: space-between;
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .modal-header h2 {
@@ -226,7 +226,7 @@ function goToSettings() {
 .close-btn {
   background: none;
   border: none;
-  color: #888;
+  color: var(--color-text-sub);
   font-size: 1.25rem;
   cursor: pointer;
   padding: 0.25rem;
@@ -242,11 +242,11 @@ function goToSettings() {
 }
 
 .panel-section h3 {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #666;
+  color: var(--color-text-muted);
   margin: 0 0 0.75rem;
 }
 
@@ -254,7 +254,7 @@ function goToSettings() {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   text-transform: capitalize;
 }
 
@@ -268,22 +268,22 @@ function goToSettings() {
 
 .retry-hint {
   font-size: 0.6875rem;
-  color: #888;
+  color: var(--color-text-sub);
   text-transform: none;
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
 }
 
 .status-dot.connected {
-  background: #4caf50;
+  background: var(--color-success);
 }
 
 .status-dot.disconnected {
-  background: #f44336;
+  background: var(--color-error);
 }
 
 .control-field {
@@ -294,17 +294,17 @@ function goToSettings() {
 }
 
 .control-field label {
-  font-size: 0.75rem;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--color-text-sub);
 }
 
 .control-field select {
   padding: 0.5rem;
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
-  background: #111;
-  color: #fff;
-  font-size: 0.8125rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
   outline: none;
 }
 
@@ -312,36 +312,36 @@ function goToSettings() {
   width: 100%;
   padding: 0.625rem;
   border: none;
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   margin-bottom: 0.5rem;
 }
 
 .btn-primary {
-  background: #2196F3;
-  color: #fff;
+  background: var(--color-info);
+  color: var(--color-text);
 }
 
 .btn-pause {
   background: #ff9800;
-  color: #fff;
+  color: var(--color-text);
 }
 
 .btn-resume {
-  background: #4caf50;
-  color: #fff;
+  background: var(--color-success);
+  color: var(--color-text);
 }
 
 .btn-secondary {
-  background: #2a2a2a;
-  color: #ccc;
+  background: var(--color-border);
+  color: var(--color-text);
 }
 
 .queue-bar {
   height: 6px;
-  background: #2a2a2a;
+  background: var(--color-border);
   border-radius: 3px;
   overflow: hidden;
   margin-bottom: 0.375rem;
@@ -349,14 +349,14 @@ function goToSettings() {
 
 .queue-fill {
   height: 100%;
-  background: #4caf50;
+  background: var(--color-success);
   transition: width 0.3s;
   border-radius: 3px;
 }
 
 .queue-label {
-  font-size: 0.75rem;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--color-text-sub);
 }
 
 @media (max-width: 768px) {

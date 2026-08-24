@@ -2,15 +2,15 @@
   <div class="frame-editor">
     <div class="editor-header">
       <div class="header-left">
-        <button @click="requestClose" class="btn-icon-nav" title="Back">
+        <AppButton variant="ghost" @click="requestClose" title="Back">
           <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
-        </button>
+        </AppButton>
         <h2>Edit Frame: <input v-model="draftFrame.name" class="name-input" /></h2>
       </div>
       <div class="actions">
-        <button @click="save" class="btn-primary" :disabled="saving">{{ saving ? 'Saving...' : 'Save Changes' }}</button>
+        <AppButton @click="save" variant="primary" :disabled="saving">{{ saving ? 'Saving...' : 'Save Changes' }}</AppButton>
       </div>
     </div>
 
@@ -19,18 +19,18 @@
         <div class="section">
           <h3>Dimensions</h3>
           <p>Canvas Size: {{ draftFrame.canvasWidth }} x {{ draftFrame.canvasHeight }}</p>
-          <div class="input-grid" style="margin-top: 0.5rem; margin-bottom: 0.5rem;">
+          <div class="input-grid input-grid-wrapper">
             <label>W (px): <input type="number" :value="draftFrame.canvasWidth" @input="updateWCanvas" class="number-input" /></label>
             <label>H (px): <input type="number" :value="draftFrame.canvasHeight" @input="updateHCanvas" class="number-input" /></label>
           </div>
         </div>
 
         <div class="section">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <h3 style="margin: 0;">Layers</h3>
+          <div class="section-header">
+            <h3 class="section-title">Layers</h3>
             <div>
-              <button @click="addText" class="btn-secondary btn-sm" title="Add Text" style="margin-right: 0.5rem;">+ Text</button>
-              <button @click="addPlaceholder" class="btn-secondary btn-sm" :disabled="draftFrame.placeholders.length >= 10" title="Add Placeholder">+ Placeholder</button>
+              <AppButton @click="addText" variant="secondary" size="sm" title="Add Text" class="mr-2">+ Text</AppButton>
+              <AppButton @click="addPlaceholder" variant="secondary" size="sm" :disabled="draftFrame.placeholders.length >= 10" title="Add Placeholder">+ Placeholder</AppButton>
             </div>
           </div>
           
@@ -56,20 +56,20 @@
                 <span class="drag-handle">☰</span>
                 <span>{{ layer.name }}</span>
               </div>
-              <button v-if="layer.type !== 'image'" @click.stop="removeItem(layer.type, layer.index)" class="btn-icon btn-danger-icon">×</button>
+              <AppButton v-if="layer.type !== 'image'" @click.stop="removeItem(layer.type, layer.index)" variant="danger" size="sm">×</AppButton>
             </div>
           </div>
         </div>
 
         <div v-if="selectedType === 'text' && selectedText" class="section">
           <div class="ph-header">
-            <h3 style="display: flex; align-items: center; width: 100%;">
-              <input type="text" v-model="selectedText.name" style="flex: 1; min-width: 0; background: transparent; color: white; border: none; border-bottom: 1px solid #444; font-size: 1.1rem; padding: 2px 0;" />
+            <h3 class="ph-title-wrapper">
+              <input type="text" v-model="selectedText.name" class="ph-title-input" />
             </h3>
           </div>
-          <label style="display:block; margin-bottom: 0.5rem; color:#ccc; font-size: 0.875rem;">
+          <label class="content-label">
             Content (e.g. {{date}}, {{time}}, {{filename}}):
-            <input type="text" v-model="selectedText.text" class="number-input" style="width:100%; margin-top:0.25rem;" />
+            <input type="text" v-model="selectedText.text" class="number-input content-input" />
           </label>
           <div class="input-grid">
             <label>Anchor Y: 
@@ -88,7 +88,7 @@
             </label>
             <label>Offset X: <input type="number" v-model.number="selectedText.offsetX" class="number-input" :disabled="selectedText.anchorX === 'center'" /></label>
             <label>Font Size: <input type="number" v-model.number="selectedText.fontSize" class="number-input" /></label>
-            <label>Color: <input type="color" v-model="selectedText.color" class="number-input" style="padding:0; height: 32px;" /></label>
+            <label>Color: <input type="color" v-model="selectedText.color" class="number-input color-picker" /></label>
             <label>Align: 
               <select v-model="selectedText.align" class="number-input">
                 <option value="left">Left</option>
@@ -109,10 +109,10 @@
 
         <div v-if="selectedType === 'placeholder' && selectedPlaceholder" class="section">
           <div class="ph-header">
-            <h3 style="display: flex; align-items: center; width: 100%; margin-right: 0.5rem;">
-              <input type="text" v-model="selectedPlaceholder.name" style="flex: 1; min-width: 0; background: transparent; color: white; border: none; border-bottom: 1px solid #444; font-size: 1.1rem; padding: 2px 0;" />
+            <h3 class="ph-title-wrapper mr-2">
+              <input type="text" v-model="selectedPlaceholder.name" class="ph-title-input" />
             </h3>
-            <button @click="selectedPlaceholder.aspectRatioLocked = !selectedPlaceholder.aspectRatioLocked" class="btn-icon" :title="selectedPlaceholder.aspectRatioLocked ? 'Unlock Aspect Ratio' : 'Lock Aspect Ratio'">
+            <AppButton @click="selectedPlaceholder.aspectRatioLocked = !selectedPlaceholder.aspectRatioLocked" variant="ghost" size="sm" :title="selectedPlaceholder.aspectRatioLocked ? 'Unlock Aspect Ratio' : 'Lock Aspect Ratio'">
               <svg v-if="selectedPlaceholder.aspectRatioLocked" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -121,7 +121,7 @@
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
               </svg>
-            </button>
+            </AppButton>
           </div>
           <div class="input-grid">
             <label>X (px): <input type="number" v-model.number="selectedPlaceholder.x" class="number-input" /></label>
@@ -139,10 +139,10 @@
 
       <div class="canvas-area">
         <div class="zoom-toolbar">
-          <button @click="zoomOut" class="btn-icon" title="Zoom Out">➖</button>
+          <AppButton @click="zoomOut" variant="ghost" size="sm" title="Zoom Out">➖</AppButton>
           <span>{{ Math.round(userZoom * 100) }}%</span>
-          <button @click="zoomIn" class="btn-icon" title="Zoom In">➕</button>
-          <button @click="fitZoom" class="btn-secondary btn-sm" style="margin-left: 0.5rem;">Fit</button>
+          <AppButton @click="zoomIn" variant="ghost" size="sm" title="Zoom In">➕</AppButton>
+          <AppButton @click="fitZoom" variant="secondary" size="sm" class="ml-2">Fit</AppButton>
         </div>
         <div class="canvas-container" ref="canvasContainer" @mousedown="startPan" :class="{ 'is-panning': isPanning }">
           <div class="outer-canvas-wrapper" :style="{ width: draftFrame.canvasWidth * userZoom + 'px', height: draftFrame.canvasHeight * userZoom + 'px' }">
@@ -197,17 +197,14 @@
       </div>
     </div>
 
-    <div v-if="showExitModal" class="modal-overlay">
-      <div class="modal">
-        <h3>Unsaved Changes</h3>
-        <p>You have unsaved changes to this frame. Do you want to save them before exiting?</p>
-        <div class="modal-actions">
-          <button @click="showExitModal = false" class="btn-secondary">Cancel</button>
-          <button @click="emit('close')" class="btn-danger">Don't Save</button>
-          <button @click="save" class="btn-primary">Save</button>
-        </div>
-      </div>
-    </div>
+    <AppModal v-model="showExitModal" title="Unsaved Changes">
+      <p>You have unsaved changes to this frame. Do you want to save them before exiting?</p>
+      <template #footer>
+        <AppButton @click="showExitModal = false" variant="secondary">Cancel</AppButton>
+          <AppButton @click="emit('close')" variant="danger">Don't Save</AppButton>
+          <AppButton @click="save" variant="primary">Save</AppButton>
+      </template>
+    </AppModal>
   </div>
 </template>
 
@@ -215,6 +212,9 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import axios from 'axios'
 import { toast } from 'vue3-toastify'
+import AppButton from './ui/AppButton.vue'
+import AppModal from './ui/AppModal.vue'
+import AppInput from './ui/AppInput.vue'
 
 const props = defineProps<{ eventId: string, frame: any }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -465,7 +465,7 @@ function addText() {
     offsetY: 20,
     offsetX: 20,
     fontSize: 48,
-    color: '#ffffff',
+    color: 'var(--color-text)fff',
     align: 'left',
     orientation: 0,
     name: newName,
@@ -677,7 +677,7 @@ function stopResize() {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #0f0f0f;
+  background: var(--color-bg);
   position: absolute;
   inset: 0;
   z-index: 50;
@@ -687,8 +687,8 @@ function stopResize() {
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1.5rem;
-  background: #1a1a1a;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
 }
 .header-left {
   display: flex;
@@ -699,17 +699,17 @@ function stopResize() {
   font-size: 1.125rem;
   font-weight: 600;
   margin: 0;
-  color: #fff;
+  color: var(--color-text);
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 .btn-icon-nav {
   background: none;
-  border: 1px solid #2a2a2a;
-  color: #ccc;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
   padding: 0.25rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   line-height: 0;
   display: flex;
@@ -721,23 +721,23 @@ function stopResize() {
   height: 16px;
 }
 .btn-icon-nav:hover {
-  border-color: #555;
-  color: #fff;
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
 }
 .name-input {
   background: transparent;
   border: none;
-  border-bottom: 1px dashed #555;
-  color: #fff;
+  border-bottom: 1px dashed var(--color-text-muted);
+  color: var(--color-text);
   font-size: 1.125rem;
   font-weight: 600;
   outline: none;
   padding: 0.25rem;
   width: 300px;
 }
-.name-input:focus { border-color: #2196F3; }
+.name-input:focus { border-color: var(--color-info); }
 .actions { margin-left: auto; }
-.btn-primary { background: #2196F3; color: #fff; border: none; padding: 0.5rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: 600; }
+.btn-primary { background: var(--color-info); color: var(--color-text); border: none; padding: 0.5rem 1.5rem; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; }
 .btn-primary:hover:not(:disabled) { background: #1976D2; }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -749,8 +749,8 @@ function stopResize() {
 
 .sidebar {
   width: 320px;
-  background: #1a1a1a;
-  border-right: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
   overflow-y: auto;
   padding: 1rem;
   display: flex;
@@ -758,20 +758,20 @@ function stopResize() {
   gap: 1.5rem;
 }
 
-.section h3 { margin: 0 0 1rem; font-size: 1rem; color: #fff; }
-.section h4 { margin: 1rem 0 0.5rem; font-size: 0.875rem; color: #ccc; }
+.section h3 { margin: 0 0 1rem; font-size: var(--text-base); color: var(--color-text); }
+.section h4 { margin: 1rem 0 0.5rem; font-size: var(--text-sm); color: var(--color-text); }
 
 .resize-row { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
 .number-input {
-  background: #0f0f0f;
-  border: 1px solid #333;
-  color: #fff;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
   padding: 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   width: 100%;
 }
-.btn-secondary { background: #333; color: #fff; border: none; padding: 0.375rem 0.75rem; border-radius: 4px; cursor: pointer; }
-.btn-secondary:hover { background: #444; }
+.btn-secondary { background: var(--color-border); color: var(--color-text); border: none; padding: 0.375rem 0.75rem; border-radius: var(--radius-sm); cursor: pointer; }
+.btn-secondary:hover { background: var(--color-border); }
 .btn-full { width: 100%; margin-bottom: 1rem; }
 
 .placeholder-list { display: flex; flex-direction: column; gap: 0.5rem; }
@@ -780,29 +780,29 @@ function stopResize() {
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem;
-  background: #222;
-  border: 1px solid #333;
-  border-radius: 4px;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
-.placeholder-item:hover { background: #2a2a2a; }
-.placeholder-item.active { border-color: #2196F3; background: #1a2a3a; }
+.placeholder-item:hover { background: var(--color-border); }
+.placeholder-item.active { border-color: var(--color-info); background: #1a2a3a; }
 .placeholder-item.is-image { border-left: 3px solid #4CAF50; }
 .placeholder-item.drag-over-top { border-top: 2px solid #4CAF50; }
 .placeholder-item.drag-over-bottom { border-bottom: 2px solid #4CAF50; }
 .layer-left { display: flex; align-items: center; gap: 0.5rem; }
-.drag-handle { cursor: grab; color: #666; font-size: 1rem; padding-right: 0.25rem; }
+.drag-handle { cursor: grab; color: var(--color-text-muted); font-size: var(--text-base); padding-right: 0.25rem; }
 .drag-handle:active { cursor: grabbing; }
 
-.btn-icon { background: none; border: none; cursor: pointer; color: #888; font-size: 1.25rem; padding: 0 0.5rem; }
-.btn-icon:hover { color: #f44336; }
+.btn-icon { background: none; border: none; cursor: pointer; color: var(--color-text-sub); font-size: 1.25rem; padding: 0 0.5rem; }
+.btn-icon:hover { color: var(--color-error); }
 
 .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-.input-grid label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: #888; }
-.full-label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: #888; }
+.input-grid label { display: flex; align-items: center; gap: 0.5rem; font-size: var(--text-xs); color: var(--color-text-sub); }
+.full-label { display: flex; align-items: center; gap: 0.5rem; font-size: var(--text-xs); color: var(--color-text-sub); }
 
 .ph-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-.ph-header h3 { margin: 0; font-size: 1rem; color: #fff; }
+.ph-header h3 { margin: 0; font-size: var(--text-base); color: var(--color-text); }
 
 .canvas-area {
   flex: 1;
@@ -842,36 +842,21 @@ function stopResize() {
   bottom: 2rem;
   left: 50%;
   transform: translateX(-50%);
-  background: #222;
-  border: 1px solid #333;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
   padding: 0.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   gap: 0.5rem;
   z-index: 100;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
-.zoom-toolbar span { color: #fff; font-size: 0.875rem; min-width: 40px; text-align: center; }
-.btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 4px; }
+.zoom-toolbar span { color: var(--color-text); font-size: var(--text-sm); min-width: 40px; text-align: center; }
+.btn-sm { padding: 0.25rem 0.5rem; font-size: var(--text-xs); border-radius: var(--radius-sm); }
 
-.modal-overlay {
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.8);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 1000;
-}
-.modal {
-  background: #1e1e1e; padding: 2rem; border-radius: 12px;
-  width: 90%; max-width: 400px;
-}
-.modal h3 { margin-top: 0; color: #fff; }
-.modal p { color: #ccc; margin-bottom: 1.5rem; }
-.modal-actions {
-  display: flex; justify-content: flex-end; gap: 0.5rem;
-}
 .btn-danger {
-  background: #f44336; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600;
+  background: var(--color-error); color: white; border: none; padding: 0.5rem 1rem; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600;
 }
 .btn-danger:hover { background: #d32f2f; }
 
@@ -887,13 +872,13 @@ function stopResize() {
 .placeholder-box {
   position: absolute;
   background: rgba(33, 150, 243, 0.7);
-  border: 2px dashed #2196F3;
+  border: 2px dashed var(--color-info);
   z-index: 5;
   cursor: move;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--color-text);
   font-size: 3rem;
   font-weight: bold;
   text-shadow: 0 2px 4px rgba(0,0,0,0.5);
@@ -902,7 +887,7 @@ function stopResize() {
 
 .placeholder-box.active {
   background: rgba(33, 150, 243, 0.5);
-  border: 2px solid #2196F3;
+  border: 2px solid var(--color-info);
   z-index: 6;
 }
 
@@ -910,12 +895,12 @@ function stopResize() {
   position: absolute;
   width: 20px;
   height: 20px;
-  background: #2196F3;
-  border-radius: 50%;
+  background: var(--color-info);
+  border-radius: var(--radius-full);
   right: -10px;
   bottom: -10px;
   cursor: se-resize;
-  border: 2px solid #fff;
+  border: 2px solid var(--color-text);
 }
 
 .text-box {
@@ -930,4 +915,16 @@ function stopResize() {
   border: 1px dashed #4CAF50;
   background: rgba(76, 175, 80, 0.2);
 }
+
+.input-grid-wrapper { margin-top: 0.5rem; margin-bottom: 0.5rem; }
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.section-title { margin: 0; }
+.mr-2 { margin-right: 0.5rem; }
+.ml-2 { margin-left: 0.5rem; }
+.ph-title-wrapper { display: flex; align-items: center; width: 100%; }
+.ph-title-input { flex: 1; min-width: 0; background: transparent; color: white; border: none; border-bottom: 1px solid var(--color-border); font-size: 1.1rem; padding: 2px 0; }
+.content-label { display: block; margin-bottom: 0.5rem; color: var(--color-text); font-size: var(--text-sm); }
+.content-input { width: 100%; margin-top: 0.25rem; }
+.color-picker { padding: 0; height: 32px; }
+
 </style>

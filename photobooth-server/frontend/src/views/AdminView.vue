@@ -141,8 +141,8 @@ function formatUptime(s: number) {
 <style scoped>
 .admin-page {
   min-height: 100vh;
-  background: #0f0f0f;
-  color: #fff;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 .admin-header {
@@ -150,8 +150,8 @@ function formatUptime(s: number) {
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1.5rem;
-  background: #1a1a1a;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 50;
@@ -161,36 +161,36 @@ function formatUptime(s: number) {
   font-size: 1.1rem;
   font-weight: 500;
   margin: 0;
-  color: #fff;
+  color: var(--color-text);
 }
 
 .admin-tabs {
   display: flex;
   gap: 0.5rem;
-  background: #2a2a2a;
+  background: var(--color-border);
   padding: 0.25rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .tab-btn {
   background: transparent;
   border: none;
-  color: #aaa;
+  color: var(--color-text-sub);
   padding: 0.5rem 1rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .tab-btn:hover {
-  color: #fff;
+  color: var(--color-text);
 }
 
 .tab-btn.active {
-  background: #444;
-  color: #fff;
+  background: var(--color-border);
+  color: var(--color-text);
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
@@ -210,24 +210,24 @@ function formatUptime(s: number) {
 }
 
 .admin-card {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
 }
 
 .admin-card h2 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0 0 1rem;
 }
 
 .upload-area {
-  border: 2px dashed #2a2a2a;
-  border-radius: 8px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
   padding: 2rem;
   text-align: center;
-  color: #666;
+  color: var(--color-text-muted);
   margin-bottom: 1rem;
 }
 
@@ -246,49 +246,49 @@ function formatUptime(s: number) {
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem;
-  background: #111;
-  border-radius: 6px;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
 }
 
 .frame-name {
-  font-size: 0.8125rem;
-  color: #ccc;
+  font-size: var(--text-sm);
+  color: var(--color-text);
 }
 
 .btn-icon {
   background: none;
   border: none;
-  color: #666;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 0.25rem;
 }
 
 .btn-icon:hover {
-  color: #f44336;
+  color: var(--color-error);
 }
 
 .btn-ghost {
   background: none;
-  border: 1px solid #2a2a2a;
-  color: #ccc;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
   padding: 0.375rem 0.75rem;
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
 .btn-ghost:hover {
-  border-color: #555;
-  color: #fff;
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .btn-secondary {
-  background: #2a2a2a;
-  color: #ccc;
+  background: var(--color-border);
+  color: var(--color-text);
   border: none;
   padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -306,18 +306,18 @@ function formatUptime(s: number) {
 }
 
 .stat-label {
-  font-size: 0.8125rem;
-  color: #888;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
 }
 
 .stat-value {
-  font-size: 0.9375rem;
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
 .empty {
-  color: #666;
-  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 
 @media (max-width: 768px) {

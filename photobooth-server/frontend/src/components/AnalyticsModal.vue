@@ -109,9 +109,9 @@ onMounted(() => {
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 .modal-header {
@@ -119,23 +119,23 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--color-border);
 }
 .modal-header h2 {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 500;
-  color: #fff;
+  color: var(--color-text);
 }
 .btn-icon {
   background: none;
   border: none;
-  color: #888;
+  color: var(--color-text-sub);
   cursor: pointer;
   font-size: 1.25rem;
 }
 .btn-icon:hover {
-  color: #fff;
+  color: var(--color-text);
 }
 .analytics-content {
   padding: 1.5rem;
@@ -148,10 +148,10 @@ onMounted(() => {
   margin-bottom: 2rem;
 }
 .stat-card {
-  background: #222;
-  border: 1px solid #333;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
   padding: 1.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -159,41 +159,41 @@ onMounted(() => {
 .stat-value {
   font-size: 2.5rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text);
 }
 .stat-label {
-  color: #888;
-  font-size: 0.875rem;
+  color: var(--color-text-sub);
+  font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-top: 0.5rem;
 }
 h3 {
   margin: 0 0 1rem 0;
-  color: #fff;
+  color: var(--color-text);
   font-size: 1.1rem;
 }
 .logs-container {
-  background: #222;
-  border: 1px solid #333;
-  border-radius: 8px;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 .logs-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 .logs-table th, .logs-table td {
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #333;
-  color: #ccc;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
 }
 .logs-table th {
-  background: #2a2a2a;
+  background: var(--color-border);
   font-weight: 500;
-  color: #fff;
+  color: var(--color-text);
 }
 .logs-table tr:last-child td {
   border-bottom: none;
@@ -206,8 +206,8 @@ h3 {
 }
 .badge {
   padding: 0.2rem 0.5rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 .badge-blue {
@@ -225,6 +225,6 @@ h3 {
 .empty-state {
   text-align: center;
   padding: 2rem;
-  color: #888;
+  color: var(--color-text-sub);
 }
 </style>

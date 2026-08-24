@@ -54,7 +54,7 @@
         </svg>
       </button>
 
-      <span class="user-email" style="color:#888; font-size:0.875rem; margin-left:0.5rem;">{{ authStore.user?.email }}</span>
+      <span class="user-email" style="color:var(--color-text-sub); font-size:0.875rem; margin-left:0.5rem;">{{ authStore.user?.email }}</span>
       <button v-if="authStore.user?.role === 'admin'" @click="router.push('/admin')" class="btn-icon" title="Admin">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -121,8 +121,8 @@ import axios from 'axios'
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 2rem;
-  background: #1a1a1a;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 50;
@@ -136,49 +136,49 @@ import axios from 'axios'
   font-size: 1.125rem;
   font-weight: 600;
   margin: 0;
-  color: #fff;
+  color: var(--color-text);
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 .nav-divider, .nav-subtitle {
-  color: #888;
+  color: var(--color-text-sub);
   font-weight: 400;
 }
 
 .btn-icon {
   background: none;
   border: none;
-  color: #888;
+  color: var(--color-text-sub);
   cursor: pointer;
   padding: 0.5rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
 }
 .btn-icon:hover {
-  background: #333;
-  color: #fff;
+  background: var(--color-border);
+  color: var(--color-text);
 }
 .btn-icon.active {
-  color: #fff;
-  background: #444;
+  color: var(--color-text);
+  background: var(--color-border);
 }
 .event-status {
   font-size: 0.6875rem;
   text-transform: uppercase;
   padding: 0.125rem 0.5rem;
-  border-radius: 100px;
+  border-radius: var(--radius-pill);
 }
 .status-active {
   background: #1a3a2a;
-  color: #4caf50;
+  color: var(--color-success);
 }
 .status-ended {
-  background: #3a1a1a;
-  color: #f44336;
+  background: var(--color-border);
+  color: var(--color-error);
 }
 .status-draft {
   background: #3a3a1a;

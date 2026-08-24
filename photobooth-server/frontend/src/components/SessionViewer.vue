@@ -4,14 +4,14 @@
       <div class="viewer">
         <div class="session-header">
           <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <button class="btn-back" @click="$emit('close')">
+            <AppButton variant="ghost" size="sm" @click="$emit('close')" style="padding: 0;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="15 18 9 12 15 6"></polyline>
               </svg>
-            </button>
-            <h1 style="margin: 0; font-size: 1.125rem; font-weight: 600; color: #fff;">
+            </AppButton>
+            <h1 style="margin: 0; font-size: 1.125rem; font-weight: 600; color: var(--color-text);">
               {{ session.photoCount }} Photo{{ session.photoCount !== 1 ? 's' : '' }}
-              <span style="color: #888; font-weight: 400; margin-left: 0.5rem; font-size: 0.9rem;">/ {{ formatTime(session.createdAt) }}</span>
+              <span style="color: var(--color-text-sub); font-weight: 400; margin-left: 0.5rem; font-size: 0.9rem;">/ {{ formatTime(session.createdAt) }}</span>
             </h1>
           </div>
         </div>
@@ -49,19 +49,19 @@
             </select>
           </div>
           
-          <button @click="copyPrimaryShare" class="btn-action">
+          <AppButton variant="secondary" @click="copyPrimaryShare">
             {{ linkCopied ? 'Copied!' : 'Copy Share Link' }}
-          </button>
-          <button @click="showPrimaryQr" class="btn-action">QR Code</button>
+          </AppButton>
+          <AppButton variant="secondary" @click="showPrimaryQr">QR Code</AppButton>
 
           <div class="dropdown-wrapper">
-            <button class="btn-icon" @click="showMenu = !showMenu">
+            <AppButton variant="icon" @click="showMenu = !showMenu">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="1"></circle>
                 <circle cx="12" cy="5" r="1"></circle>
                 <circle cx="12" cy="19" r="1"></circle>
               </svg>
-            </button>
+            </AppButton>
             <div v-if="showMenu" class="dropdown-menu">
               <a @click="openManageShares">Manage Share Links</a>
               <a v-if="activeFrames.length > 0" @click="applyAllActiveFrames">Regenerate Frames</a>
@@ -118,82 +118,82 @@
     </div>
   </Teleport>
 
-  <Teleport to="body">
-    <div v-if="showManageSharesModal" class="modal-overlay" @click.self="showManageSharesModal = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h2>Manage Share Links</h2>
-          <button class="btn-icon btn-add" @click="createNewShare" title="New Share Link">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-          </button>
-        </div>
+  <AppModal v-model="showManageSharesModal">
+    <template #header>
+      <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        <h2 style="margin: 0;">Manage Share Links</h2>
+        <AppButton variant="primary" size="sm" @click="createNewShare" title="New Share Link">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </AppButton>
+      </div>
+    </template>
         
-        <div v-if="shares.length === 0" class="empty-state">No share links available.</div>
-        <div v-else class="share-list">
-          <div v-for="share in shares" :key="share.id" class="share-item">
-            <div class="share-info">
-              <a :href="origin + '/share/' + share.id" target="_blank" class="share-url" title="Open Share Link">/share/{{ share.id }}</a>
-              <div class="share-date">{{ new Date(share.created_at).toLocaleString() }}</div>
-            </div>
-            <div class="share-actions">
-              <button @click="toggleShareStatus(share)" class="btn-icon" :title="share.is_active ? 'Disable' : 'Enable'" :class="{ inactive: !share.is_active }">
-                <svg v-if="!share.is_active" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                  <circle cx="12" cy="12" r="3"></circle>
-                  <line x1="1" y1="1" x2="23" y2="23"></line>
-                </svg>
-                <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                  <circle cx="12" cy="12" r="3"></circle>
-                </svg>
-              </button>
-              <button @click="copySpecificShare(share.id)" class="btn-icon" title="Copy Link">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-              </button>
-              <button @click="showSpecificQr(share.id)" class="btn-icon" title="View QR Code">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="7" height="7"></rect>
-                  <rect x="14" y="3" width="7" height="7"></rect>
-                  <rect x="14" y="14" width="7" height="7"></rect>
-                  <rect x="3" y="14" width="7" height="7"></rect>
-                </svg>
-              </button>
-              <button @click="deleteShare(share.id)" class="btn-icon btn-danger-icon" title="Delete Link">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2-2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
+    <div v-if="shares.length === 0" class="empty-state">No share links available.</div>
+    <div v-else class="share-list">
+      <div v-for="share in shares" :key="share.id" class="share-item">
+        <div class="share-info">
+          <a :href="origin + '/share/' + share.id" target="_blank" class="share-url" title="Open Share Link">/share/{{ share.id }}</a>
+          <div class="share-date">{{ new Date(share.created_at).toLocaleString() }}</div>
         </div>
-
-        <div class="form-actions">
-          <button @click="showManageSharesModal = false" class="btn-secondary">Close</button>
+        <div class="share-actions">
+          <AppButton variant="icon" @click="toggleShareStatus(share)" :title="share.is_active ? 'Disable' : 'Enable'" :style="share.is_active ? '' : 'color: var(--color-text-sub);'">
+            <svg v-if="!share.is_active" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+            <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </AppButton>
+          <AppButton variant="icon" @click="copySpecificShare(share.id)" title="Copy Link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </AppButton>
+          <AppButton variant="icon" @click="showSpecificQr(share.id)" title="View QR Code">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+          </AppButton>
+          <AppButton variant="danger" size="sm" @click="deleteShare(share.id)" title="Delete Link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2-2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </AppButton>
         </div>
       </div>
     </div>
-  </Teleport>
 
-  <Teleport to="body">
-    <div v-if="showQrCode" class="qr-overlay" @click.self="showQrCode = false">
-      <div class="qr-modal">
-        <button class="close-btn" @click="showQrCode = false">✕</button>
-        <canvas ref="qrCanvas"></canvas>
-      </div>
+    <template #footer>
+      <AppButton variant="secondary" @click="showManageSharesModal = false">Close</AppButton>
+    </template>
+  </AppModal>
+
+  <AppModal v-model="showQrCode" size="md">
+    <template #header>
+      <h2 style="margin: 0;">QR Code</h2>
+    </template>
+    <div style="display: flex; justify-content: center; align-items: center; width: 100%;">
+      <canvas ref="qrCanvas" style="max-width: 100%; height: auto;"></canvas>
     </div>
-  </Teleport>
+  </AppModal>
 </template>
 
 <script setup lang="ts">
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import AppButton from './ui/AppButton.vue'
+import AppModal from './ui/AppModal.vue'
 import QRCode from 'qrcode'
 import axios from 'axios'
 import { toast } from 'vue3-toastify'
@@ -587,7 +587,7 @@ function formatTime(ts: string) {
 .overlay {
   position: fixed;
   inset: 0;
-  background: #0f0f0f;
+  background: var(--color-bg);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -596,7 +596,7 @@ function formatTime(ts: string) {
 }
 
 .viewer {
-  background: #0f0f0f;
+  background: var(--color-bg);
   border-radius: 0;
   width: 100%;
   max-width: 100%;
@@ -613,14 +613,14 @@ function formatTime(ts: string) {
   right: 0.75rem;
   background: none;
   border: none;
-  color: #888;
+  color: var(--color-text-sub);
   font-size: 1.25rem;
   cursor: pointer;
   z-index: 10;
 }
 
 .close-btn:hover {
-  color: #fff;
+  color: var(--color-text);
 }
 
 .session-header {
@@ -629,8 +629,8 @@ function formatTime(ts: string) {
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 2rem;
-  background: #1a1a1a;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 50;
@@ -641,11 +641,11 @@ function formatTime(ts: string) {
 }
 .frame-select {
   padding: 0.5rem 1rem;
-  background: #2a2a2a;
-  color: #ccc;
+  background: var(--color-border);
+  color: var(--color-text);
   border: none;
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   cursor: pointer;
   outline: none;
   font-family: inherit;
@@ -653,10 +653,10 @@ function formatTime(ts: string) {
 }
 .frame-select:hover {
   background: #3a3a3a;
-  color: #fff;
+  color: var(--color-text);
 }
 .frame-select:focus {
-  outline: 1px solid #555;
+  outline: 1px solid var(--color-text-muted);
 }
 .viewer-body {
   padding: 1.5rem 2rem;
@@ -673,8 +673,8 @@ function formatTime(ts: string) {
 }
 
 .session-time {
-  font-size: 0.75rem;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--color-text-sub);
 }
 
 .photo-grid {
@@ -688,13 +688,13 @@ function formatTime(ts: string) {
 }
 
 .empty-state {
-  color: #888;
+  color: var(--color-text-sub);
   text-align: center;
   padding: 3rem 1rem;
   margin-bottom: 2rem;
-  background: #1a1a1a;
-  border-radius: 8px;
-  border: 1px dashed #333;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border);
 }
 
 @keyframes pulse {
@@ -704,7 +704,7 @@ function formatTime(ts: string) {
 }
 
 .skeleton-pulse {
-  background-color: #333;
+  background-color: var(--color-border);
   animation: pulse 1.5s infinite ease-in-out;
 }
 
@@ -717,12 +717,12 @@ function formatTime(ts: string) {
   align-self: center;
   min-height: 0;
   min-width: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   transition: transform 0.2s ease, opacity 0.3s ease;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   object-fit: contain;
-  background-color: #333;
+  background-color: var(--color-border);
   animation: pulse 1.5s infinite ease-in-out;
   opacity: 0;
 }
@@ -746,62 +746,18 @@ function formatTime(ts: string) {
   padding-top: 1.5rem;
 }
 
-.btn-action {
-  padding: 0.5rem 1rem;
-  background: #2a2a2a;
-  color: #ccc;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
-}
-
-.btn-action:hover {
-  background: #3a3a3a;
-  color: #fff;
-}
-
-.btn-danger {
-  color: #f44336;
-}
-
-.btn-danger:hover {
-  background: #3a1a1a;
-  color: #ff6659;
-}
-
 .dropdown-wrapper {
   position: relative;
   display: inline-block;
 }
-
-.btn-icon {
-  background: #2a2a2a;
-  color: #ccc;
-  border: none;
-  border-radius: 6px;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.btn-icon:hover {
-  background: #3a3a3a;
-  color: #fff;
-}
-
 .dropdown-menu {
   position: absolute;
   bottom: 100%;
   right: 0;
   margin-bottom: 0.5rem;
   background: #1e1e1e;
-  border: 1px solid #333;
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
   display: flex;
   flex-direction: column;
@@ -812,92 +768,18 @@ function formatTime(ts: string) {
 
 .dropdown-menu a {
   padding: 0.75rem 1rem;
-  color: #fff;
+  color: var(--color-text);
   text-decoration: none;
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .dropdown-menu a:hover {
-  background: #2a2a2a;
+  background: var(--color-border);
 }
 
 .dropdown-menu a.text-danger {
-  color: #f44336;
-}
-
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  overflow-y: auto;
-}
-
-.modal {
-  background: #1a1a1a;
-  padding: 2rem;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 600px;
-  border: 1px solid #333;
-  color: #fff;
-}
-
-.modal h2 {
-  margin-top: 0;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-}
-
-.btn-add {
-  background: #2196F3;
-  color: #fff;
-  border: none;
-  padding: 0.375rem;
-  border-radius: 6px;
-}
-
-.btn-add:hover {
-  background: #1976D2;
-  color: #fff;
-}
-
-.btn-primary {
-  background: #2196F3;
-  color: #fff;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.btn-primary:hover {
-  background: #1976D2;
-}
-
-.btn-secondary {
-  background: #2a2a2a;
-  color: #ccc;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.btn-secondary:hover {
-  background: #3a3a3a;
-  color: #fff;
+  color: var(--color-error);
 }
 
 .share-list {
@@ -911,9 +793,9 @@ function formatTime(ts: string) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #2a2a2a;
+  background: var(--color-border);
   padding: 1rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .share-info {
@@ -924,7 +806,7 @@ function formatTime(ts: string) {
 
 .share-url {
   font-family: monospace;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: #4CAF50;
   text-decoration: none;
 }
@@ -934,8 +816,8 @@ function formatTime(ts: string) {
 }
 
 .share-date {
-  font-size: 0.75rem;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--color-text-sub);
 }
 
 .share-actions {
@@ -944,21 +826,21 @@ function formatTime(ts: string) {
 }
 
 .share-actions .btn-icon {
-  background: #333;
-  border-color: #444;
+  background: var(--color-border);
+  border-color: var(--color-border);
 }
 
 .share-actions .btn-icon:hover {
-  background: #444;
-  border-color: #666;
+  background: var(--color-border);
+  border-color: var(--color-text-muted);
 }
 
 .share-actions .btn-icon.inactive {
-  color: #888;
+  color: var(--color-text-sub);
 }
 
 .share-actions .btn-danger-icon {
-  color: #f44336;
+  color: var(--color-error);
 }
 
 .share-actions .btn-danger-icon:hover {
@@ -967,46 +849,12 @@ function formatTime(ts: string) {
   color: #ff6659;
 }
 
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 2rem;
-}
 
-.qr-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-}
-
-.qr-modal {
-  background: #1a1a1a;
-  border-radius: 12px;
-  padding: 2rem;
-  position: relative;
-  max-width: 90vw;
-  max-height: 90vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.qr-modal canvas {
-  width: 100% !important;
-  height: auto !important;
-  max-width: 500px;
-  max-height: calc(90vh - 4rem);
-  object-fit: contain;
-}
 
 .share-error {
   margin-top: 0.5rem;
-  font-size: 0.75rem;
-  color: #f44336;
+  font-size: var(--text-xs);
+  color: var(--color-error);
 }
 
 .fs-overlay {
@@ -1025,7 +873,7 @@ function formatTime(ts: string) {
   right: 2rem;
   background: none;
   border: none;
-  color: #fff;
+  color: var(--color-text);
   font-size: 2rem;
   cursor: pointer;
   z-index: 210;
@@ -1041,7 +889,7 @@ function formatTime(ts: string) {
   top: 50%;
   transform: translateY(-50%);
   background: rgba(0, 0, 0, 0.5);
-  color: #fff;
+  color: var(--color-text);
   border: none;
   font-size: 3rem;
   width: 60px;
@@ -1051,7 +899,7 @@ function formatTime(ts: string) {
   justify-content: center;
   cursor: pointer;
   z-index: 210;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   opacity: 0.7;
   transition: opacity 0.2s, background 0.2s;
 }
@@ -1086,7 +934,7 @@ function formatTime(ts: string) {
   max-width: 90vw;
   max-height: 80vh;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .fs-blur-bg {
@@ -1105,7 +953,7 @@ function formatTime(ts: string) {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   transition: opacity 0.3s ease;
 }
 
@@ -1116,7 +964,7 @@ function formatTime(ts: string) {
 .fs-image {
   max-width: 90vw;
   max-height: 80vh;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   opacity: 0;
   transition: opacity 0.3s ease;
   will-change: opacity;

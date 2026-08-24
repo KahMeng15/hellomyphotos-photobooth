@@ -19,36 +19,36 @@
           </div>
         </div>
 
-        <h3 style="margin: 0 0 1rem 0; color: #fff; font-size: 1.1rem;">Recent Activity</h3>
-        <div class="logs-container" style="background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 12px; overflow: hidden;">
-          <table class="logs-table" v-if="analytics.logs.length > 0" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem;">
+        <h3 style="margin: 0 0 1rem 0; color: var(--color-text); font-size: 1.1rem;">Recent Activity</h3>
+        <div class="logs-container" style="background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden;">
+          <table class="logs-table" v-if="analytics.logs.length > 0" style="width: 100%; border-collapse: collapse; text-align: left; font-size: var(--text-sm);">
             <thead>
               <tr>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; background: #111; font-weight: 500; color: #fff;">Time</th>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; background: #111; font-weight: 500; color: #fff;">Action</th>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; background: #111; font-weight: 500; color: #fff;">Source</th>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; background: #111; font-weight: 500; color: #fff;">Device</th>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; background: #111; font-weight: 500; color: #fff;">Target</th>
+                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); font-weight: 500; color: var(--color-text);">Time</th>
+                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); font-weight: 500; color: var(--color-text);">Action</th>
+                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); font-weight: 500; color: var(--color-text);">Source</th>
+                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); font-weight: 500; color: var(--color-text);">Device</th>
+                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); font-weight: 500; color: var(--color-text);">Target</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="log in analytics.logs" :key="log.id">
-                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; color: #ccc;">{{ formatTime(log.created_at) }}</td>
-                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; color: #ccc;">
-                  <span class="badge" :class="log.action === 'download' ? 'badge-blue' : 'badge-gray'" style="padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500;">
+                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); color: var(--color-text);">{{ formatTime(log.created_at) }}</td>
+                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); color: var(--color-text);">
+                  <span class="badge" :class="log.action === 'download' ? 'badge-blue' : 'badge-gray'" style="padding: 0.2rem 0.5rem; border-radius: var(--radius-lg); font-size: var(--text-xs); font-weight: 500;">
                     {{ log.action }}
                   </span>
                 </td>
-                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; color: #ccc;">
-                  <span class="badge badge-purple" v-if="log.source === 'qr'" style="padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500;">QR</span>
-                  <span class="badge badge-gray" v-else style="padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500;">Direct</span>
+                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); color: var(--color-text);">
+                  <span class="badge badge-purple" v-if="log.source === 'qr'" style="padding: 0.2rem 0.5rem; border-radius: var(--radius-lg); font-size: var(--text-xs); font-weight: 500;">QR</span>
+                  <span class="badge badge-gray" v-else style="padding: 0.2rem 0.5rem; border-radius: var(--radius-lg); font-size: var(--text-xs); font-weight: 500;">Direct</span>
                 </td>
-                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; color: #ccc;">{{ log.device_type }} / {{ log.os }}</td>
-                <td class="target-col" :title="log.target_file || '-'" style="padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; color: #ccc; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ log.target_file || '-' }}</td>
+                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); color: var(--color-text);">{{ log.device_type }} / {{ log.os }}</td>
+                <td class="target-col" :title="log.target_file || '-'" style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); color: var(--color-text); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ log.target_file || '-' }}</td>
               </tr>
             </tbody>
           </table>
-          <p v-else class="empty-state" style="text-align: center; padding: 2rem; color: #888;">No activity yet.</p>
+          <p v-else class="empty-state" style="text-align: center; padding: 2rem; color: var(--color-text-sub);">No activity yet.</p>
         </div>
       </div>
     </div>
@@ -95,9 +95,9 @@ onMounted(() => {
 
 <style scoped>
 .page-wrapper {
-  background: #0f0f0f;
+  background: var(--color-bg);
   min-height: 100vh;
-  color: #fff;
+  color: var(--color-text);
   display: flex;
   flex-direction: column;
 }
@@ -114,10 +114,10 @@ onMounted(() => {
   margin-bottom: 2rem;
 }
 .stat-card {
-  background: #0f0f0f;
-  border: 1px solid #2a2a2a;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
   padding: 1.5rem;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -125,11 +125,11 @@ onMounted(() => {
 .stat-value {
   font-size: 2.5rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text);
 }
 .stat-label {
-  color: #888;
-  font-size: 0.875rem;
+  color: var(--color-text-sub);
+  font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-top: 0.5rem;

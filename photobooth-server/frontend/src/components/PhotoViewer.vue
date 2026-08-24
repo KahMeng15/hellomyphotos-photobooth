@@ -138,8 +138,8 @@ function formatTime(ts: string) {
 }
 
 .viewer {
-  background: #1a1a1a;
-  border-radius: 12px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
   width: 90vw;
   max-width: 800px;
@@ -155,14 +155,14 @@ function formatTime(ts: string) {
   right: 0.75rem;
   background: none;
   border: none;
-  color: #888;
+  color: var(--color-text-sub);
   font-size: 1.25rem;
   cursor: pointer;
   z-index: 10;
 }
 
 .close-btn:hover {
-  color: #fff;
+  color: var(--color-text);
 }
 
 .image-wrap {
@@ -174,7 +174,7 @@ function formatTime(ts: string) {
   min-height: 0;
   margin-bottom: 1rem;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .blur-bg {
@@ -190,8 +190,8 @@ function formatTime(ts: string) {
 .image-skeleton {
   position: absolute;
   inset: 0;
-  background-color: #222;
-  border-radius: 8px;
+  background-color: var(--color-surface-alt);
+  border-radius: var(--radius-md);
   transition: opacity 0.3s ease;
 }
 
@@ -213,7 +213,7 @@ function formatTime(ts: string) {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   display: block;
   opacity: 0;
   transition: opacity 0.3s ease;
@@ -229,8 +229,8 @@ function formatTime(ts: string) {
   display: flex;
   gap: 1rem;
   padding: 0.75rem 0;
-  font-size: 0.8125rem;
-  color: #888;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
 }
 
 .viewer-actions {
@@ -242,11 +242,11 @@ function formatTime(ts: string) {
 
 .btn-action {
   padding: 0.5rem 1rem;
-  background: #2a2a2a;
-  color: #ccc;
+  background: var(--color-border);
+  color: var(--color-text);
   border: none;
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   cursor: pointer;
   text-decoration: none;
   display: inline-block;
@@ -254,16 +254,16 @@ function formatTime(ts: string) {
 
 .btn-action:hover {
   background: #3a3a3a;
-  color: #fff;
+  color: var(--color-text);
 }
 
 .btn-danger {
-  color: #f44336;
-  border-color: #f44336;
+  color: var(--color-error);
+  border-color: var(--color-error);
 }
 
 .btn-danger:hover {
-  background: #3a1a1a;
+  background: var(--color-border);
   color: #ff6659;
 }
 

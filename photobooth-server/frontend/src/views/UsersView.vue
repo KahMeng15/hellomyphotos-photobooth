@@ -107,16 +107,16 @@ onMounted(() => {
 <style scoped>
 .users-page {
   min-height: 100vh;
-  background: #0f0f0f;
-  color: #fff;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1.5rem;
-  background: #1a1a1a;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 50;
@@ -127,19 +127,19 @@ onMounted(() => {
   gap: 1rem;
 }
 .header-left h1 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0;
 }
 .btn-ghost {
   background: none;
   border: none;
-  color: #888;
+  color: var(--color-text-sub);
   cursor: pointer;
   padding: 0.25rem;
 }
 .btn-ghost:hover {
-  color: #fff;
+  color: var(--color-text);
 }
 .users-main {
   max-width: 800px;
@@ -162,9 +162,9 @@ onMounted(() => {
   gap: 1rem;
 }
 .user-card {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 1rem;
   display: flex;
   justify-content: space-between;
@@ -177,14 +177,14 @@ onMounted(() => {
 }
 .user-email {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 500;
 }
 .user-role {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.2rem 0.5rem;
-  border-radius: 12px;
-  background: #333;
+  border-radius: var(--radius-lg);
+  background: var(--color-border);
   width: max-content;
 }
 .role-admin {
@@ -196,11 +196,11 @@ onMounted(() => {
   color: #60a5fa;
 }
 .btn-primary {
-  background: #fff;
-  color: #000;
+  background: var(--color-text);
+  color: var(--color-bg);
   border: none;
   padding: 0.5rem 1rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-weight: 500;
   cursor: pointer;
 }
@@ -208,26 +208,26 @@ onMounted(() => {
   background: #e5e5e5;
 }
 .btn-sm {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   padding: 0.4rem 0.75rem;
 }
 .btn-secondary {
-  background: #333;
-  color: #fff;
-  border: 1px solid #444;
+  background: var(--color-border);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
   padding: 0.5rem 1rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 .btn-icon {
   background: none;
   border: none;
-  color: #666;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 0.5rem;
 }
 .btn-icon:hover {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 /* Modal styles from existing app */
@@ -241,9 +241,9 @@ onMounted(() => {
   z-index: 1000;
 }
 .modal-content {
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
   width: 100%;
   max-width: 400px;
@@ -259,15 +259,15 @@ onMounted(() => {
   gap: 0.5rem;
 }
 .form-field label {
-  font-size: 0.875rem;
-  color: #888;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
 }
 .form-field input, .form-field select {
-  background: #000;
-  border: 1px solid #333;
-  color: #fff;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
   padding: 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .modal-actions {
   display: flex;

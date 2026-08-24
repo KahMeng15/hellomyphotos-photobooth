@@ -189,8 +189,8 @@ function cancelChanges() {
 <style scoped>
 .settings-page {
   min-height: 100vh;
-  background: #0f0f0f;
-  color: #fff;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 .settings-header {
@@ -198,15 +198,15 @@ function cancelChanges() {
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1.5rem;
-  background: #1a1a1a;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 50;
 }
 
 .settings-header h1 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0;
 }
@@ -218,31 +218,31 @@ function cancelChanges() {
 }
 
 .card {
-  background: #0f0f0f;
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
   margin-bottom: 1.5rem;
 }
 
 .card h2 {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #666;
+  color: var(--color-text-muted);
   margin: 0 0 0.25rem;
 }
 
 .card-desc {
-  font-size: 0.75rem;
-  color: #666;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
   margin: 0 0 1.25rem;
 }
 
 .settings-box {
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -254,7 +254,7 @@ function cancelChanges() {
 }
 
 .field-row:nth-child(odd) {
-  background: #111;
+  background: var(--color-surface);
 }
 
 .field-row:nth-child(even) {
@@ -266,19 +266,19 @@ function cancelChanges() {
 }
 
 .field-row label {
-  font-size: 0.875rem;
-  color: #ccc;
+  font-size: var(--text-sm);
+  color: var(--color-text);
   font-weight: 500;
 }
 
 .num-input {
   width: 60px;
   padding: 0.375rem 0.5rem;
-  border: 1px solid #333;
-  border-radius: 6px;
-  background: #0f0f0f;
-  color: #fff;
-  font-size: 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
   font-weight: 600;
   outline: none;
   text-align: center;
@@ -286,18 +286,18 @@ function cancelChanges() {
 }
 
 .num-input:focus {
-  border-color: #666;
-  box-shadow: 0 0 0 1px #555;
+  border-color: var(--color-text-muted);
+  box-shadow: 0 0 0 1px var(--color-text-muted);
 }
 
 .str-input {
   width: 120px;
   padding: 0.375rem 0.5rem;
-  border: 1px solid #333;
-  border-radius: 6px;
-  background: #0f0f0f;
-  color: #fff;
-  font-size: 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
   font-weight: 600;
   outline: none;
   text-align: center;
@@ -305,8 +305,8 @@ function cancelChanges() {
 }
 
 .str-input:focus {
-  border-color: #666;
-  box-shadow: 0 0 0 1px #555;
+  border-color: var(--color-text-muted);
+  box-shadow: 0 0 0 1px var(--color-text-muted);
 }
 
 .slider-wrapper {
@@ -323,16 +323,16 @@ function cancelChanges() {
 }
 
 .slider-val {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
-  color: #fff;
+  color: var(--color-text);
   min-width: 50px;
   text-align: right;
 }
 
 .field-desc {
-  font-size: 0.75rem;
-  color: #666;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
   margin: 0 0 0.5rem;
 }
 
@@ -341,21 +341,21 @@ function cancelChanges() {
   font-family: monospace;
   letter-spacing: 0.5rem;
   padding: 0.625rem;
-  background: #111;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
-  color: #fff;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
   width: 200px;
   text-align: center;
   outline: none;
 }
 
 .input-otp:focus {
-  border-color: #555;
+  border-color: var(--color-text-muted);
 }
 
 .value {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   min-width: 2.5rem;
   text-align: right;
@@ -369,64 +369,64 @@ function cancelChanges() {
 
 .btn-primary {
   padding: 0.75rem 2rem;
-  background: #fff;
-  color: #000;
+  background: var(--color-text);
+  color: var(--color-bg);
   border: none;
-  border-radius: 8px;
-  font-size: 0.9375rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
   font-weight: 600;
   cursor: pointer;
 }
 
 .btn-ghost {
   background: none;
-  border: 1px solid #2a2a2a;
-  color: #ccc;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
   padding: 0.375rem 0.75rem;
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
 .btn-ghost:hover {
-  border-color: #555;
-  color: #fff;
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .btn-cancel {
   padding: 0.75rem 2rem;
   background: transparent;
-  color: #888;
-  border: 1px solid #333;
-  border-radius: 8px;
-  font-size: 0.9375rem;
+  color: var(--color-text-sub);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
   cursor: pointer;
 }
 
 .focus-toggle {
   display: flex;
-  border: 1px solid #333;
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .focus-btn {
   padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   border: none;
   cursor: pointer;
-  background: #111;
-  color: #888;
+  background: var(--color-surface);
+  color: var(--color-text-sub);
 }
 
 .focus-btn.focus-active {
-  background: #fff;
-  color: #000;
+  background: var(--color-text);
+  color: var(--color-bg);
 }
 
 .saved-msg {
-  font-size: 0.8125rem;
-  color: #4caf50;
+  font-size: var(--text-sm);
+  color: var(--color-success);
 }
 </style>
