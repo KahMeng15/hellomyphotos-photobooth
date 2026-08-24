@@ -154,6 +154,14 @@ io.on('connection', (socket) => {
       forwardToBooth(data.eventId, { type: 'reshot' })
     })
 
+    socket.on('request-booth-config', (eventId: string) => {
+      forwardToBooth(eventId, { type: 'request-config' })
+    })
+
+    socket.on('update-booth-config', (data: { eventId: string, config: any }) => {
+      forwardToBooth(data.eventId, { type: 'update-config', config: data.config })
+    })
+
     socket.on('booth-pause', (data: { eventId: string; paused: boolean }) => {
       forwardToBooth(data.eventId, { type: 'booth-pause', paused: data.paused })
     })
@@ -216,6 +224,15 @@ io.on('connection', (socket) => {
       if (subs) {
         for (const sid of subs) {
           io.to(sid).emit('booth-state', { ...data, eventId })
+        }
+      }
+    })
+
+    socket.on('booth-config', (config: any) => {
+      const subs = operatorSubscriptions.get(eventId)
+      if (subs) {
+        for (const sid of subs) {
+          io.to(sid).emit('booth-config', { eventId, config })
         }
       }
     })

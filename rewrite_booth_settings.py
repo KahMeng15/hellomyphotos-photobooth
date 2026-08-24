@@ -1,4 +1,11 @@
-<template>
+import os
+import re
+
+filepath = 'photobooth-server/frontend/src/views/EventBoothSettingsView.vue'
+with open(filepath, 'r') as f:
+    content = f.read()
+
+template_new = """<template>
   <div class="dashboard page-wrapper" v-if="event">
     <AppTopNav mode="event" :event="event" currentTitle="Booth Settings" />
 
@@ -99,49 +106,7 @@
         </div>
       </section>
 
-
-      <section class="card" v-if="boothConnected && remoteConfig">
-        <h2>Live Booth Hardware</h2>
-        <p class="card-desc">These settings live only on the local machine and are being updated over WebSockets.</p>
-        <div class="settings-box">
-          
-          <div class="field-row">
-            <label>Camera Source</label>
-            <select v-model="remoteConfig.cameraMode" class="custom-select">
-              <option value="webcam">Webcam (USB/Built-in)</option>
-              <option value="dslr">DSLR (Sony/Canon/Nikon)</option>
-            </select>
-          </div>
-          
-          <div class="field-row" v-if="remoteConfig.cameraMode === 'dslr'">
-            <label>DSLR Liveview Mode</label>
-            <select v-model="remoteConfig.liveviewMode" class="custom-select">
-              <option value="mjpeg">MJPEG Stream (Smooth)</option>
-              <option value="polling">Polling (Low Bandwidth)</option>
-            </select>
-          </div>
-
-          <div class="field-row">
-            <label>Auto-Start Session on Idle</label>
-            <div class="focus-toggle">
-              <button :class="['focus-btn', remoteConfig.autoPreview ? 'focus-active' : '']" @click="remoteConfig.autoPreview = true">ON</button>
-              <button :class="['focus-btn', !remoteConfig.autoPreview ? 'focus-active' : '']" @click="remoteConfig.autoPreview = false">OFF</button>
-            </div>
-          </div>
-          
-          <div class="field-row">
-            <label>Development Simulation</label>
-            <div class="focus-toggle">
-              <button :class="['focus-btn', remoteConfig.devSimulationEnabled ? 'focus-active' : '']" @click="remoteConfig.devSimulationEnabled = true">ENABLED</button>
-              <button :class="['focus-btn', !remoteConfig.devSimulationEnabled ? 'focus-active' : '']" @click="remoteConfig.devSimulationEnabled = false">DISABLED</button>
-            </div>
-          </div>
-          
-        </div>
-      </section>
-      
       <div class="page-actions">
-
         <AppButton variant="secondary" @click="goBack">Cancel</AppButton>
         <AppButton variant="primary" @click="saveSettings" :disabled="settingsSaving || !boothConnected">
           {{ settingsSaving ? 'Saving...' : 'Save Settings' }}
@@ -149,51 +114,23 @@
       </div>
     </div>
   </div>
-</template>
+</template>"""
 
-<script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import AppTopNav from '../components/ui/AppTopNav.vue'
-import AppButton from '../components/ui/AppButton.vue'
-import { useWebSocket } from '../composables/useWebSocket'
-// import AppPageLayout from '../components/ui/AppPageLayout.vue'
-import axios from 'axios'
-import { toast } from 'vue3-toastify'
+# Replace template
+template_match = re.search(r'<template>.*?</template>', content, re.DOTALL)
+if template_match:
+    content = content[:template_match.start()] + template_new + content[template_match.end():]
 
-const router = useRouter()
-const route = useRoute()
+# Ensure we import AppButton and useWebSocket
+if 'import AppButton' not in content:
+    content = content.replace("import AppTopNav from '../components/ui/AppTopNav.vue'", "import AppTopNav from '../components/ui/AppTopNav.vue'\nimport AppButton from '../components/ui/AppButton.vue'\nimport { useWebSocket } from '../composables/useWebSocket'")
 
-const eventId = computed(() => route.params.id as string)
-const event = ref<any>(null)
-
-const isoChoices = ['auto', '100', '200', '400', '800', '1600', '3200', '6400']
-const shutterChoices = ['auto', '1/30', '1/40', '1/50', '1/60', '1/80', '1/100', '1/125', '1/160', '1/200', '1/250', '1/320', '1/400', '1/500', '1/640', '1/800']
-const apertureChoices = ['auto', '2.8', '4', '4.5', '5', '5.6', '6.3', '7.1', '8', '9', '10', '11']
-
-const eventSettings = ref({
-  photoCount: 4,
-  countdown: 5,
-  captureInterval: 1,
-  postCapturePreview: 2,
-  dslrIso: 'auto',
-  dslrShutterSpeed: 'auto',
-  dslrAperture: 'auto',
-  dslrFocusMode: 'auto'
-})
-
-const settingsSaving = ref(false)
-
-
+# Inject WS logic
+ws_logic = """
 const { connect: connectWs, disconnect: disconnectWs, subscribe, ws } = useWebSocket()
 const boothConnected = ref(false)
 
-
-const remoteConfig = ref<any>(null)
-let socketRef: any = null
-
 onMounted(async () => {
-
   try {
     const { data } = await axios.get(`/api/admin/events/${eventId.value}`)
     event.value = data.event
@@ -211,67 +148,27 @@ onMounted(async () => {
       dslrWhiteBalanceKelvin: ev.dslr_whitebalance_kelvin || 5200
     }
 
-
     const socket = connectWs()
     if (socket) {
-      socketRef = socket
       subscribe(eventId.value)
       socket.on('booth-connected', (payload) => {
         if (payload.eventId === eventId.value) {
           boothConnected.value = payload.connected
-          if (payload.connected) {
-            socket.emit('request-booth-config', eventId.value)
-          } else {
-            remoteConfig.value = null
-          }
         }
       })
-      
-      socket.on('booth-config', (payload) => {
-        if (payload.eventId === eventId.value) {
-          remoteConfig.value = payload.config
-        }
-      })
-      
-      // Request initially just in case
-      socket.emit('request-booth-config', eventId.value)
     }
-
   } catch (err) {
     console.error('Failed to load event', err)
   }
 })
+"""
 
+# Replace onMounted
+onmounted_match = re.search(r'onMounted\(async \(\) => \{.*?\}\)', content, re.DOTALL)
+if onmounted_match:
+    content = content[:onmounted_match.start()] + ws_logic + content[onmounted_match.end():]
 
-function goBack() {
-  router.push(`/events/${eventId.value}`)
-}
-
-async function saveSettings() {
-  settingsSaving.value = true
-  try {
-    await axios.patch(`/api/admin/events/${eventId.value}`, {
-      photoCount: eventSettings.value.photoCount,
-      countdown: eventSettings.value.countdown,
-      captureInterval: eventSettings.value.captureInterval,
-      postCapturePreview: eventSettings.value.postCapturePreview,
-      dslrIso: eventSettings.value.dslrIso,
-      dslrShutterSpeed: eventSettings.value.dslrShutterSpeed,
-      dslrAperture: eventSettings.value.dslrAperture,
-      dslrFocusMode: eventSettings.value.dslrFocusMode,
-    })
-    if (boothConnected.value && remoteConfig.value && socketRef) {
-      socketRef.emit('update-booth-config', { eventId: eventId.value, config: remoteConfig.value })
-    }
-    toast.success('Settings saved successfully')
-  } catch {
-    toast.error('Failed to save settings')
-  }
-  settingsSaving.value = false
-}
-</script>
-
-<style scoped>
+css_new = """<style scoped>
 .page-wrapper {
   background: var(--color-bg);
   min-height: 100vh;
@@ -372,26 +269,20 @@ async function saveSettings() {
   gap: 0.5rem;
   flex-wrap: wrap;
 }
-.focus-toggle {
-  display: flex;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  width: max-content;
-}
 .focus-btn {
-  background: var(--color-surface);
-  border: none;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
   color: var(--color-text-sub);
-  padding: 0.375rem 0.75rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-full);
   font-size: var(--text-xs);
-  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
 }
 .focus-active {
-  background: var(--color-border);
-  color: var(--color-text);
+  background: var(--color-text);
+  color: var(--color-bg);
+  border-color: var(--color-text);
 }
 .focus-btn:disabled {
   opacity: 0.5;
@@ -424,19 +315,13 @@ async function saveSettings() {
   background: var(--color-success);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-success) 20%, transparent);
 }
+</style>"""
 
-.custom-select {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  outline: none;
-  min-width: 200px;
-}
-.custom-select:focus {
-  border-color: var(--color-text-sub);
-}
+css_match = re.search(r'<style scoped>.*?</style>', content, re.DOTALL)
+if css_match:
+    content = content[:css_match.start()] + css_new + content[css_match.end():]
 
-</style>
+with open(filepath, 'w') as f:
+    f.write(content)
+
+print("Rewrote EventBoothSettingsView.vue")
