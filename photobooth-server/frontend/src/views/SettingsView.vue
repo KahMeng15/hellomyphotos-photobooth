@@ -188,7 +188,7 @@ function cancelChanges() {
 
 <style scoped>
 .settings-page {
-  min-height: 100vh;
+  /* min-height: 100vh; removed to prevent double scrolling */
   background: var(--color-bg);
   color: var(--color-text);
 }

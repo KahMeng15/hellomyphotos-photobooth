@@ -1,66 +1,47 @@
 <template>
   <div class="admin-page">
     <AppTopNav mode="admin" currentTitle="System Admin" />
-    <header class="admin-header" style="display:none;">
-      <button @click="router.push('/events')" class="btn-ghost">&larr; Dashboard</button>
-      <h1>System Admin</h1>
+    <div class="admin-tabs-container">
       <div class="admin-tabs">
-        <button :class="['tab-btn', { active: currentTab === 'frames' }]" @click="currentTab = 'frames'">Frames & Health</button>
         <button :class="['tab-btn', { active: currentTab === 'settings' }]" @click="currentTab = 'settings'">Global Settings</button>
         <button v-if="authStore.user?.role === 'admin'" :class="['tab-btn', { active: currentTab === 'users' }]" @click="currentTab = 'users'">Users</button>
+        <button :class="['tab-btn', { active: currentTab === 'health' }]" @click="currentTab = 'health'">Server Health</button>
       </div>
-    </header>
+    </div>
 
     <div class="admin-content">
-      <div v-if="currentTab === 'frames'" class="admin-grid">
-        <section class="admin-card">
-          <h2>Frame Library</h2>
-          <div class="upload-area" @drop="handleDrop" @dragover.prevent>
-            <p>Drag & drop frame PNGs here</p>
-            <input
-              type="file"
-              accept=".png,.jpg,.jpeg,.webp"
-              @change="handleFileSelect"
-              ref="fileInput"
-              hidden
-            />
-            <button @click="openFilePicker" class="btn-secondary">Browse Files</button>
-          </div>
-          <div class="frame-list">
-            <div v-for="frame in photosStore.frames" :key="frame.id" class="frame-item">
-              <span class="frame-name">{{ frame.name }}</span>
-              <button @click="deleteFrame(frame.id)" class="btn-icon">✕</button>
-            </div>
-            <p v-if="photosStore.frames.length === 0" class="empty">No frames uploaded yet.</p>
-          </div>
-        </section>
+      <div v-if="currentTab === 'health'" class="health-container">
+        
 
-        <section class="admin-card">
+        <section class="card">
           <h2>Server Health</h2>
-          <div class="health-stats" v-if="health">
-            <div class="stat">
-              <span class="stat-label">Uptime</span>
-              <span class="stat-value">{{ formatUptime(health.uptime) }}</span>
+          <p class="card-desc">System diagnostics and storage information.</p>
+          <div class="settings-box" v-if="health">
+            <div class="field-row">
+              <label>Uptime</label>
+              <div class="value">{{ formatUptime(health.uptime) }}</div>
             </div>
-            <div class="stat">
-              <span class="stat-label">Memory</span>
-              <span class="stat-value">{{ health.system?.memory?.usagePercent }}%</span>
+            <div class="field-row">
+              <label>Memory</label>
+              <div class="value">{{ health.system?.memory?.usagePercent }}%</div>
             </div>
-            <div class="stat">
-              <span class="stat-label">Photos</span>
-              <span class="stat-value">{{ health.storage?.photos }}</span>
+            <div class="field-row">
+              <label>Photos</label>
+              <div class="value">{{ health.storage?.photos }}</div>
             </div>
-            <div class="stat">
-              <span class="stat-label">Queue</span>
-              <span class="stat-value">{{ health.queue?.depth || 0 }}</span>
+            <div class="field-row">
+              <label>Queue Depth</label>
+              <div class="value">{{ health.queue?.depth || 0 }}</div>
             </div>
-            <div class="stat">
-              <span class="stat-label">WebSocket</span>
-              <span class="stat-value">{{ health.connections?.websocket || 0 }}</span>
+            <div class="field-row">
+              <label>WebSocket Connections</label>
+              <div class="value">{{ health.connections?.websocket || 0 }}</div>
             </div>
           </div>
           <p v-else class="empty">Loading health data...</p>
-          <button @click="fetchHealth" class="btn-secondary">Refresh</button>
+          <div class="card-actions">
+            <button @click="fetchHealth" class="btn-secondary">Refresh</button>
+          </div>
         </section>
       </div>
 
@@ -91,7 +72,7 @@ const photosStore = usePhotosStore()
 const authStore = useAuthStore()
 const fileInput = ref<HTMLInputElement | null>(null)
 const health = ref<any>(null)
-const currentTab = ref('frames')
+const currentTab = ref('settings')
 
 onMounted(async () => {
   await photosStore.fetchFrames()
@@ -167,24 +148,37 @@ function formatUptime(s: number) {
   color: var(--color-text);
 }
 
+.admin-tabs-container {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0 var(--space-6);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 58px; /* Height of AppTopNav */
+  z-index: 40;
+}
+
 .admin-tabs {
   display: flex;
-  gap: 0.5rem;
-  background: var(--color-border);
-  padding: 0.25rem;
-  border-radius: var(--radius-md);
+  gap: var(--space-6);
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
 }
 
 .tab-btn {
   background: transparent;
   border: none;
   color: var(--color-text-sub);
-  padding: 0.5rem 1rem;
+  padding: var(--space-3) 0;
   font-size: var(--text-sm);
   font-weight: 500;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
   cursor: pointer;
   transition: all 0.2s;
+  margin-bottom: -1px;
 }
 
 .tab-btn:hover {
@@ -192,9 +186,10 @@ function formatUptime(s: number) {
 }
 
 .tab-btn.active {
-  background: var(--color-border);
+  background: transparent;
   color: var(--color-text);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  box-shadow: none;
+  border-bottom: 2px solid var(--color-text);
 }
 
 .admin-content {
@@ -327,5 +322,59 @@ function formatUptime(s: number) {
   .admin-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin: 1.5rem auto;
+  max-width: 800px;
+}
+.card h2 {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin: 0 0 0.25rem;
+}
+.card-desc {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin: 0 0 1.25rem;
+}
+.settings-box {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.field-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.field-row:last-child {
+  border-bottom: none;
+}
+.field-row:nth-child(even) {
+  background: var(--color-surface-alt);
+}
+.field-row label {
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+.field-row .value {
+  font-size: var(--text-base);
+  font-weight: 500;
+}
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
 }
 </style>

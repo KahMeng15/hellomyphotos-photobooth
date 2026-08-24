@@ -6,7 +6,7 @@
       <div class="events-header">
         <div class="events-header-left">
           <h2>Events</h2>
-          <span class="event-count">{{ events.length }} event{{ events.length !== 1 ? 's' : '' }}</span>
+          
         </div>
         <div class="events-header-right">
           <AppButton v-if="authStore.user?.role === 'admin'" variant="primary" @click="showCreateModal = true">
@@ -29,11 +29,10 @@
           <div class="event-info">
             <h3 class="event-name">{{ event.name }}</h3>
             <div class="event-organizer">{{ event.organizer || authStore.user?.email || 'Admin' }}</div>
-            <div class="event-date">{{ formatDate(event.date) }}</div>
             <p v-if="event.description" class="event-desc">{{ event.description }}</p>
           </div>
           <div class="event-meta">
-            
+            <div class="event-date">{{ formatDate(event.date) }}</div>
             <span class="event-status" :class="`status-${event.status}`">{{ event.status }}</span>
           </div>
         </div>
@@ -233,8 +232,8 @@ async function handleLogout() {
 }
 
 .event-date {
-  display: block;
-  margin-top: 0.25rem;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
   font-size: var(--text-sm);
   color: var(--color-text-sub);
 }
@@ -247,7 +246,7 @@ async function handleLogout() {
 
 .event-meta {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   padding-top: 0.5rem;
   border-top: 1px solid var(--color-border);

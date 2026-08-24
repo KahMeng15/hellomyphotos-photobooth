@@ -18,6 +18,8 @@ services:
       ALLOWED_ORIGINS: "*"
       COOKIE_SAME_SITE: lax
       COOKIE_SECURE: "false"
+      COOKIE_PATH: /hellomyphotos-photobooth-test
+      COOKIE_DOMAIN: kmeng.ftp.sh
       VITE_BASE_URL: /hellomyphotos-photobooth-test/
     volumes:
       - ./photobooth-server:/app

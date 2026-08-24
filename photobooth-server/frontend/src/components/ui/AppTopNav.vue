@@ -6,7 +6,7 @@
       
       <!-- Event Mode -->
       <template v-else-if="mode === 'event'">
-        <button @click="navigateBack" class="app-btn app-btn--ghost app-btn--icon" :title="currentTitle ? 'Back to event' : 'Back to events'">
+        <button @click="navigateBack" class="nav-icon" :title="currentTitle ? 'Back to event' : 'Back to events'">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
@@ -17,6 +17,16 @@
           <span v-if="currentTitle" class="nav-subtitle">{{ currentTitle }}</span>
           <span v-if="!currentTitle && event?.status" class="event-status" :class="`status-${event.status}`">{{ event.status }}</span>
         </h1>
+      </template>
+
+      <!-- Admin Mode -->
+      <template v-else-if="mode === 'admin'">
+        <button @click="navigateBack" class="nav-icon" title="Back to events">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <h1 class="event-nav-title">{{ currentTitle || 'System Admin' }}</h1>
       </template>
     </div>
 

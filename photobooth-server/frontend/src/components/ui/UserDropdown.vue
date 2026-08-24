@@ -2,9 +2,6 @@
   <div class="user-dropdown-wrapper" ref="dropdownRef">
     <button @click="toggle" class="user-email-btn" :class="{ 'is-open': isOpen }">
       {{ authStore.user?.email }}
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron" :class="{ 'rotate': isOpen }">
-        <polyline points="6 9 12 15 18 9"></polyline>
-      </svg>
     </button>
     
     <div v-if="isOpen" class="dropdown-menu">

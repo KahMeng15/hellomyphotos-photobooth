@@ -1,20 +1,25 @@
 <template>
   <div class="users-page">
     <main class="users-main">
-      <div class="users-header">
-        <h2>Users</h2>
-        <button @click="showAddModal = true" class="btn-primary btn-sm">Add User</button>
-      </div>
-
-      <div class="user-grid">
-        <div v-for="user in users" :key="user.id" class="user-card">
-          <div class="user-info">
-            <h3 class="user-email">{{ user.email }}</h3>
-            <span class="user-role" :class="`role-${user.role}`">{{ user.role }}</span>
+      <section class="card">
+        <h2>System Users</h2>
+        <p class="card-desc">Manage administrators and operators for your photobooth.</p>
+        <div class="settings-box">
+          <div v-for="user in users" :key="user.id" class="field-row">
+            <div class="user-info">
+              <h3 class="user-email">{{ user.email }}</h3>
+            </div>
+            <div class="user-actions">
+              <span class="user-role" :class="`role-${user.role}`">{{ user.role }}</span>
+              <button v-if="user.email !== authStore.user?.email" @click="deleteUser(user.id)" class="btn-icon" title="Remove User">✕</button>
+              <div v-else class="btn-icon-placeholder"></div>
+            </div>
           </div>
-          <button v-if="user.email !== authStore.user?.email" @click="deleteUser(user.id)" class="btn-icon">✕</button>
         </div>
-      </div>
+        <div class="card-actions">
+          <button @click="showAddModal = true" class="btn-primary">Add User</button>
+        </div>
+      </section>
     </main>
 
     <Teleport to="body">
@@ -106,7 +111,7 @@ onMounted(() => {
 
 <style scoped>
 .users-page {
-  min-height: 100vh;
+  /* min-height: 100vh; removed to prevent double scrolling */
   background: var(--color-bg);
   color: var(--color-text);
 }
@@ -146,30 +151,24 @@ onMounted(() => {
   margin: 0 auto;
   padding: 2rem;
 }
-.users-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-}
+
 .users-header h2 {
   font-size: 1.25rem;
   font-weight: 500;
   margin: 0;
 }
-.user-grid {
-  display: grid;
+
+
+
+.user-actions {
+  display: flex;
+  align-items: center;
   gap: 1rem;
 }
-.user-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.btn-icon-placeholder {
+  width: 32px; /* roughly the size of the icon button to keep alignment consistent */
 }
+
 .user-info {
   display: flex;
   flex-direction: column;
@@ -273,6 +272,51 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.card h2 {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin: 0 0 0.25rem;
+}
+.card-desc {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin: 0 0 1.25rem;
+}
+.settings-box {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.field-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.field-row:last-child {
+  border-bottom: none;
+}
+.field-row:nth-child(even) {
+  background: var(--color-surface-alt);
+}
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
   margin-top: 1.5rem;
 }
 </style>
