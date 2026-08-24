@@ -1,4 +1,5 @@
 import QRCode from 'qrcode'
+import { createButton } from '../utils/UIKit.js'
 
 export interface QueuedSession {
   id: number
@@ -17,12 +18,12 @@ export interface QueuedSession {
 // ---------------------------------------------------------------------------
 // Design tokens (mirrors Settings.ts)
 // ---------------------------------------------------------------------------
-const BG          = '#0f0f0f'
-const ROW_A       = '#191919'
-const ROW_B       = '#111'
-const BORDER      = '#2a2a2a'
-const LABEL_COLOR = '#888'
-const TEXT_COLOR  = '#ccc'
+const BG          = 'var(--color-bg)'
+const ROW_A       = 'var(--color-surface-alt)'
+const ROW_B       = 'var(--color-surface)'
+const BORDER      = 'var(--color-border)'
+const LABEL_COLOR = 'var(--color-text-sub)'
+const TEXT_COLOR  = 'var(--color-text-sub)'
 
 const normalizeUrl = (url: string) => {
   let u = url.trim().replace(/\/+$/, '')
@@ -49,19 +50,19 @@ function statusInfo(s: StatusKey): { label: string; color: string; icon: string 
     case 'completed':
       return {
         label: 'Uploaded',
-        color: '#22c55e',
+        color: 'var(--color-success)',
         icon: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
       }
     case 'uploading':
       return {
         label: 'Uploading',
-        color: '#fbbf24',
+        color: 'var(--color-warning)',
         icon: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>`,
       }
     case 'failed':
       return {
         label: 'Failed',
-        color: '#ef4444',
+        color: 'var(--color-error)',
         icon: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
       }
     default:
@@ -73,80 +74,7 @@ function statusInfo(s: StatusKey): { label: string; color: string; icon: string 
   }
 }
 
-// Inject shared styles once
-let stylesInjected = false
-function ensureStyles() {
-  if (stylesInjected) return
-  stylesInjected = true
-  const style = document.createElement('style')
-  style.textContent = `
-    @keyframes gfadeup {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    .g-page {
-      position: absolute; inset: 0;
-      background: ${BG};
-      display: none; flex-direction: column;
-      overflow: hidden;
-    }
-    .g-page.g-visible { display: flex; }
-    .g-panel {
-      background: ${BG}; padding: 2rem;
-      width: 100%; box-sizing: border-box;
-      flex: 1; overflow-y: auto;
-      scrollbar-width: thin; scrollbar-color: #2a2a2a transparent;
-    }
-    .g-header {
-      display: flex; align-items: center; gap: 0.75rem;
-      margin-bottom: 1.5rem; flex-shrink: 0;
-    }
-    .g-back-btn {
-      background: none; border: none; color: ${LABEL_COLOR};
-      cursor: pointer; padding: 0.25rem;
-      display: flex; align-items: center; border-radius: 6px;
-      transition: color 150ms;
-    }
-    .g-back-btn:hover { color: #fff; }
-    .g-title {
-      font-size: 1.25rem; font-weight: 700; margin: 0; flex: 1; color: #fff;
-    }
-    .g-section-label {
-      font-size: 0.8125rem; font-weight: 600; color: ${LABEL_COLOR};
-      margin: 0 0 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
-    }
-    .g-card {
-      background: ${ROW_A}; border: 1px solid ${BORDER};
-      border-radius: 8px; overflow: hidden;
-      cursor: pointer;
-      transition: border-color 150ms, background 150ms;
-      animation: gfadeup 220ms ease both;
-    }
-    .g-card:hover { background: #1e1e1e; border-color: #3a3a3a; }
-    .g-card:active { background: #222; }
-    .g-meta-row {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0.625rem 1rem; border-bottom: 1px solid #252525;
-      font-size: 0.8125rem;
-    }
-    .g-meta-row:last-child { border-bottom: none; }
-    .g-meta-label { color: ${LABEL_COLOR}; }
-    .g-meta-value { color: ${TEXT_COLOR}; font-weight: 500; }
-    .g-photo-thumb {
-      background: #1a1a1a; overflow: hidden;
-      cursor: zoom-in; border-radius: 6px;
-      transition: opacity 150ms;
-    }
-    .g-photo-thumb:hover { opacity: 0.85; }
-    .g-photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .g-status-pill {
-      display: inline-flex; align-items: center; gap: 0.3rem;
-      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em;
-      padding: 0.2rem 0.55rem; border-radius: 100px;
-    }
-  `
-  document.head.appendChild(style)
-}
+
 
 // ---------------------------------------------------------------------------
 // Gallery — main exported class
@@ -166,8 +94,7 @@ export class Gallery {
 
   constructor(container: HTMLElement) {
     this.container = container
-    ensureStyles()
-
+    
     if (!Gallery.progressListenerAdded) {
       Gallery.progressListenerAdded = true
       window.hellomyphoto?.onUploadProgress((data) => {
@@ -185,8 +112,7 @@ export class Gallery {
 
     // ---- List page ----
     this.listPage = document.createElement('div')
-    this.listPage.className = 'g-page'
-    this.listPage.style.zIndex = '45'
+    this.listPage.className = 'g-page g-page-list'
 
     const listPanel = document.createElement('div')
     listPanel.className = 'g-panel'
@@ -216,19 +142,14 @@ export class Gallery {
     listPanel.appendChild(sectionLabel)
 
     this.listGrid = document.createElement('div')
-    this.listGrid.style.cssText = `
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 1rem;
-    `
+    this.listGrid.className = 'g-list-grid'
     listPanel.appendChild(this.listGrid)
 
     this.listPage.appendChild(listPanel)
 
     // ---- Detail page ----
     this.detailPage = document.createElement('div')
-    this.detailPage.className = 'g-page'
-    this.detailPage.style.zIndex = '46'
+    this.detailPage.className = 'g-page g-page-detail'
 
     this.container.appendChild(this.listPage)
     this.container.appendChild(this.detailPage)
@@ -308,14 +229,10 @@ export class Gallery {
       if (sessions.length === 0) {
         if (countEl) countEl.textContent = '0 sessions'
         const empty = document.createElement('div')
-        empty.style.cssText = `
-          grid-column: 1 / -1; display: flex; flex-direction: column;
-          align-items: flex-start; gap: 0.5rem;
-          padding: 2rem 0; color: ${LABEL_COLOR}; font-size: 0.875rem;
-        `
+        empty.className = 'g-empty-state'
         empty.innerHTML = `
-          <p style="margin:0;font-size:0.9375rem;font-weight:600;color:#555;">No sessions yet</p>
-          <p style="margin:0;color:${LABEL_COLOR};">Photos will appear here after your first capture.</p>
+          <p class="g-empty-title">No sessions yet</p>
+          <p class="g-empty-desc">Photos will appear here after your first capture.</p>
         `
         this.listGrid.appendChild(empty)
         return
@@ -343,7 +260,7 @@ export class Gallery {
       console.error('[Gallery] Failed to load sessions', e)
       this.listGrid.innerHTML = ''
       const err = document.createElement('div')
-      err.style.cssText = `color: #ef4444; font-size: 0.875rem; padding: 1rem 0;`
+      err.className = 'g-error-state'
       err.textContent = 'Failed to load sessions.'
       this.listGrid.appendChild(err)
     }
@@ -366,14 +283,11 @@ export class Gallery {
 
     // --- Thumbnail (last image, no collage — fast) ---
     const thumb = document.createElement('div')
-    thumb.style.cssText = `
-      width: 100%; aspect-ratio: 3/2;
-      background: #1a1a1a; overflow: hidden; position: relative;
-    `
+    thumb.className = 'g-card-thumb'
 
     if (thumbPath) {
       const img = document.createElement('img')
-      img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; display: block;'
+      img.className = 'g-card-thumb-img'
       img.loading = 'lazy'
       img.decoding = 'async'
       // Defer src assignment slightly so layout doesn't block
@@ -396,8 +310,7 @@ export class Gallery {
       thumb.appendChild(img)
     } else {
       thumb.innerHTML = `
-        <div style="width:100%;height:100%;display:flex;align-items:center;
-          justify-content:center;color:#333;">
+        <div class="g-card-thumb-empty">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -410,13 +323,7 @@ export class Gallery {
     // Photo count badge
     if (paths.length > 0) {
       const badge = document.createElement('div')
-      badge.style.cssText = `
-        position: absolute; bottom: 0.4rem; right: 0.4rem;
-        background: rgba(0,0,0,0.6); border-radius: 100px;
-        padding: 0.15rem 0.45rem;
-        font-size: 0.68rem; font-weight: 600; color: #e0e0e0;
-        letter-spacing: 0.02em; backdrop-filter: blur(4px);
-      `
+      badge.className = 'g-card-badge'
       badge.textContent = `${paths.length}`
       thumb.appendChild(badge)
     }
@@ -425,32 +332,23 @@ export class Gallery {
 
     // --- Info section ---
     const info = document.createElement('div')
-    info.style.cssText = 'padding: 0.75rem 0.875rem 0.875rem;'
+    info.className = 'g-card-info'
 
     const { time, date } = formatDateParts(session.createdAt)
 
     const timeEl = document.createElement('div')
-    timeEl.style.cssText = `
-      font-size: 0.875rem; font-weight: 600; color: #e5e5e5; margin-bottom: 0.15rem;
-    `
+    timeEl.className = 'g-card-time'
     timeEl.textContent = time
 
     const dateEl = document.createElement('div')
-    dateEl.style.cssText = `
-      font-size: 0.75rem; color: ${LABEL_COLOR}; margin-bottom: 0.625rem;
-    `
+    dateEl.className = 'g-card-date'
     dateEl.textContent = date
 
     const { label, color, icon } = statusInfo(session.status)
     const pill = document.createElement('div')
     pill.className = 'g-status-pill'
-    pill.style.cssText = `
-      display: inline-flex; align-items: center; gap: 0.3rem;
-      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em;
-      padding: 0.2rem 0.55rem; border-radius: 100px;
-      color: ${color}; background: ${color}1a;
-    `
-    pill.innerHTML = `<span style="color:${color};display:flex;">${icon}</span>${label}`
+    pill.style.color = color; pill.style.background = `${color}1a`;
+    pill.innerHTML = `<span class="g-status-icon-wrap" style="color:${color};">${icon}</span>${label}`
 
     info.appendChild(timeEl)
     info.appendChild(dateEl)
@@ -492,9 +390,7 @@ export class Gallery {
 
     // --- Two-column layout ---
     const layout = document.createElement('div')
-    layout.style.cssText = `
-      display: grid; grid-template-columns: 1fr 280px; gap: 2rem; align-items: start;
-    `
+    layout.className = 'g-detail-layout'
 
     // ---- Left: Photos ----
     const leftCol = document.createElement('div')
@@ -507,22 +403,12 @@ export class Gallery {
     if (paths.length > 0) {
       const cols = paths.length > 1 ? 2 : 1;
       const photoCard = document.createElement('div')
-      photoCard.style.cssText = `
-        border: 1px solid ${BORDER}; border-radius: 8px;
-        background: ${ROW_A}; padding: 1rem;
-        display: grid; 
-        grid-template-columns: repeat(${cols}, 1fr); 
-        gap: 1rem;
-      `
+      photoCard.className = 'g-photo-card';
+      photoCard.dataset.cols = cols.toString()
 
       paths.forEach((p, i) => {
         const wrap = document.createElement('div')
-        wrap.style.cssText = `
-          background: #1a1a1a; overflow: hidden;
-          cursor: zoom-in; border-radius: 6px;
-          transition: opacity 150ms;
-          display: flex;
-        `
+        wrap.className = 'g-photo-wrap'
         wrap.onmouseenter = () => { wrap.style.opacity = '0.85' }
         wrap.onmouseleave = () => { wrap.style.opacity = '1' }
 
@@ -530,9 +416,7 @@ export class Gallery {
         img.alt = `Photo ${i + 1}`
         img.loading = 'lazy'
         img.decoding = 'async'
-        img.style.cssText = `
-          width: 100%; height: auto; object-fit: contain; display: block;
-        `
+        img.className = 'g-photo-img'
         img.onerror = () => {
           if (session.shareId) {
             window.hellomyphoto.getSettings().then(settings => {
@@ -565,7 +449,7 @@ export class Gallery {
       leftCol.appendChild(photoCard)
     } else {
       const noPhotos = document.createElement('p')
-      noPhotos.style.cssText = `color:${LABEL_COLOR};font-size:0.875rem;margin:0;`
+      noPhotos.className = 'g-no-photos'
       noPhotos.textContent = 'No photos available.'
       leftCol.appendChild(noPhotos)
     }
@@ -574,7 +458,7 @@ export class Gallery {
 
     // ---- Right: QR + Metadata ----
     const rightCol = document.createElement('div')
-    rightCol.style.cssText = 'display: flex; flex-direction: column; gap: 1.5rem;'
+    rightCol.className = 'g-right-col'
 
     // QR section
     const qrLabel = document.createElement('p')
@@ -584,9 +468,7 @@ export class Gallery {
 
     if (session.shareId) {
       const qrBox = document.createElement('div')
-      qrBox.style.cssText = `
-        border: 1px solid ${BORDER}; border-radius: 8px; overflow: hidden;
-      `
+      qrBox.className = 'g-qr-box'
 
       try {
         const serverConfig = await window.hellomyphoto.getServerConfig()
@@ -596,34 +478,26 @@ export class Gallery {
         const qrDataUrl = await QRCode.toDataURL(shareUrl, {
           width: 240,
           margin: 1,
-          color: { dark: '#0a0a0a', light: '#ffffff' },
+          color: { dark: '#0a0a0a', light: 'var(--color-text)fff' },
           errorCorrectionLevel: 'M',
         })
 
         const qrWrap = document.createElement('div')
-        qrWrap.style.cssText = `
-          background: #fff; padding: 1rem;
-          display: flex; align-items: center; justify-content: center;
-        `
+        qrWrap.className = 'g-qr-wrap'
         const qrImg = document.createElement('img')
         qrImg.src = qrDataUrl
-        qrImg.style.cssText = 'width: 100%; max-width: 240px; height: auto; display: block;'
+        qrImg.className = 'g-qr-img'
         qrWrap.appendChild(qrImg)
         qrBox.appendChild(qrWrap)
 
         const scanRow = document.createElement('div')
-        scanRow.style.cssText = `
-          padding: 0.625rem 1rem; background: ${ROW_A};
-          border-top: 1px solid ${BORDER};
-          font-size: 0.75rem; color: ${LABEL_COLOR}; text-align: center;
-          word-break: break-all; line-height: 1.4;
-        `
+        scanRow.className = 'g-qr-scan-row'
         scanRow.textContent = shareUrl
         qrBox.appendChild(scanRow)
       } catch (e) {
         console.error('[Gallery] QR error', e)
         const errRow = document.createElement('div')
-        errRow.style.cssText = `padding: 1rem; color: #ef4444; font-size: 0.8rem;`
+        errRow.className = 'g-qr-error'
         errRow.textContent = 'Could not generate QR code.'
         qrBox.appendChild(errRow)
       }
@@ -633,37 +507,34 @@ export class Gallery {
       // Pending / failed / uploading placeholder
       const { color, icon } = statusInfo(session.status)
       const placeholder = document.createElement('div')
-      placeholder.style.cssText = `
-        border: 1px solid ${BORDER}; border-radius: 8px;
-        padding: 1.5rem 1rem; background: ${ROW_A};
-        display: flex; flex-direction: column; align-items: center;
-        gap: 0.75rem; text-align: center; width: 100%; box-sizing: border-box;
-      `
+      placeholder.className = 'g-placeholder-box'
       
       const iconWrap = document.createElement('span')
-      iconWrap.style.cssText = `color:${color};display:flex;`
+      iconWrap.className = 'g-status-icon-wrap'; iconWrap.style.color = color
       iconWrap.innerHTML = icon.replace('width="12"', 'width="28"').replace('height="12"', 'height="28"')
       
       const msg = document.createElement('p')
-      msg.style.cssText = `margin:0;font-size:0.8rem;color:${LABEL_COLOR};line-height:1.5;`
+      msg.className = 'g-placeholder-msg'
       msg.textContent = session.status === 'failed' 
         ? 'Upload failed and no share link is available.'
         : 'No share link is available.'
 
       // Progress bar container
       const progContainer = document.createElement('div')
-      progContainer.style.cssText = 'width: 100%; display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.5rem;'
+      progContainer.className = 'g-prog-container'
       
       const progBarBg = document.createElement('div')
-      progBarBg.style.cssText = 'width: 100%; background: #333; border-radius: 4px; height: 6px; overflow: hidden;'
+      progBarBg.className = 'g-prog-bar-bg'
       
       const progFill = document.createElement('div')
       const progData = Gallery.progressMap[session.sessionId] || { percent: 0, speed: '--' }
-      progFill.style.cssText = `width: ${progData.percent}%; background: ${session.status === 'failed' ? '#ef4444' : '#fbbf24'}; height: 100%; transition: width 0.3s ease;`
+      progFill.className = 'g-prog-fill';
+      progFill.style.width = `${progData.percent}%`;
+      progFill.style.background = session.status === 'failed' ? 'var(--color-error)' : 'var(--color-warning)'
       progBarBg.appendChild(progFill)
       
       const progText = document.createElement('div')
-      progText.style.cssText = 'font-size: 0.7rem; color: #888; display: flex; justify-content: space-between;'
+      progText.className = 'g-prog-text'
       progText.innerHTML = `<span>${progData.percent}%</span><span>${progData.speed || '--'}</span>`
       
       progContainer.appendChild(progBarBg)
@@ -704,7 +575,7 @@ export class Gallery {
     rightCol.appendChild(metaLabel)
 
     const metaBox = document.createElement('div')
-    metaBox.style.cssText = `border: 1px solid ${BORDER}; border-radius: 8px; overflow: hidden;`
+    metaBox.className = 'g-meta-box'
 
     const metaRows: [string, string][] = [
       ['Time', time],
@@ -738,25 +609,14 @@ export class Gallery {
     const actionsLabel = document.createElement('p')
     actionsLabel.className = 'g-section-label'
     actionsLabel.textContent = 'Actions'
-    actionsLabel.style.marginTop = '0.5rem'
+    actionsLabel.className = 'g-section-label g-actions-label'
     rightCol.appendChild(actionsLabel)
 
     const actionsBox = document.createElement('div')
-    actionsBox.style.cssText = `display: flex; flex-direction: column; gap: 0.5rem;`
+    actionsBox.className = 'g-actions-box'
 
     const createBtn = (text: string, onClick: () => void, primary = false) => {
-      const btn = document.createElement('button')
-      btn.textContent = text
-      btn.style.cssText = `
-        padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid ${primary ? 'transparent' : BORDER};
-        background: ${primary ? '#fff' : ROW_A}; color: ${primary ? '#000' : '#e5e5e5'};
-        font-size: 0.875rem; font-weight: 600; cursor: pointer;
-        transition: all 150ms; width: 100%; text-align: center;
-      `
-      btn.onmouseenter = () => { btn.style.background = primary ? '#e5e5e5' : '#222' }
-      btn.onmouseleave = () => { btn.style.background = primary ? '#fff' : ROW_A }
-      btn.onclick = onClick
-      return btn
+      return createButton(text, { variant: primary ? 'primary' : 'secondary', onClick })
     }
 
     const refreshDetail = async () => {
@@ -842,19 +702,12 @@ export class Gallery {
     let current = startIndex
 
     const lb = document.createElement('div')
-    lb.style.cssText = `
-      position: fixed; inset: 0; z-index: 200;
-      background: ${BG};
-      display: flex; flex-direction: column; overflow: hidden;
-    `
+    lb.className = 'g-lightbox'
 
     // Header
     const lbHeader = document.createElement('div')
     lbHeader.className = 'g-header'
-    lbHeader.style.cssText = `
-      display: flex; align-items: center; gap: 0.75rem;
-      padding: 1.5rem 2rem 1rem; flex-shrink: 0;
-    `
+    lbHeader.className = 'g-header g-lightbox-header'
 
     const lbBackBtn = document.createElement('button')
     lbBackBtn.className = 'g-back-btn'
@@ -863,7 +716,7 @@ export class Gallery {
 
     const lbCounter = document.createElement('h2')
     lbCounter.className = 'g-title'
-    lbCounter.style.fontSize = '1rem'
+    lbCounter.className = 'g-title g-lightbox-counter'
 
     lbHeader.appendChild(lbBackBtn)
     lbHeader.appendChild(lbCounter)
@@ -871,24 +724,18 @@ export class Gallery {
     // Nav buttons
     const makeNavBtn = (dir: -1 | 1) => {
       const btn = document.createElement('button')
-      btn.style.cssText = `
-        background: none; border: 1px solid ${BORDER}; color: ${LABEL_COLOR};
-        border-radius: 8px; padding: 0.4rem 0.75rem; cursor: pointer;
-        display: flex; align-items: center; font-size: 0.8rem;
-        transition: color 150ms, border-color 150ms;
-      `
+      btn.className = 'g-nav-btn'
       btn.innerHTML = dir === -1
         ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>`
         : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`
-      btn.onmouseenter = () => { btn.style.color = '#fff'; btn.style.borderColor = '#555' }
-      btn.onmouseleave = () => { btn.style.color = LABEL_COLOR; btn.style.borderColor = BORDER }
+      
       btn.addEventListener('click', () => { current = (current + dir + paths.length) % paths.length; update() })
       if (paths.length <= 1) btn.style.visibility = 'hidden'
       return btn
     }
 
     const navGroup = document.createElement('div')
-    navGroup.style.cssText = 'display: flex; gap: 0.5rem; margin-left: auto;'
+    navGroup.className = 'g-nav-group'
     navGroup.appendChild(makeNavBtn(-1))
     navGroup.appendChild(makeNavBtn(1))
     lbHeader.appendChild(navGroup)
@@ -896,16 +743,10 @@ export class Gallery {
 
     // Image area
     const imgArea = document.createElement('div')
-    imgArea.style.cssText = `
-      flex: 1; display: flex; align-items: center; justify-content: center;
-      padding: 0 2rem 2rem; overflow: hidden; min-height: 0;
-    `
+    imgArea.className = 'g-img-area'
 
     const img = document.createElement('img')
-    img.style.cssText = `
-      max-width: 100%; max-height: 100%;
-      object-fit: contain; border-radius: 4px;
-    `
+    img.className = 'g-photo-img'
     imgArea.appendChild(img)
     lb.appendChild(imgArea)
 

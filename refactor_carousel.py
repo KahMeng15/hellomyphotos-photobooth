@@ -1,42 +1,27 @@
-export class FrameCarousel {
-  private container: HTMLElement
-  private carouselEl: HTMLDivElement
-  private frames: { id: string; name: string; url: string }[] = []
-  private selectedId: string | null = null
-  public activeFrames: any[] = []
-  private onChange: (frameId: string | null) => void
+import os
 
-  constructor(container: HTMLElement, onChange: (frameId: string | null) => void) {
+filepath = 'photobooth-client/src/renderer/components/FrameCarousel.ts'
+with open(filepath, 'r') as f:
+    content = f.read()
+
+# Replace constructor body
+replacement1 = """  constructor(container: HTMLElement, onChange: (frameId: string | null) => void) {
     this.container = container
     this.onChange = onChange
 
     this.carouselEl = document.createElement('div')
     this.carouselEl.className = 'ui-carousel'
     container.appendChild(this.carouselEl)
-  }
+  }"""
 
-  async loadFrames(serverUrl: string, otp: string) {
-    try {
-      const response = await fetch(`${serverUrl}/api/booth/frames`, {
-        headers: {
-          'Authorization': `Bearer ${otp}`
-        }
-      })
-      const data = await response.json()
-      this.frames = data.frames.map((f: any) => ({
-        id: f.id,
-        name: f.name,
-        url: `${serverUrl}${f.imageUrl}?otp=${otp}`,
-      }))
-      this.activeFrames = data.frames
-      this.render()
-    } catch {
-      this.frames = []
-      this.activeFrames = []
-    }
-  }
+start1 = content.find("  constructor(container: HTMLElement")
+end1 = content.find("  async loadFrames(")
 
-  private render() {
+if start1 != -1 and end1 != -1:
+    content = content[:start1] + replacement1 + "\n\n" + content[end1:]
+
+# Replace render method
+replacement2 = """  private render() {
     this.carouselEl.innerHTML = ''
 
     const noneBtn = document.createElement('button')
@@ -63,4 +48,15 @@ export class FrameCarousel {
       this.carouselEl.appendChild(btn)
     }
   }
-}
+}"""
+
+start2 = content.find("  private render() {")
+end2 = content.find("}\n") # end of class
+
+if start2 != -1:
+    content = content[:start2] + replacement2 + "\n"
+
+with open(filepath, 'w') as f:
+    f.write(content)
+
+print("FrameCarousel refactored.")

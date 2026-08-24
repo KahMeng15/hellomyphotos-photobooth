@@ -1,3 +1,7 @@
+import '@picocss/pico/css/pico.min.css'
+import './styles/tokens.css'
+import './styles/components.css'
+
 import { BoothApp } from './components/BoothApp.js'
 
 declare global {

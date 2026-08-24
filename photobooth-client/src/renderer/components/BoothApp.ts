@@ -6,6 +6,8 @@ import { PhotoPreview } from './PhotoPreview.js'
 import { OfflineIndicator } from './OfflineIndicator.js'
 import { Settings, connectBoothSocket, boothSocket } from './Settings.js'
 import { Gallery } from './Gallery.js'
+import { createButton, createModal, createInput, createSpinner } from '../utils/UIKit.js'
+
 
 type BoothState = 'idle' | 'live' | 'capturing' | 'preview' | 'paused'
 type CameraMode = 'webcam' | 'dslr'
@@ -142,7 +144,7 @@ export class BoothApp {
       position: 'absolute', inset: '0', pointerEvents: 'none',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     })
-    this.previewWindow.style.position = 'relative'
+    
     this.previewWindow.appendChild(this.overlay)
 
     this.stateDisplay = document.createElement('div')
@@ -175,26 +177,20 @@ export class BoothApp {
       position: 'absolute', right: '2rem',
     })
 
-    const iconBtnStyle = {
-      padding: '0.625rem',
-      background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', borderRadius: '50%',
-      cursor: 'pointer', display: 'flex',
-      alignItems: 'center', justifyContent: 'center',
-    }
-
+    
     this.settingsBtn = document.createElement('button')
+    this.settingsBtn.className = 'booth-icon-btn'
     this.settingsBtn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`
-    Object.assign(this.settingsBtn.style, iconBtnStyle)
     this.settingsBtn.addEventListener('click', () => this.openSettings('exposure'))
 
     this.pauseBtn = document.createElement('button')
+    this.pauseBtn.className = 'booth-icon-btn'
     this.pauseBtn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>`
-    Object.assign(this.pauseBtn.style, iconBtnStyle)
     this.pauseBtn.addEventListener('click', () => this.togglePause())
 
     this.exitBtn = document.createElement('button')
+    this.exitBtn.className = 'booth-icon-btn'
     this.exitBtn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`
-    Object.assign(this.exitBtn.style, iconBtnStyle)
     this.exitBtn.addEventListener('click', () => this.goHome())
 
     this.statusActions.appendChild(this.settingsBtn)
@@ -206,20 +202,16 @@ export class BoothApp {
     // Landing screen
     // ------------------------------------------------------------------
     this.landingEl = document.createElement('div')
-    Object.assign(this.landingEl.style, {
-      position: 'absolute', inset: '0', zIndex: '20',
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', background: '#0f0f0f', gap: '2rem',
-    })
+    this.landingEl.className = 'booth-landing'
 
     const brand = document.createElement('h1')
     brand.textContent = 'hellomyphoto'
-    brand.style.cssText = 'font-size: 3rem; font-weight: 900; letter-spacing: -0.03em; margin: 0;'
+    brand.className = 'booth-landing-brand'
     this.landingEl.appendChild(brand)
 
     const subtitle = document.createElement('p')
     subtitle.textContent = 'Photo Booth'
-    subtitle.style.cssText = 'font-size: 1.125rem; color: #666; margin: -1rem 0 0;'
+    subtitle.className = 'booth-landing-subtitle'
     this.landingEl.appendChild(subtitle)
 
     this.startBtn = document.createElement('button')
@@ -312,10 +304,7 @@ export class BoothApp {
     // Flash overlay
     // ------------------------------------------------------------------
     this.flashOverlay = document.createElement('div')
-    Object.assign(this.flashOverlay.style, {
-      position: 'absolute', inset: '0', zIndex: '999',
-      background: '#fff', pointerEvents: 'none', opacity: '0',
-    })
+    this.flashOverlay.className = 'booth-flash-overlay'
 
     // ------------------------------------------------------------------
     // DSLR disconnect error overlay
@@ -357,24 +346,7 @@ export class BoothApp {
 
     // Upload status bar
     this.uploadStatusBar = document.createElement('div')
-    Object.assign(this.uploadStatusBar.style, {
-      position: 'fixed',
-      bottom: '0',
-      left: '0',
-      right: '0',
-      background: 'rgba(15,15,15,0.96)',
-      borderTop: '1px solid #1f1f1f',
-      padding: '0.5rem 1.5rem',
-      display: 'none',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '0.78rem',
-      color: '#666',
-      zIndex: '300',
-      fontFamily: 'monospace',
-      letterSpacing: '0.02em',
-      gap: '0.5rem',
-    })
+    this.uploadStatusBar.className = 'booth-upload-status-bar'
     this.container.appendChild(this.uploadStatusBar)
     this.settings = new Settings(this.container, (s) => {
       const prevMode = this.cameraMode
@@ -512,11 +484,7 @@ export class BoothApp {
 
   private createCaptureProgress() {
     this.captureProgress = document.createElement('div')
-    Object.assign(this.captureProgress.style, {
-      position: 'absolute', bottom: '2rem', left: '2rem', zIndex: '40',
-      display: 'none', flexDirection: 'column', gap: '0.5rem',
-      fontFamily: 'system-ui, sans-serif',
-    })
+    this.captureProgress.className = 'booth-capture-progress'
 
     this.captureProgressText = document.createElement('div')
     Object.assign(this.captureProgressText.style, {
@@ -525,9 +493,7 @@ export class BoothApp {
     this.captureProgress.appendChild(this.captureProgressText)
 
     this.captureProgressBars = document.createElement('div')
-    Object.assign(this.captureProgressBars.style, {
-      display: 'flex', gap: '0.25rem',
-    })
+    this.captureProgressBars.className = 'booth-capture-progress-bars'
     this.captureProgress.appendChild(this.captureProgressBars)
   }
 

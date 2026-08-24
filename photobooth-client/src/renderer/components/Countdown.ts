@@ -6,12 +6,7 @@ export class CountdownUI {
     this.overlay = overlay
 
     this.countdownEl = document.createElement('div')
-    this.countdownEl.style.cssText = `
-      font-size: 12rem; font-weight: 900; color: rgba(255,255,255,0.9);
-      text-shadow: 0 0 60px rgba(0,0,0,0.5);
-      transition: opacity 0.1s, transform 0.1s;
-      pointer-events: none; user-select: none;
-    `
+    this.countdownEl.className = 'ui-countdown'
     this.overlay.appendChild(this.countdownEl)
   }
 

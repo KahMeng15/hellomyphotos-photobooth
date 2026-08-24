@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client'
+import { createThemeToggle, createButton, createInput, createModal, createSpinner, createStatusBadge } from "../utils/UIKit.js"
 
 export let boothSocket: Socket | null = null
 
@@ -178,6 +179,8 @@ export class Settings {
     title.textContent = 'Settings'
     title.style.cssText = 'font-size: 1.25rem; font-weight: 700; margin: 0; flex: 1;'
     header.appendChild(title)
+    const themeToggle = createThemeToggle()
+    header.appendChild(themeToggle)
 
     const saveBtn = document.createElement('button')
     saveBtn.textContent = 'Save'

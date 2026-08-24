@@ -284,7 +284,6 @@ export function initIpcHandlers(
       const data = await res.json()
       
       const hw = await dslrManager.getHardwareSettings()
-      const s = getSettingsSync()
       let changed = false
       
       const reconcile = (serverVal: string | undefined, hwVal: string, currentAppVal: string) => {
@@ -645,7 +644,7 @@ export function initIpcHandlers(
         if (status.connected && status.model) {
           await fetch(`${syncUrl}/api/booth/camera-settings`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-booth-otp': syncOtp },
+            headers: { 'Content-Type': 'application/json', 'x-booth-otp': merged.otp || '' },
             body: JSON.stringify({
               model: status.model,
               dslrIso: merged.dslrIso,

@@ -34,19 +34,11 @@ export class PhotoPreview {
     this.onConfirm = onConfirm
 
     this.overlay = document.createElement('div')
-    this.overlay.style.cssText = `
-      position: absolute; inset: 0; background: #0f0f0f;
-      display: none; flex-direction: column; align-items: center;
-      justify-content: center; z-index: 50; padding: 2rem;
-    `
+    this.overlay.className = 'ui-photo-preview-overlay'
     this.container.appendChild(this.overlay)
 
     this.qrOverlay = document.createElement('div')
-    this.qrOverlay.style.cssText = `
-      position: absolute; inset: 0; background: rgba(0,0,0,0.85);
-      display: none; flex-direction: column; align-items: center;
-      justify-content: center; z-index: 60;
-    `
+    this.qrOverlay.className = 'ui-qr-overlay'
     this.container.appendChild(this.qrOverlay)
 
     this.keydownHandler = (e: KeyboardEvent) => {
@@ -101,14 +93,14 @@ export class PhotoPreview {
 
     const title = document.createElement('h2')
     title.textContent = 'Your Photos'
-    title.style.cssText = 'font-size: 2rem; font-weight: 700; margin-bottom: 2rem;'
+    title.className = 'ui-photo-preview-title'
     this.overlay.appendChild(title)
 
     let canvasOrGrid: HTMLElement
 
     if (frameConfig && serverUrl && otp) {
       const canvas = document.createElement('canvas')
-      canvas.style.cssText = 'max-width: 100%; max-height: 70vh; border-radius: 8px; object-fit: contain; margin-bottom: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.5);'
+      canvas.className = 'ui-photo-preview-canvas'
       this.overlay.appendChild(canvas)
       canvasOrGrid = canvas
       
@@ -122,16 +114,10 @@ export class PhotoPreview {
       }
     } else {
       const grid = document.createElement('div')
-      grid.style.cssText = `
-        display: flex; flex-wrap: wrap; justify-content: center;
-        gap: 1rem; max-width: 800px; width: 100%; margin-bottom: 2rem;
-      `
+      grid.className = 'ui-photo-preview-grid'
       for (const p of paths) {
         const img = document.createElement('img')
-        img.style.cssText = `
-          width: calc(${paths.length === 1 ? '100%' : '50%'} - 0.5rem);
-          border-radius: 8px; object-fit: contain; max-height: 80vh;
-        `
+        img.className = paths.length === 1 ? 'ui-photo-preview-img ui-photo-preview-img-full' : 'ui-photo-preview-img ui-photo-preview-img-half'
         img.src = p.startsWith('blob:') || p.startsWith('http') ? p : `file://${p}`
         grid.appendChild(img)
       }
@@ -140,15 +126,11 @@ export class PhotoPreview {
     }
 
     const actions = document.createElement('div')
-    actions.style.cssText = 'display: flex; gap: 1rem;'
+    actions.className = 'ui-photo-preview-actions'
 
     const retakeBtn = document.createElement('button')
     retakeBtn.textContent = 'Retake'
-    retakeBtn.style.cssText = `
-      padding: 1rem 3rem; font-size: 1.25rem; font-weight: 600;
-      background: transparent; color: #fff; border: 1px solid #555; border-radius: 100px;
-      cursor: pointer;
-    `
+    retakeBtn.className = 'ui-photo-btn-retake'
     retakeBtn.addEventListener('click', () => {
       this.showRetakeSelection()
     })
@@ -156,11 +138,7 @@ export class PhotoPreview {
 
     const confirmBtn = document.createElement('button')
     confirmBtn.textContent = 'Looks Great!'
-    confirmBtn.style.cssText = `
-      padding: 1rem 3rem; font-size: 1.25rem; font-weight: 600;
-      background: #fff; color: #000; border: none; border-radius: 100px;
-      cursor: pointer;
-    `
+    confirmBtn.className = 'ui-photo-btn-confirm'
     confirmBtn.addEventListener('click', () => {
       this.hide()
       this.onConfirm()
@@ -170,11 +148,7 @@ export class PhotoPreview {
     if (sessionId && serverUrl) {
       this.shareBtn = document.createElement('button')
       this.shareBtn.textContent = 'Share QR'
-      this.shareBtn.style.cssText = `
-        padding: 1rem 3rem; font-size: 1.25rem; font-weight: 600;
-        background: #2196F3; color: #fff; border: none; border-radius: 100px;
-        cursor: pointer; transition: background 0.2s, opacity 0.2s;
-      `
+      this.shareBtn.className = 'ui-photo-btn-share'
       this.shareBtn.addEventListener('click', () => {
         if (this.isOffline) {
           this.showQR('') // Empty URL signals offline message
@@ -188,17 +162,17 @@ export class PhotoPreview {
     this.overlay.appendChild(actions)
 
     this.progressContainer = document.createElement('div')
-    this.progressContainer.style.cssText = 'margin-top: 1.5rem; width: 100%; max-width: 400px; display: none; flex-direction: column; align-items: center; gap: 0.5rem;'
+    this.progressContainer.className = 'ui-photo-progress-container'
     
     this.progressBar = document.createElement('div')
-    this.progressBar.style.cssText = 'width: 100%; height: 8px; background: #333; border-radius: 4px; overflow: hidden;'
+    this.progressBar.className = 'ui-photo-progress-bar'
     
     this.progressFill = document.createElement('div')
-    this.progressFill.style.cssText = 'width: 0%; height: 100%; background: #4caf50; transition: width 0.3s ease;'
+    this.progressFill.className = 'ui-photo-progress-fill'
     this.progressBar.appendChild(this.progressFill)
     
     this.progressText = document.createElement('div')
-    this.progressText.style.cssText = 'font-size: 0.875rem; color: #aaa;'
+    this.progressText.className = 'ui-photo-progress-text'
     
     this.progressContainer.appendChild(this.progressBar)
     this.progressContainer.appendChild(this.progressText)
@@ -218,10 +192,10 @@ export class PhotoPreview {
     if (this.shareBtn) {
       if (offline) {
         this.shareBtn.textContent = 'Server Offline'
-        this.shareBtn.style.background = '#d32f2f'
+        this.shareBtn.style.background = 'var(--color-error)'
       } else {
         this.shareBtn.textContent = 'Share QR'
-        this.shareBtn.style.background = '#2196F3'
+        this.shareBtn.style.background = 'var(--color-info)'
         // If the overlay was showing the offline message, hide it so they can click the button again
         if (this.qrOverlay && this.qrOverlay.style.display !== 'none') {
           this.qrOverlay.style.display = 'none'
@@ -259,19 +233,17 @@ export class PhotoPreview {
     
     const title = document.createElement('h2')
     title.textContent = 'Which photo do you want to retake?'
-    title.style.cssText = 'font-size: 2rem; font-weight: 700; margin-bottom: 2rem;'
+    title.className = 'ui-photo-preview-title'
     this.overlay.appendChild(title)
     
     const subtitle = document.createElement('p')
     subtitle.textContent = 'Click on photos to replace them.'
-    subtitle.style.cssText = 'color: #888; font-size: 1.125rem; margin-top: -1rem; margin-bottom: 2rem;'
+    subtitle.className = 'ui-photo-retake-subtitle'
     this.overlay.appendChild(subtitle)
 
     const grid = document.createElement('div')
-    grid.style.cssText = `
-      display: grid; grid-template-columns: repeat(${Math.min(this.currentPaths.length, 2)}, 1fr);
-      gap: 1.5rem; max-width: 900px; width: 100%; margin-bottom: 2rem;
-    `
+    grid.className = 'ui-photo-retake-grid'
+    grid.style.gridTemplateColumns = `repeat(${Math.min(this.currentPaths.length, 2)}, 1fr)`
 
     const selectedIndices = new Set<number>()
     const photoWrappers: HTMLDivElement[] = []
@@ -285,14 +257,14 @@ export class PhotoPreview {
     this.currentPaths.forEach((p, idx) => {
       const wrapper = document.createElement('div')
       photoWrappers.push(wrapper)
-      wrapper.style.cssText = 'position: relative; cursor: pointer; display: flex; justify-content: center; align-items: center;'
+      wrapper.className = 'ui-photo-retake-wrapper'
       
       const img = document.createElement('img')
-      img.style.cssText = 'max-width: 100%; max-height: 50vh; width: auto; height: auto; display: block; border-radius: 8px; border: 4px solid transparent; transition: border-color 0.2s; box-sizing: border-box;'
+      img.className = 'ui-photo-retake-img'
       img.src = p.startsWith('blob:') || p.startsWith('http') ? p : `file://${p}`
 
       wrapper.onmouseover = () => {
-        if (!selectedIndices.has(idx)) img.style.borderColor = '#555'
+        if (!selectedIndices.has(idx)) img.style.borderColor = 'var(--color-text-muted)'
       }
       wrapper.onmouseout = () => {
         if (!selectedIndices.has(idx)) img.style.borderColor = 'transparent'
@@ -304,7 +276,7 @@ export class PhotoPreview {
           checkMark.style.display = 'none'
         } else {
           selectedIndices.add(idx)
-          img.style.borderColor = '#2196F3'
+          img.style.borderColor = 'var(--color-info)'
           checkMark.style.display = 'flex'
         }
         updateConfirmBtn()
@@ -312,14 +284,14 @@ export class PhotoPreview {
       
       const checkMark = document.createElement('div')
       checkMark.innerHTML = '✓'
-      checkMark.style.cssText = 'position: absolute; top: 1rem; right: 1rem; background: #2196F3; color: #fff; width: 40px; height: 40px; display: none; align-items: center; justify-content: center; border-radius: 50%; font-weight: bold; font-size: 1.5rem; z-index: 2;'
+      checkMark.className = 'ui-photo-retake-check'
       
       const numBadge = document.createElement('div')
       numBadge.textContent = String(idx + 1)
-      numBadge.style.cssText = 'position: absolute; top: 1rem; left: 1rem; background: rgba(0,0,0,0.7); color: #fff; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: bold; font-size: 1.25rem;'
+      numBadge.className = 'ui-photo-retake-badge'
       
       const innerWrapper = document.createElement('div')
-      innerWrapper.style.cssText = 'position: relative; display: inline-block; max-width: 100%;'
+      innerWrapper.className = 'ui-photo-retake-inner'
       
       innerWrapper.appendChild(img)
       innerWrapper.appendChild(numBadge)
@@ -331,15 +303,11 @@ export class PhotoPreview {
     this.overlay.appendChild(grid)
     
     const actions = document.createElement('div')
-    actions.style.cssText = 'display: flex; gap: 1.5rem; justify-content: center; margin-top: 2rem;'
+    actions.className = 'ui-photo-retake-actions'
 
     const cancelBtn = document.createElement('button')
     cancelBtn.textContent = 'Cancel'
-    cancelBtn.style.cssText = `
-      padding: 1rem 3rem; font-size: 1.25rem; font-weight: 600;
-      background: transparent; color: #ccc; border: 1px solid #555; border-radius: 100px;
-      cursor: pointer;
-    `
+    cancelBtn.className = 'ui-photo-btn-cancel'
     cancelBtn.addEventListener('click', () => {
       this.keydownHandlers = null
       this.show(this.currentPaths, this.lastFrameConfig, this.lastServerUrl, this.lastOtp, this.lastSessionId)
@@ -347,11 +315,8 @@ export class PhotoPreview {
 
     const confirmBtn = document.createElement('button')
     confirmBtn.disabled = true
-    confirmBtn.style.cssText = `
-      padding: 1rem 3rem; font-size: 1.25rem; font-weight: 600;
-      background: #2196F3; color: #fff; border: none; border-radius: 100px;
-      cursor: pointer; opacity: 0.5; transition: opacity 0.2s;
-    `
+    confirmBtn.className = 'ui-photo-btn-confirm'
+    confirmBtn.style.opacity = '0.5'
     confirmBtn.addEventListener('click', () => {
       if (selectedIndices.size > 0) {
         this.keydownHandlers = null
@@ -385,30 +350,28 @@ export class PhotoPreview {
     this.qrOverlay.style.display = 'flex'
 
     const box = document.createElement('div')
-    box.style.cssText = 'background: #fff; padding: 2rem; border-radius: 16px; text-align: center; max-width: 90%; display: flex; flex-direction: column; align-items: center;'
+    box.className = 'ui-qr-box'
     
     if (url === '') {
       // Show offline message
       const title = document.createElement('h3')
       title.textContent = 'Server Offline'
-      title.style.cssText = 'color: #d32f2f; margin: 0 0 1.5rem; font-size: 1.75rem;'
+      title.className = 'ui-qr-title-offline'
       box.appendChild(title)
 
       const msg = document.createElement('p')
       msg.textContent = 'Your photos have been securely saved to the offline queue. They will automatically upload when the internet connection is restored. Please ask the event host for the gallery link later.'
-      msg.style.cssText = 'color: #555; margin: 0 0 1.5rem; font-size: 1.125rem; line-height: 1.5; max-width: 400px;'
+      msg.className = 'ui-qr-msg-offline'
       box.appendChild(msg)
     } else {
       // Show QR code
       const title = document.createElement('h3')
       title.textContent = 'Scan to get photos'
-      title.style.cssText = 'color: #000; margin: 0 0 1.5rem; font-size: 1.5rem;'
+      title.className = 'ui-qr-title'
       box.appendChild(title)
 
       const img = document.createElement('img')
-      img.style.width = '400px'
-      img.style.height = '400px'
-      img.style.marginBottom = '1.5rem'
+      img.className = 'ui-qr-img'
       
       try {
         img.src = await QRCode.toDataURL(url, { margin: 1, width: 400 })
@@ -419,17 +382,13 @@ export class PhotoPreview {
 
       const linkText = document.createElement('p')
       linkText.textContent = url
-      linkText.style.cssText = 'color: #333; font-size: 1.125rem; margin: 0 0 1.5rem; word-break: break-all; max-width: 400px;'
+      linkText.className = 'ui-qr-link'
       box.appendChild(linkText)
     }
 
     const closeBtn = document.createElement('button')
     closeBtn.textContent = 'Close'
-    closeBtn.style.cssText = `
-      padding: 0.75rem 2rem; font-size: 1rem; font-weight: 600;
-      background: #eee; color: #333; border: none; border-radius: 100px;
-      cursor: pointer; align-self: center; width: 100%; max-width: 200px;
-    `
+    closeBtn.className = 'ui-qr-close-btn'
     closeBtn.addEventListener('click', () => {
       this.qrOverlay.style.display = 'none'
     })
