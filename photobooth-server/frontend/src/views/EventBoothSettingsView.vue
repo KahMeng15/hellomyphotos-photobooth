@@ -1,8 +1,8 @@
 <template>
   <div class="dashboard page-wrapper" v-if="event">
-    <EventTopNav :event="event" currentTitle="Booth Settings" />
+    <AppTopNav mode="event" :event="event" currentTitle="Booth Settings" />
 
-    <div class="page-content" style="padding: 2rem; display: flex; justify-content: center;">
+    <div class="app-page-layout">
       <div class="settings-container">
         <div class="settings-box">
           <div class="field-row" style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 0;">
@@ -68,7 +68,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import EventTopNav from '../components/EventTopNav.vue'
+import AppTopNav from '../components/ui/AppTopNav.vue'
+// import AppPageLayout from '../components/ui/AppPageLayout.vue'
 import axios from 'axios'
 import { toast } from 'vue3-toastify'
 

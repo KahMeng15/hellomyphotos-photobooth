@@ -23,7 +23,7 @@
         </div>
       </div>
     </div>
-    <EventTopNav :event="event" currentTitle="" @toggle-panel="togglePanel" />
+    <AppTopNav mode="event" :event="event" currentTitle="" @toggle-panel="togglePanel" />
 
     <div class="dashboard-grid">
       <section class="photo-feed">
@@ -151,7 +151,8 @@ import { useWebSocket } from '../composables/useWebSocket'
 import EventControlPanel from '../components/EventControlPanel.vue'
 import PhotoViewer from '../components/PhotoViewer.vue'
 import SessionViewer from '../components/SessionViewer.vue'
-import EventTopNav from '../components/EventTopNav.vue'
+import AppTopNav from '../components/ui/AppTopNav.vue'
+import AppPageLayout from '../components/ui/AppPageLayout.vue'
 import axios from 'axios'
 
 const route = useRoute()

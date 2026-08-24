@@ -1,8 +1,8 @@
 <template>
   <div class="dashboard page-wrapper" v-if="event">
-    <EventTopNav :event="event" currentTitle="Frames" />
+    <AppTopNav mode="event" :event="event" currentTitle="Frames" />
 
-    <div class="page-content" style="padding: 2rem;">
+    <div class="app-page-layout">
       <div v-if="eventId" class="frames-container">
         <FrameManager v-if="!editingFrame" :event-id="eventId" @edit="editingFrame = $event" />
         <FrameEditor v-else :event-id="event.id" :frame="editingFrame" @close="editingFrame = null" />
@@ -14,7 +14,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import EventTopNav from '../components/EventTopNav.vue'
+import AppTopNav from '../components/ui/AppTopNav.vue'
+// import AppPageLayout from '../components/ui/AppPageLayout.vue'
 import FrameManager from '../components/FrameManager.vue'
 import FrameEditor from '../components/FrameEditor.vue'
 import axios from 'axios'

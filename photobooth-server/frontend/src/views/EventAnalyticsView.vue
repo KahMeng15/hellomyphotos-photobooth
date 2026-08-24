@@ -1,13 +1,13 @@
 <template>
   <div class="dashboard page-wrapper" v-if="event">
-    <EventTopNav :event="event" currentTitle="Analytics" />
+    <AppTopNav mode="event" :event="event" currentTitle="Analytics" />
 
-    <div class="page-content" style="padding: 2rem;">
-      <div class="analytics-content" v-if="loading" style="max-width: 800px; margin: 0 auto; width: 100%;">
+    <div class="app-page-layout">
+      <div class="analytics-content" v-if="loading" >
         <p>Loading analytics...</p>
       </div>
       
-      <div class="analytics-content" v-else-if="analytics" style="max-width: 800px; margin: 0 auto; width: 100%;">
+      <div class="analytics-content" v-else-if="analytics" >
         <div class="stats-grid">
           <div class="stat-card">
             <span class="stat-value">{{ analytics.totalVisits }}</span>
@@ -24,27 +24,27 @@
           <table class="logs-table" v-if="analytics.logs.length > 0" style="width: 100%; border-collapse: collapse; text-align: left; font-size: var(--text-sm);">
             <thead>
               <tr>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); font-weight: 500; color: var(--color-text);">Time</th>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); font-weight: 500; color: var(--color-text);">Action</th>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); font-weight: 500; color: var(--color-text);">Source</th>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); font-weight: 500; color: var(--color-text);">Device</th>
-                <th style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); font-weight: 500; color: var(--color-text);">Target</th>
+                <th >Time</th>
+                <th >Action</th>
+                <th >Source</th>
+                <th >Device</th>
+                <th >Target</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="log in analytics.logs" :key="log.id">
-                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); color: var(--color-text);">{{ formatTime(log.created_at) }}</td>
-                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); color: var(--color-text);">
-                  <span class="badge" :class="log.action === 'download' ? 'badge-blue' : 'badge-gray'" style="padding: 0.2rem 0.5rem; border-radius: var(--radius-lg); font-size: var(--text-xs); font-weight: 500;">
+                <td >{{ formatTime(log.created_at) }}</td>
+                <td >
+                  <span class="badge" :class="log.action === 'download' ? 'badge-blue' : 'badge-gray'" >
                     {{ log.action }}
                   </span>
                 </td>
-                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); color: var(--color-text);">
-                  <span class="badge badge-purple" v-if="log.source === 'qr'" style="padding: 0.2rem 0.5rem; border-radius: var(--radius-lg); font-size: var(--text-xs); font-weight: 500;">QR</span>
-                  <span class="badge badge-gray" v-else style="padding: 0.2rem 0.5rem; border-radius: var(--radius-lg); font-size: var(--text-xs); font-weight: 500;">Direct</span>
+                <td >
+                  <span class="badge badge-purple" v-if="log.source === 'qr'" >QR</span>
+                  <span class="badge badge-gray" v-else >Direct</span>
                 </td>
-                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); color: var(--color-text);">{{ log.device_type }} / {{ log.os }}</td>
-                <td class="target-col" :title="log.target_file || '-'" style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); color: var(--color-text); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ log.target_file || '-' }}</td>
+                <td >{{ log.device_type }} / {{ log.os }}</td>
+                <td class="target-col" :title="log.target_file || '-'" >{{ log.target_file || '-' }}</td>
               </tr>
             </tbody>
           </table>
@@ -58,7 +58,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import EventTopNav from '../components/EventTopNav.vue'
+import AppTopNav from '../components/ui/AppTopNav.vue'
+// import AppPageLayout from '../components/ui/AppPageLayout.vue'
 import axios from 'axios'
 
 const router = useRouter()

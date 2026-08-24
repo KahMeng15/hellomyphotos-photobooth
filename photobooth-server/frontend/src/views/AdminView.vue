@@ -1,6 +1,7 @@
 <template>
   <div class="admin-page">
-    <header class="admin-header">
+    <AppTopNav mode="admin" currentTitle="System Admin" />
+    <header class="admin-header" style="display:none;">
       <button @click="router.push('/events')" class="btn-ghost">&larr; Dashboard</button>
       <h1>System Admin</h1>
       <div class="admin-tabs">
@@ -75,6 +76,8 @@
 </template>
 
 <script setup lang="ts">
+import AppTopNav from '../components/ui/AppTopNav.vue'
+import AppPageLayout from '../components/ui/AppPageLayout.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePhotosStore } from '../stores/photos'

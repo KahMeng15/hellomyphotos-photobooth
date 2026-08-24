@@ -89,3 +89,16 @@ button, input, select, textarea {
   transition: border-color var(--transition-base);
 }
 .app-form-field input:focus, .app-form-field select:focus, .app-form-field textarea:focus { border-color: var(--color-text-sub); }
+
+/* Standard Page Layout (Full width with padding) */
+.app-page-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-6);
+  width: 100%;
+  box-sizing: border-box;
+}
+.app-page-layout > * {
+  max-width: 100%;
+}

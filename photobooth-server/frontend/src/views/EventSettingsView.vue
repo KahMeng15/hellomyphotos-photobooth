@@ -1,8 +1,8 @@
 <template>
   <div class="dashboard page-wrapper" v-if="event">
-    <EventTopNav :event="event" currentTitle="Event Settings" />
+    <AppTopNav mode="event" :event="event" currentTitle="Event Settings" />
 
-    <div class="page-content" style="padding: 2rem; display: flex; justify-content: center;">
+    <div class="app-page-layout">
       <div class="settings-container">
         <div class="settings-box">
           <div class="field-row" style="margin-bottom:1rem; border-bottom: 1px solid var(--color-border); padding-bottom: 1rem;">
@@ -15,8 +15,8 @@
               <span style="font-size:0.8rem;color:var(--color-text-sub);">Hide original filenames in shared links</span>
             </div>
             <div class="focus-toggle" style="display:flex; background:var(--color-border); border-radius:100px; padding:2px;">
-              <button :class="['focus-btn', eventSettings.obfuscateLinks ? 'focus-active' : '']" @click="eventSettings.obfuscateLinks = true" style="padding:0.25rem 1rem; border-radius:100px; border:none; background:transparent; color:var(--color-text-sub); cursor:pointer;">ON</button>
-              <button :class="['focus-btn', !eventSettings.obfuscateLinks ? 'focus-active' : '']" @click="eventSettings.obfuscateLinks = false" style="padding:0.25rem 1rem; border-radius:100px; border:none; background:transparent; color:var(--color-text-sub); cursor:pointer;">OFF</button>
+              <button :class="['focus-btn', eventSettings.obfuscateLinks ? 'focus-active' : '']" @click="eventSettings.obfuscateLinks = true" >ON</button>
+              <button :class="['focus-btn', !eventSettings.obfuscateLinks ? 'focus-active' : '']" @click="eventSettings.obfuscateLinks = false" >OFF</button>
             </div>
           </div>
           
@@ -73,22 +73,22 @@
           <table v-if="operators.length > 0" style="width: 100%; border-collapse: collapse; text-align: left; margin-bottom: 1rem;">
             <thead>
               <tr style="border-bottom: 1px solid var(--color-border);">
-                <th style="padding: 0.5rem; color: var(--color-text-sub); font-size: 0.8rem;">Name</th>
-                <th style="padding: 0.5rem; color: var(--color-text-sub); font-size: 0.8rem;">Link</th>
-                <th style="padding: 0.5rem; color: var(--color-text-sub); font-size: 0.8rem;" v-if="operatorAccessUnlocked">Actions</th>
+                <th >Name</th>
+                <th >Link</th>
+                <th  v-if="operatorAccessUnlocked">Actions</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="op in operators" :key="op.id" style="border-bottom: 1px solid var(--color-border);">
-                <td style="padding: 0.75rem 0.5rem;">{{ op.name }}</td>
-                <td style="padding: 0.75rem 0.5rem;">
+                <td >{{ op.name }}</td>
+                <td >
                   <div style="display:flex; gap:0.5rem;">
                     <input type="text" readonly :value="operatorAccessUnlocked ? getOperatorLink(op.access_token) : '••••••••••••••••••••'" @click="operatorAccessUnlocked && $event.target.select()" style="font-family: monospace; background: var(--color-surface-alt); border: 1px solid var(--color-border); padding: 0.25rem; border-radius: var(--radius-sm); color: var(--color-text); width: 200px;" />
                   </div>
                 </td>
-                <td style="padding: 0.75rem 0.5rem;" v-if="operatorAccessUnlocked">
+                <td  v-if="operatorAccessUnlocked">
                   <div style="display:flex; gap:0.5rem;">
-                    <button @click="copyOperatorLink(op)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">Copy</button>
+                    <button @click="copyOperatorLink(op)" class="btn-secondary" >Copy</button>
                     <button @click="deleteOperator(op.id)" class="btn-icon" style="color: #ff4444;" title="Delete Operator">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -105,7 +105,7 @@
             <p style="color: var(--color-text); margin-bottom: 1rem; font-size: 0.9rem;">Enter Admin Password to view links and add operators.</p>
             <div style="display: flex; gap: 0.5rem; justify-content: center; max-width: 400px; margin: 0 auto;">
               <input type="password" v-model="adminUnlockPassword" @keyup.enter="unlockOperatorAccess" placeholder="Admin Password" class="text-input" style="flex: 1; background:#1f1f1f;color:var(--color-text);border:1px solid var(--color-border);padding:0.5rem;border-radius:4px;" />
-              <button @click="unlockOperatorAccess" class="btn-primary" style="padding: 0.5rem 1rem;">Unlock</button>
+              <button @click="unlockOperatorAccess" class="btn-primary" >Unlock</button>
             </div>
           </div>
 
@@ -114,7 +114,7 @@
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
               <input v-model="newOperatorName" placeholder="Operator Name (e.g. Attendant A)" class="text-input" style="flex: 1; min-width: 200px; background:#1f1f1f;color:var(--color-text);border:1px solid var(--color-border);padding:0.5rem;border-radius:4px;" />
               <input v-model="newOperatorPassword" placeholder="Set Password" class="text-input" style="flex: 1; min-width: 150px; background:#1f1f1f;color:var(--color-text);border:1px solid var(--color-border);padding:0.5rem;border-radius:4px;" />
-              <button @click="addOperator" class="btn-primary" style="padding: 0.5rem 1rem;">Add</button>
+              <button @click="addOperator" class="btn-primary" >Add</button>
             </div>
             <div v-if="lastAddedOperator" style="margin-top: 1rem; background: var(--color-border); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--color-border);">
               <p style="font-size: 0.85rem; margin-bottom: 0.5rem; color: #4ade80;">Successfully created! Save these details now (the password won't be shown again):</p>
@@ -140,7 +140,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import EventTopNav from '../components/EventTopNav.vue'
+import AppTopNav from '../components/ui/AppTopNav.vue'
+// import AppPageLayout from '../components/ui/AppPageLayout.vue'
 import axios from 'axios'
 
 import { toast } from 'vue3-toastify'

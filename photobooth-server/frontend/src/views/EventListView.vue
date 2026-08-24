@@ -1,28 +1,21 @@
 <template>
   <div class="events-page">
-    <header class="page-header">
-      <div class="header-left">
-        <h1>hellomyphoto</h1>
-      </div>
-      <div class="header-right">
-        <button v-if="authStore.user?.role === 'admin'" @click="showCreateModal = true" class="btn-primary btn-sm">Create Event</button>
-        <span class="user-email">{{ authStore.user?.email }}</span>
-        <button @click="handleLogout" class="btn-icon" title="Logout">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-            <polyline points="16 17 21 12 16 7"/>
-            <line x1="21" y1="12" x2="9" y2="12"/>
-          </svg>
-        </button>
-      </div>
-    </header>
+    <AppTopNav mode="home" />
 
-    <main class="events-main">
+    <main class="app-page-layout">
       <div class="events-header">
-        <h2>Events</h2>
-        <div class="events-header-right">
+        <div class="events-header-left">
+          <h2>Events</h2>
           <span class="event-count">{{ events.length }} event{{ events.length !== 1 ? 's' : '' }}</span>
-          <router-link v-if="authStore.user?.role === 'admin'" to="/admin" class="btn-link">System Admin</router-link>
+        </div>
+        <div class="events-header-right">
+          <AppButton v-if="authStore.user?.role === 'admin'" variant="primary" @click="showCreateModal = true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Create Event
+          </AppButton>
         </div>
       </div>
 
@@ -35,11 +28,12 @@
         >
           <div class="event-info">
             <h3 class="event-name">{{ event.name }}</h3>
-            <span class="event-date">{{ event.date }}</span>
+            <div class="event-organizer">{{ event.organizer || authStore.user?.email || 'Admin' }}</div>
+            <div class="event-date">{{ formatDate(event.date) }}</div>
             <p v-if="event.description" class="event-desc">{{ event.description }}</p>
           </div>
           <div class="event-meta">
-            <span class="event-otp">OTP: {{ event.otp }}</span>
+            
             <span class="event-status" :class="`status-${event.status}`">{{ event.status }}</span>
           </div>
         </div>
@@ -94,6 +88,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import AppTopNav from '../components/ui/AppTopNav.vue'
+import AppButton from '../components/ui/AppButton.vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { usePhotosStore } from '../stores/photos'
@@ -113,6 +109,11 @@ const creating = ref(false)
 const createdOtp = ref('')
 const showOtpModal = ref(false)
 const otpCopied = ref(false)
+
+function formatDate(dateStr: string) {
+  if (!dateStr) return ''
+  return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+}
 
 onMounted(async () => {
   try {
@@ -167,79 +168,36 @@ async function handleLogout() {
   color: var(--color-text);
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 1.5rem;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-  position: sticky;
-  top: 0;
-  z-index: 50;
-}
-
-.header-left h1 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.user-email {
-  font-size: var(--text-sm);
-  color: var(--color-text-sub);
-}
-
-.btn-icon {
-  background: none;
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
-  padding: 0.375rem;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  line-height: 0;
-}
-
-.btn-icon:hover {
-  border-color: var(--color-text-muted);
-  color: var(--color-text);
-}
-
-.btn-sm {
-  padding: 0.375rem 0.75rem;
-  font-size: var(--text-sm);
-}
-
 .events-main {
   flex: 1;
-  overflow-y: auto;
-  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
 }
-
 .events-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-6);
+  /* Full width via app-page-layout */
+  width: 100%;
 }
-
+.events-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
 .events-header h2 {
-  font-size: var(--text-base);
-  font-weight: 600;
+  font-size: var(--text-2xl);
+  font-weight: 700;
   margin: 0;
 }
-
 .event-count {
-  font-size: var(--text-sm);
   color: var(--color-text-sub);
+  font-size: var(--text-sm);
+  background: var(--color-surface);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
 }
-
 .event-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -267,7 +225,16 @@ async function handleLogout() {
   margin: 0;
 }
 
+.event-organizer {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--color-text-sub);
+  margin-top: 0.25rem;
+}
+
 .event-date {
+  display: block;
+  margin-top: 0.25rem;
   font-size: var(--text-sm);
   color: var(--color-text-sub);
 }
@@ -280,7 +247,7 @@ async function handleLogout() {
 
 .event-meta {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   padding-top: 0.5rem;
   border-top: 1px solid var(--color-border);
