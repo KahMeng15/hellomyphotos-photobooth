@@ -37,6 +37,10 @@ export default defineConfig({
         ws: true,
         rewrite: (path) => path.replace(new RegExp(`^${process.env.VITE_BASE_URL || '/'}`), '/')
       },
+      '/socket.io': {
+        target: 'http://localhost:3000',
+        ws: true,
+      },
     },
   },
 })
