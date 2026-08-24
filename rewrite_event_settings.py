@@ -1,4 +1,14 @@
-<template>
+import os
+import re
+
+filepath = 'photobooth-server/frontend/src/views/EventSettingsView.vue'
+with open(filepath, 'r') as f:
+    content = f.read()
+
+# I will completely rewrite the template and the CSS. 
+# And for script, I will insert relativeNumber/relativeUnit and AppButton import.
+
+template_new = """<template>
   <div class="dashboard page-wrapper" v-if="event">
     <AppTopNav mode="event" :event="event" currentTitle="Event Settings" />
 
@@ -14,7 +24,7 @@
           </div>
           <div class="field-row">
             <label>Organizer</label>
-            <input type="text" v-model="eventSettings.organizer" class="text-input" placeholder="Faculty of Computer Science and Information Technology" />
+            <input type="text" v-model="eventSettings.organizer" class="text-input" placeholder="e.g. Acme Corp" />
           </div>
           <div class="field-row-col">
             <label>Contact Info</label>
@@ -126,129 +136,21 @@
 
     </div>
   </div>
-</template>
+</template>"""
 
-<script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import AppTopNav from '../components/ui/AppTopNav.vue'
-import AppButton from '../components/ui/AppButton.vue'
-// import AppPageLayout from '../components/ui/AppPageLayout.vue'
-import axios from 'axios'
+# Replace entire <template> block
+template_match = re.search(r'<template>.*?</template>', content, re.DOTALL)
+if template_match:
+    content = content[:template_match.start()] + template_new + content[template_match.end():]
 
-import { toast } from 'vue3-toastify'
+# Add AppButton import
+if 'import AppButton' not in content:
+    content = content.replace("import AppTopNav from '../components/ui/AppTopNav.vue'", "import AppTopNav from '../components/ui/AppTopNav.vue'\nimport AppButton from '../components/ui/AppButton.vue'")
+if 'import { watch }' not in content:
+    content = content.replace("import { ref, onMounted, computed } from 'vue'", "import { ref, onMounted, computed, watch } from 'vue'")
 
-import { useAuthStore } from '../stores/auth'
-
-const router = useRouter()
-const route = useRoute()
-const authStore = useAuthStore()
-
-const eventId = computed(() => route.params.id as string)
-const event = ref<any>(null)
-
-const operatorAccessUnlocked = ref(false)
-const adminUnlockPassword = ref('')
-const operators = ref<any[]>([])
-const newOperatorName = ref('')
-const newOperatorPassword = ref('')
-
-async function fetchOperators() {
-  try {
-    const { data } = await axios.get(`/api/admin/events/${eventId.value}/operators`)
-    operators.value = data.operators
-  } catch (err: any) {
-    toast.error('Failed to load operators')
-  }
-}
-
-async function unlockOperatorAccess() {
-  try {
-    await axios.post('/api/admin/verify-password', { password: adminUnlockPassword.value })
-    operatorAccessUnlocked.value = true
-    toast.success('Unlocked')
-    await fetchOperators()
-    // auto-generate a readable default password
-    newOperatorPassword.value = Math.random().toString(36).slice(-8)
-  } catch (err: any) {
-    toast.error(err.response?.data?.error || 'Invalid password')
-  }
-}
-
-const lastAddedOperator = ref<any>(null)
-
-async function addOperator() {
-  if (!newOperatorName.value || !newOperatorPassword.value) {
-    toast.error('Name and Password required')
-    return
-  }
-  const pwdToSave = newOperatorPassword.value
-  try {
-    await axios.post(`/api/admin/events/${eventId.value}/operators`, {
-      name: newOperatorName.value,
-      operatorPassword: pwdToSave,
-      adminPassword: adminUnlockPassword.value
-    })
-    toast.success('Operator added')
-    await fetchOperators()
-    
-    // Find the newly added operator to get its token
-    const newOp = operators.value.find(o => o.name === newOperatorName.value)
-    
-    lastAddedOperator.value = {
-      name: newOperatorName.value,
-      password: pwdToSave,
-      link: getOperatorLink(newOp?.access_token || '')
-    }
-
-    newOperatorName.value = ''
-    newOperatorPassword.value = Math.random().toString(36).slice(-8)
-  } catch (err: any) {
-    toast.error(err.response?.data?.error || 'Failed to add operator')
-  }
-}
-
-async function copyFullMessage() {
-  if (!lastAddedOperator.value) return
-  const text = `Operator Name: ${lastAddedOperator.value.name}\nLogin Link: ${lastAddedOperator.value.link}\nPassword: ${lastAddedOperator.value.password}`
-  await navigator.clipboard.writeText(text)
-  toast.success('Full message copied to clipboard')
-}
-
-async function deleteOperator(operatorId: string) {
-  if (!confirm('Are you sure you want to revoke this operator?')) return
-  try {
-    await axios.delete(`/api/admin/events/${eventId.value}/operators/${operatorId}`, {
-      data: { adminPassword: adminUnlockPassword.value }
-    })
-    toast.success('Operator deleted')
-    await fetchOperators()
-  } catch (err: any) {
-    toast.error(err.response?.data?.error || 'Failed to delete operator')
-  }
-}
-
-function getOperatorLink(token: string) {
-  const base = window.location.origin
-  // If deployed in a subdirectory, router base is needed. Let's use window.location.href parsing:
-  const appRoot = window.location.href.split('/events')[0]
-  return `${appRoot}/operator/${token}`
-}
-
-async function copyOperatorLink(op: any) {
-  try {
-    const link = getOperatorLink(op.access_token)
-    // We cannot copy the password since it is hashed! We should probably show the password when created, or just tell them to copy it then.
-    // Actually, since we can't get the password from the DB (it's hashed), the "Copy Info" is mostly the link and name.
-    const text = `Operator Name: ${op.name}\nLogin Link: ${link}`
-    await navigator.clipboard.writeText(text)
-    toast.success('Link copied to clipboard')
-  } catch {
-    toast.error('Failed to copy')
-  }
-}
-
-
+# Add relativeNumber and relativeUnit
+script_addition = """
 const relativeNumber = ref(1)
 const relativeUnit = ref('days')
 
@@ -257,23 +159,22 @@ watch([relativeNumber, relativeUnit], ([num, unit]) => {
     eventSettings.value.expiryValue = `${num}_${unit}`
   }
 })
+"""
+content = content.replace("const eventSettings = ref({", script_addition + "\nconst eventSettings = ref({")
 
-const eventSettings = ref({
-  name: '',
-  obfuscateLinks: false,
-  expiryType: 'none',
-  expiryValue: '1_year',
-  organizer: '',
-  contactInfo: ''
-})
+# Remove obfuscateLinks from payload and add relative mapping inside onMounted
+mount_match = re.search(r'const ev = data\.event\s+eventSettings\.value = \{.*?', content, re.DOTALL)
 
-const settingsSaving = ref(false)
-
-onMounted(async () => {
-  try {
-    const { data } = await axios.get(`/api/admin/events/${eventId.value}`)
-    event.value = data.event
-    const ev = data.event
+old_mount = """    const ev = data.event
+    eventSettings.value = {
+      name: ev.name || '',
+      obfuscateLinks: !!ev.obfuscate_links,
+      expiryType: ev.expiry_type || 'none',
+      expiryValue: ev.expiry_value || '',
+      organizer: ev.organizer || '',
+      contactInfo: ev.contact_info || ''
+    }"""
+new_mount = """    const ev = data.event
     eventSettings.value = {
       name: ev.name || '',
       expiryType: ev.expiry_type || 'none',
@@ -293,40 +194,29 @@ onMounted(async () => {
         if (u === 'year') u = 'years'
         relativeUnit.value = u
       }
-    }
-  } catch (err) {
-    console.error('Failed to load event', err)
-    toast.error('Failed to load event settings')
-  }
-  
-  if (authStore.user?.role === 'admin') {
-    await fetchOperators()
-  }
-})
+    }"""
+content = content.replace(old_mount, new_mount)
 
-function goBack() {
-  router.push(`/events/${eventId.value}`)
-}
-
-async function saveSettings() {
-  settingsSaving.value = true
-  try {
-    await axios.patch(`/api/admin/events/${eventId.value}`, {
+# In saveSettings, remove obfuscateLinks
+old_save = """    await axios.patch(`/api/admin/events/${eventId.value}`, {
+      name: eventSettings.value.name,
+      obfuscateLinks: eventSettings.value.obfuscateLinks ? 1 : 0,
+      expiryType: eventSettings.value.expiryType,
+      expiryValue: eventSettings.value.expiryValue,
+      organizer: eventSettings.value.organizer,
+      contactInfo: eventSettings.value.contactInfo,
+    })"""
+new_save = """    await axios.patch(`/api/admin/events/${eventId.value}`, {
       name: eventSettings.value.name,
       expiryType: eventSettings.value.expiryType,
       expiryValue: eventSettings.value.expiryValue,
       organizer: eventSettings.value.organizer,
       contactInfo: eventSettings.value.contactInfo,
-    })
-    toast.success('Settings saved successfully')
-  } catch {
-    toast.error('Failed to save settings')
-  }
-  settingsSaving.value = false
-}
-</script>
+    })"""
+content = content.replace(old_save, new_save)
 
-<style scoped>
+# Replace all CSS
+css_new = """<style scoped>
 .page-wrapper {
   background: var(--color-bg);
   min-height: 100vh;
@@ -491,4 +381,13 @@ async function saveSettings() {
   margin-top: 2rem;
   margin-bottom: 2rem;
 }
-</style>
+</style>"""
+
+css_match = re.search(r'<style scoped>.*?</style>', content, re.DOTALL)
+if css_match:
+    content = content[:css_match.start()] + css_new + content[css_match.end():]
+
+with open(filepath, 'w') as f:
+    f.write(content)
+
+print("Rewrote EventSettingsView.vue")
