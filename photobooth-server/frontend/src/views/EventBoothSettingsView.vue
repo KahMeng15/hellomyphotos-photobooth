@@ -2,6 +2,9 @@
   <div class="dashboard page-wrapper" v-if="event">
     <AppTopNav mode="event" :event="event" currentTitle="Booth Settings" />
 
+
+    
+
     <div class="app-page-layout settings-container">
       
       <!-- Connection Status -->
@@ -185,8 +188,10 @@ const eventSettings = ref({
 const settingsSaving = ref(false)
 
 
-const { connect: connectWs, disconnect: disconnectWs, subscribe, ws } = useWebSocket()
+const { connect: connectWs, disconnect: disconnectWs, subscribe, ws, sendMessage } = useWebSocket()
 const boothConnected = ref(false)
+
+
 
 
 const remoteConfig = ref<any>(null)
@@ -216,6 +221,7 @@ onMounted(async () => {
     if (socket) {
       socketRef = socket
       subscribe(eventId.value)
+
       socket.on('booth-connected', (payload) => {
         if (payload.eventId === eventId.value) {
           boothConnected.value = payload.connected
