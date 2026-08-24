@@ -17,7 +17,7 @@
           </div>
         </div>
         <div class="card-actions">
-          <button @click="showAddModal = true" class="btn-primary">Add User</button>
+          <AppButton variant="primary" @click="showAddModal = true">Add User</AppButton>
         </div>
       </section>
     </main>
@@ -42,10 +42,10 @@
             </select>
           </div>
           <div class="modal-actions">
-            <button class="btn-secondary" @click="showAddModal = false">Cancel</button>
-            <button class="btn-primary" @click="addUser" :disabled="loading">
+            <AppButton variant="secondary" @click="showAddModal = false">Cancel</AppButton>
+            <AppButton variant="primary" @click="addUser" :disabled="loading">
               {{ loading ? 'Saving...' : 'Add User' }}
-            </button>
+            </AppButton>
           </div>
         </div>
       </div>
@@ -59,6 +59,7 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { toast } from 'vue3-toastify'
 import { useAuthStore } from '../stores/auth'
+import AppButton from '../components/ui/AppButton.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()

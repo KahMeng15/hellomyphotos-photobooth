@@ -114,8 +114,8 @@
         </section>
 
       <div class="actions">
-        <button @click="saveAndClose" class="btn-primary">Save</button>
-        <button @click="cancelChanges" class="btn-cancel">Cancel</button>
+        <AppButton variant="primary" @click="saveAndClose">Save</AppButton>
+        <AppButton variant="secondary" @click="cancelChanges">Cancel</AppButton>
       </div>
     </div>
   </div>
@@ -124,6 +124,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
+import AppButton from '../components/ui/AppButton.vue'
 import axios from 'axios'
 import { toast } from 'vue3-toastify'
 

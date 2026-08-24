@@ -61,21 +61,17 @@ import AppTopNav from '../components/ui/AppTopNav.vue'
 import AppPageLayout from '../components/ui/AppPageLayout.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { usePhotosStore } from '../stores/photos'
 import { useAuthStore } from '../stores/auth'
 import axios from 'axios'
 import SettingsViewEmbedded from './SettingsView.vue'
 import UsersViewEmbedded from './UsersView.vue'
 
 const router = useRouter()
-const photosStore = usePhotosStore()
 const authStore = useAuthStore()
-const fileInput = ref<HTMLInputElement | null>(null)
 const health = ref<any>(null)
 const currentTab = ref('settings')
 
 onMounted(async () => {
-  await photosStore.fetchFrames()
   await fetchHealth()
 })
 
@@ -86,30 +82,13 @@ async function fetchHealth() {
   } catch {}
 }
 
-function openFilePicker() {
-  fileInput.value?.click()
-}
 
-async function handleFileSelect(e: Event) {
-  const target = e.target as HTMLInputElement
-  if (target.files?.length) {
-    await photosStore.uploadFrame(target.files[0])
-  }
-}
 
-async function handleDrop(e: DragEvent) {
-  e.preventDefault()
-  const files = e.dataTransfer?.files
-  if (files?.length) {
-    await photosStore.uploadFrame(files[0])
-  }
-}
 
-async function deleteFrame(id: string) {
-  if (confirm('Delete this frame?')) {
-    await photosStore.deleteFrame(id)
-  }
-}
+
+
+
+
 
 function goBack() {
   router.back()
