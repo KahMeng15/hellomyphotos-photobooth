@@ -195,7 +195,7 @@ async function handleLogout() {
   font-size: var(--text-sm);
   background: var(--color-surface);
   padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-lg);
 }
 .event-grid {
   display: grid;
@@ -262,7 +262,7 @@ async function handleLogout() {
   font-size: 0.6875rem;
   text-transform: uppercase;
   padding: 0.125rem 0.5rem;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-lg);
 }
 
 .status-active {

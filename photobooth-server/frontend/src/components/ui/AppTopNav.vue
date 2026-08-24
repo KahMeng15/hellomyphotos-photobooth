@@ -193,7 +193,7 @@ const currentRoute = computed(() => {
   font-size: var(--text-xs);
   text-transform: uppercase;
   padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-lg);
   font-weight: 600;
   letter-spacing: 0.05em;
 }
