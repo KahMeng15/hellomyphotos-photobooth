@@ -9,6 +9,7 @@
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-surface); /* Top overscroll matches topbar */
 }
 
 body {
@@ -16,8 +17,15 @@ body {
   font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: 1.5;
-  background: var(--color-bg);
+  background-color: var(--color-bg);
   color: var(--color-text);
+  /* Ensure #app takes full height so body background paints correctly */
+  min-height: 100vh; 
+}
+
+#app {
+  min-height: 100vh;
+  background-color: var(--color-bg);
 }
 
 a {
