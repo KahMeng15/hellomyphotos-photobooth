@@ -528,7 +528,9 @@ function formatTime(ts: string) {
     display: flex;
     flex-direction: column;
     position: sticky;
-    top: 1.5rem;
+    top: 5rem;
+    height: fit-content;
+    align-self: flex-start;
   }
 }
 </style>
@@ -957,7 +959,9 @@ function formatTime(ts: string) {
     display: flex;
     flex-direction: column;
     position: sticky;
-    top: 1.5rem;
+    top: 5rem;
+    height: fit-content;
+    align-self: flex-start;
   }
 }
 </style>
