@@ -124,9 +124,7 @@ async function deleteSession() {
 
 function formatTime(ts: string) {
   const d = new Date(ts)
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })
-  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-  return `${time}, ${date}`
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })
 }
 </script>
 

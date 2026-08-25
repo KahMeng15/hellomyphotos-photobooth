@@ -518,7 +518,7 @@ const updateEventSchema = z.object({
   dslrFocusMode: z.string().max(20).optional(),
   dslrWhiteBalance: z.string().max(20).optional(),
   obfuscateLinks: z.boolean().optional(),
-  expiryType: z.enum(['relative', 'absolute', 'never']).optional(),
+  expiryType: z.enum(['relative', 'absolute', 'none']).optional(),
   expiryValue: z.string().max(100).optional(),
   organizer: z.string().max(200).optional(),
   contactInfo: z.string().max(500).optional(),

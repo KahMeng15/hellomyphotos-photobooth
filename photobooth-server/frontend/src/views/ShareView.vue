@@ -636,7 +636,12 @@ async function downloadAll() {
     padding: 0;
     position: relative;
   }
-  .hero-preview::after {
+  .hero-img-wrap {
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+  .hero-img-wrap::after {
     content: '';
     position: absolute;
     bottom: 0;
@@ -645,6 +650,7 @@ async function downloadAll() {
     height: 160px;
     background: linear-gradient(to top, var(--color-bg), transparent);
     pointer-events: none;
+    z-index: 10;
   }
   .hero-preview img {
     border-radius: 0;
