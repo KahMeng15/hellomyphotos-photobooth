@@ -185,8 +185,9 @@
     <template #header>
       <h2 style="margin: 0;">QR Code</h2>
     </template>
-    <div style="display: flex; justify-content: center; align-items: center; width: 100%;">
-      <canvas ref="qrCanvas" style="width: 100%; max-width: 300px; aspect-ratio: 1 / 1; display: block; margin: 0 auto;"></canvas>
+    <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; gap: 1.5rem; padding: 1rem 0;">
+      <img v-if="qrDataUrl" :src="qrDataUrl" style="width: 100%; max-width: 250px; height: auto; display: block;" alt="QR Code" />
+      <a :href="currentQrLink" target="_blank" style="font-family: monospace; font-size: 0.875rem; color: var(--color-text-sub); text-align: center; word-break: break-all; text-decoration: none;">{{ currentQrLink }}</a>
     </div>
   </AppModal>
 </template>
@@ -223,7 +224,8 @@ const linkCopied = ref(false)
 const applyingFrame = ref(false)
 const shareError = ref('')
 const showQrCode = ref(false)
-const qrCanvas = ref<HTMLCanvasElement | null>(null)
+const qrDataUrl = ref('')
+const currentQrLink = ref('')
 let shareUrl = ''
 
 const showMenu = ref(false)
@@ -527,14 +529,12 @@ async function showPrimaryQr() {
 async function showSpecificQr(shareId: string) {
   shareUrl = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, '')}/share/${shareId}`
   showQrCode.value = true
-  await nextTick()
-  if (qrCanvas.value) {
-    const qrUrl = shareUrl.includes('?') ? `${shareUrl}&ref=qr` : `${shareUrl}?ref=qr`
-    await QRCode.toCanvas(qrCanvas.value, qrUrl, {
-      width: 500,
-      margin: 2,
-    })
-  }
+  const qrUrl = shareUrl.includes('?') ? `${shareUrl}&ref=qr` : `${shareUrl}?ref=qr`
+  currentQrLink.value = qrUrl
+  qrDataUrl.value = await QRCode.toDataURL(qrUrl, {
+    width: 500,
+    margin: 2,
+  })
 }
 
 async function downloadAll() {

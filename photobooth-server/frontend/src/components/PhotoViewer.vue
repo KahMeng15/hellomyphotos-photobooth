@@ -27,8 +27,9 @@
           <button v-if="photo.sessionId" @click="deleteSession" class="btn-action btn-danger">Delete Session</button>
           <button @click="deleteSingle" class="btn-action btn-danger">Delete</button>
         </div>
-        <div v-if="showQrCode" class="qr-section">
-          <canvas ref="qrCanvas" style="width: 100%; max-width: 300px; aspect-ratio: 1 / 1; display: block; margin: 0 auto;"></canvas>
+        <div v-if="showQrCode" class="qr-section" style="display: flex; flex-direction: column; align-items: center; gap: 1rem;">
+          <img v-if="qrDataUrl" :src="qrDataUrl" style="width: 100%; max-width: 250px; height: auto; display: block;" alt="QR Code" />
+          <a :href="currentQrLink" target="_blank" style="font-family: monospace; font-size: 0.875rem; color: var(--color-text-sub); text-align: center; word-break: break-all; text-decoration: none;">{{ currentQrLink }}</a>
         </div>
       </div>
     </div>
@@ -52,7 +53,8 @@ const photosStore = usePhotosStore()
 
 const photoLoaded = ref(false)
 const showQrCode = ref(false)
-const qrCanvas = ref<HTMLCanvasElement | null>(null)
+const qrDataUrl = ref('')
+const currentQrLink = ref('')
 const sessionLinkCopied = ref(false)
 
 
@@ -91,9 +93,11 @@ async function shareSessionLink() {
 
 async function showQr() {
   showQrCode.value = !showQrCode.value
-  if (showQrCode.value && qrCanvas.value) {
-    await QRCode.toCanvas(qrCanvas.value, window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, '') + props.photo.url, {
-      width: 200,
+  if (showQrCode.value) {
+    const qrUrl = window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, '') + props.photo.url
+    currentQrLink.value = qrUrl
+    qrDataUrl.value = await QRCode.toDataURL(qrUrl, {
+      width: 250,
       margin: 2,
     })
   }
