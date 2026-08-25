@@ -2,8 +2,8 @@
   <div class="dashboard page-wrapper" v-if="event">
     <AppTopNav mode="event" :event="event" currentTitle="Frames" />
 
-    <div class="app-page-layout">
-      <div v-if="eventId" class="frames-container">
+    <div class="app-page-layout settings-container">
+      <div v-if="eventId" style="width: 100%;">
         <FrameManager v-if="!editingFrame" :event-id="eventId" @edit="editingFrame = $event" />
         <FrameEditor v-else :event-id="event.id" :frame="editingFrame" @close="editingFrame = null" />
       </div>
@@ -53,17 +53,8 @@ function goBack() {
   display: flex;
   flex-direction: column;
 }
-.page-content {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-}
-.frames-container {
-  width: 100%;
-  max-width: 1200px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
+.settings-container {
+  max-width: 1000px;
+  margin: 0 auto;
 }
 </style>

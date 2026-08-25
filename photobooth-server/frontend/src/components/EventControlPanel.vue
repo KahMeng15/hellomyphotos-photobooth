@@ -67,89 +67,7 @@
     </div>
   </aside>
 
-  <Teleport to="body">
-    <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
-      <div class="modal-page">
-        <div class="modal-header">
-          <button class="back-btn" @click="$emit('close')"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
-          <h2>Booth Controller</h2>
-        </div>
-        <div class="modal-body" v-if="event">
-          <div class="panel-section">
-            <h3>Booth Status</h3>
-            <div class="status-row" @click="$emit('retry')" :class="{ 'status-clickable': !connected }">
-              <div :class="['status-dot', connected ? 'connected' : 'disconnected']"></div>
-              <span>{{ connected ? 'connected' : 'disconnected' }}</span>
-              <span v-if="!connected" class="retry-hint">click to retry</span>
-            </div>
-            <div v-if="!connected && event.otp" class="otp-section">
-              <span class="otp-label">Share this OTP with the booth:</span>
-              <span class="otp-code">{{ event.otp }}</span>
-              <button @click="copyOtp" class="btn-tiny">{{ otpCopied ? 'Copied!' : 'Copy' }}</button>
-            </div>
-          </div>
-
-          <div class="panel-section">
-            <h3>Controls</h3>
-
-            <div class="control-field">
-              <label>Override Frame</label>
-              <select v-model="selectedFrame" @change="sendFrameOverride">
-                <option value="">No Override</option>
-                <option v-for="f in photosStore.frames" :key="f.id" :value="f.id">
-                  {{ f.name }}
-                </option>
-              </select>
-            </div>
-
-            <button @click="boothAction" class="btn-control" :class="actionButtonClass" :disabled="!canAct">
-              {{ actionButtonLabel }}
-            </button>
-            <button @click="togglePause" class="btn-control" :class="paused ? 'btn-resume' : 'btn-pause'">
-              {{ paused ? 'Resume Booth' : 'Pause Booth' }}
-            </button>
-          </div>
-
-          <div class="panel-section">
-            <button @click="showSettingsModal = true" class="btn-control btn-secondary">
-              Event Settings
-            </button>
-          </div>
-
-          <div class="panel-section">
-            <h3>Sessions</h3>
-            <div class="stats-row">
-              <div class="stat-item">
-                <span class="stat-value">{{ totalSessions }}</span>
-                <span class="stat-label">groups</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value">{{ totalPhotos }}</span>
-                <span class="stat-label">photos</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value">{{ photosStore.queueDepth }}</span>
-                <span class="stat-label">queued</span>
-              </div>
-            </div>
-            <div class="queue-bar">
-              <div class="queue-fill" :style="{ width: queuePercent + '%' }"></div>
-            </div>
-          </div>
-
-          <div class="panel-section">
-            <h3>Quick Actions</h3>
-            <button @click="shareAll" class="btn-control btn-secondary">
-              Share All
-            </button>
-            <button v-if="event.status === 'active'" @click="endThisEvent" class="btn-control btn-danger">
-              End Event
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+  
 </template>
 
 <script setup lang="ts">
@@ -256,7 +174,6 @@ function copyOtp() {
 <style scoped>
 .control-panel {
   background: var(--color-surface);
-  border-left: 1px solid var(--color-border);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -665,23 +582,5 @@ function copyOtp() {
   background: var(--color-success);
   transition: width 0.3s;
   border-radius: 3px;
-}
-
-@media (max-width: 768px) {
-  .control-panel {
-    display: none;
-  }
-
-  .modal-overlay {
-    padding: 0;
-    align-items: stretch;
-  }
-
-  .modal-page {
-    max-width: none;
-    max-height: none;
-    border-radius: 0;
-    height: 100%;
-  }
 }
 </style>

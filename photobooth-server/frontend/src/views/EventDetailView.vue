@@ -23,9 +23,9 @@
         </div>
       </div>
     </div>
-    <AppTopNav mode="event" :event="event" currentTitle="" @toggle-panel="togglePanel" />
+    <AppTopNav mode="event" :event="event" currentTitle="" />
 
-    <div class="dashboard-grid">
+    <div class="dashboard-grid-full">
       <section class="photo-feed">
         <div class="feed-header">
           <h2>Photos</h2>
@@ -98,6 +98,7 @@
       </section>
 
       <EventControlPanel
+        class="remote-sidebar"
         :connected="boothConnected"
         :event-id="event.id"
         :show="showPanel"
@@ -108,6 +109,7 @@
         @close="showPanel = false"
         @retry="retryConnection"
       />
+
     </div>
 
     <PhotoViewer
@@ -501,6 +503,35 @@ function formatTime(ts: string) {
 .btn-cancel-modal:hover {
   border-color: var(--color-text-muted);
   color: var(--color-text);
+}
+
+.dashboard-grid-full {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+.remote-sidebar {
+  display: none;
+}
+@media (min-width: 1200px) {
+  .dashboard-grid-full {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    align-items: flex-start;
+  }
+  .remote-sidebar {
+    display: flex;
+    position: sticky;
+    top: 1.5rem;
+    height: calc(100vh - 3rem - 65px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+  }
 }
 </style>
 
@@ -904,5 +935,34 @@ function formatTime(ts: string) {
   border-radius: var(--radius-pill);
   font-size: var(--text-base);
   cursor: pointer;
+}
+
+.dashboard-grid-full {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+.remote-sidebar {
+  display: none;
+}
+@media (min-width: 1200px) {
+  .dashboard-grid-full {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    align-items: flex-start;
+  }
+  .remote-sidebar {
+    display: flex;
+    position: sticky;
+    top: 1.5rem;
+    height: calc(100vh - 3rem - 65px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+  }
 }
 </style>

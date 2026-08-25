@@ -30,6 +30,12 @@ export const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/events/:id/remote',
+      name: 'event-remote',
+      component: () => import('./views/EventRemoteView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/events/:id/analytics',
       name: 'event-analytics',
       component: () => import('./views/EventAnalyticsView.vue'),

@@ -32,7 +32,10 @@ function checkLimits(req: Request, res: Response, next: NextFunction, scope: 'ad
 
   // Check lockout
   if (data.lockedUntil && now < data.lockedUntil) {
-    return res.status(429).json({ error: 'You have been temporarily blocked due to excessive requests. Try again later.' })
+    const remainingMs = data.lockedUntil - now
+    const remainingMinutes = Math.ceil(remainingMs / 60000)
+    const plural = remainingMinutes > 1 ? 's' : ''
+    return res.status(429).json({ error: `You have been temporarily blocked due to excessive requests. Try again in ${remainingMinutes} minute${plural}.` })
   } else if (data.lockedUntil && now >= data.lockedUntil) {
     data.lockedUntil = undefined // remove lock
     data.reqCount = 0
@@ -50,7 +53,9 @@ function checkLimits(req: Request, res: Response, next: NextFunction, scope: 'ad
     logger.warn(`Rate limit or bandwidth exceeded for ${clientId} in scope ${scope}. Locking out.`)
     data.lockedUntil = now + lockoutDur
     clientData.set(clientId, data)
-    return res.status(429).json({ error: 'Rate limit or bandwidth exceeded. You have been locked out.' })
+    const lockoutMins = Math.ceil(lockoutDur / 60000)
+    const plural = lockoutMins > 1 ? 's' : ''
+    return res.status(429).json({ error: `You have been temporarily blocked due to excessive requests. Try again in ${lockoutMins} minute${plural}.` })
   }
 
   data.reqCount++
