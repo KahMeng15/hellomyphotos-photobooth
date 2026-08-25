@@ -1,11 +1,11 @@
 <template>
   <aside class="control-panel" v-if="event">
     
-    <!-- Status Card -->
+    <!-- Booth Remote Card -->
     <section class="card" :class="{ 'card-connected': connected, 'card-disconnected': !connected }">
       <div class="card-header-flex">
         <div>
-          <h2>Booth Status</h2>
+          <h2>Booth Remote</h2>
           <p class="card-desc" style="margin-bottom:0;" v-if="!connected">Waiting for booth...</p>
         </div>
         <div class="status-indicator" @click="$emit('retry')" :style="{ cursor: !connected ? 'pointer' : 'default' }">
@@ -22,7 +22,7 @@
         </div>
       </div>
 
-      <div class="stats-grid" v-if="totalSessions !== undefined" :style="{ marginTop: (!connected && event.otp) ? '0' : '1rem' }">
+      <div class="stats-grid" v-if="totalSessions !== undefined" :style="{ marginTop: (!connected && event.otp) ? '0' : '1rem', marginBottom: '1.25rem' }">
         <div class="stat-card">
           <span class="stat-value">{{ totalSessions }}</span>
           <span class="stat-label">Sessions</span>
@@ -32,46 +32,17 @@
           <span class="stat-label">Photos</span>
         </div>
       </div>
-    </section>
 
-    
+      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <button class="app-btn full-width-btn" :class="actionButtonClass" @click="boothAction" :disabled="!canAct">
+          {{ actionButtonLabel }}
+        </button>
 
-    <!-- Controls Card -->
-    <section class="card">
-      <h2>Action Controls</h2>
-      <p class="card-desc">Trigger booth functions remotely.</p>
-      
-      <div class="settings-box control-box">
-        
-        <div class="field-row">
-          <div class="control-info">
-            <label>Session Control</label>
-            <span class="sub-label">{{ boothState === 'preview' ? 'User is previewing' : (boothState === 'live' ? 'Ready to capture' : 'Force action') }}</span>
-          </div>
-          <button class="app-btn" :class="actionButtonClass" @click="boothAction" :disabled="!canAct">
-            {{ actionButtonLabel }}
-          </button>
-        </div>
+        <button class="app-btn full-width-btn" :class="paused ? 'btn-resume' : 'btn-pause'" @click="togglePause(!paused)" :disabled="!connected">
+          {{ paused ? 'Resume Booth' : 'Pause Booth' }}
+        </button>
 
-        <div class="field-row">
-          <div class="control-info">
-            <label>Pause Booth</label>
-            <span class="sub-label">Lock the screen.</span>
-          </div>
-          <div class="focus-toggle">
-            <button :class="['focus-btn', paused ? 'focus-active' : '']" @click="togglePause(true)" :disabled="!connected">PAUSE</button>
-            <button :class="['focus-btn', !paused ? 'focus-active' : '']" @click="togglePause(false)" :disabled="!connected">RESUME</button>
-          </div>
-        </div>
-
-        <div class="field-row">
-          <div class="control-info">
-            <label>Retake Photo</label>
-            <span class="sub-label">Force a reshot.</span>
-          </div>
-          <button class="app-btn app-btn--secondary" @click="triggerReshot" :disabled="!connected">Retake</button>
-        </div>
-
+        <button class="app-btn app-btn--secondary full-width-btn" @click="triggerReshot" :disabled="!connected">Retake Photo</button>
       </div>
     </section>
 
@@ -346,6 +317,14 @@ function copyOtp() {
   background: #ff9800;
   color: #fff;
 }
+.btn-pause {
+  background: #ff9800;
+  color: #fff;
+}
+.btn-resume {
+  background: var(--color-success);
+  color: #fff;
+}
 .app-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -388,6 +367,20 @@ function copyOtp() {
 .custom-select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.full-width-btn {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  font-size: var(--text-base);
+}
+.focus-toggle.full-width-btn .focus-btn {
+  flex: 1;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  font-size: var(--text-sm);
 }
 </style>
 

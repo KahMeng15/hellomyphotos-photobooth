@@ -30,7 +30,10 @@
         </header>
 
         <div v-if="animationPhotos.length >= 2" class="hero-preview">
-          <img :src="baseUrl + (animationPhotos[heroIndex]?.thumbnail || animationPhotos[heroIndex]?.url)" alt="Preview animation" />
+          <div class="hero-img-wrap">
+            <div class="blur-bg" :style="{ backgroundImage: `url(${baseUrl + (animationPhotos[heroIndex]?.thumbnail || animationPhotos[heroIndex]?.url)})` }"></div>
+            <img :src="baseUrl + (animationPhotos[heroIndex]?.thumbnail || animationPhotos[heroIndex]?.url)" alt="Preview animation" />
+          </div>
         </div>
 
         <div class="photo-grid">
@@ -385,7 +388,6 @@ async function downloadAll() {
 .share-header {
   text-align: center;
   padding: 2rem 1rem;
-  border-bottom: 1px solid var(--color-surface);
 }
 
 .share-header h1 {
@@ -412,13 +414,26 @@ async function downloadAll() {
   justify-content: center;
 }
 
-.hero-preview img {
+.hero-img-wrap {
+  position: relative;
   width: 100%;
   max-height: 65vh;
-  object-fit: contain;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
   border-radius: var(--radius-lg);
   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
   border: 1px solid var(--color-border);
+}
+
+.hero-img-wrap img {
+  width: 100%;
+  height: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
 }
 
 .btn-download-all {
