@@ -76,9 +76,9 @@ export class BoothApp {
     liveviewRetryAttempts?: number
     shutterOffsetDelay?: number
     settingsPasscode?: string
-  } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', liveviewMode: 'mjpeg', autoPreview: false, liveviewRetryAttempts: 1, shutterOffsetDelay: 0, dslrWhiteBalance: 'auto', dslrWhiteBalanceKelvin: 5200 }
+  } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: '', liveviewMode: 'mjpeg', autoPreview: false, liveviewRetryAttempts: 1, shutterOffsetDelay: 0, dslrWhiteBalance: 'auto', dslrWhiteBalanceKelvin: 5200 }
   private serverOnline = true
-  private serverUrl = 'http://localhost:3000'
+  private serverUrl = ''
   private _state: BoothState = 'idle'
   private currentSessionId: string | null = null
   private currentSessionUploaded = false

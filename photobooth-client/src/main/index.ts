@@ -17,9 +17,9 @@ const SETTINGS_FILE = path.join(app.getPath('userData'), 'booth-settings.json')
 function loadServerUrl(): string {
   try {
     const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'))
-    if (settings.serverUrl) return settings.serverUrl
+    if (settings.serverUrl !== undefined) return settings.serverUrl
   } catch {}
-  return process.env.SERVER_URL || 'http://localhost:3000'
+  return process.env.SERVER_URL || ''
 }
 
 let activeServerUrl = loadServerUrl()

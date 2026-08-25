@@ -30,7 +30,7 @@ const DEFAULT_SETTINGS = {
   countdown: 5,
   captureInterval: 1,
   postCapturePreview: 2,
-  serverUrl: 'http://localhost:3000',
+  serverUrl: '',
   cameraMode: 'webcam' as 'webcam' | 'dslr',
   dslrCameraPort: null as string | null,
   dslrIso: 'auto',
@@ -614,8 +614,8 @@ export function initIpcHandlers(
       const existing = getSettingsSync()
       const merged = { ...existing, ...settings }
       fs.writeFileSync(SETTINGS_FILE, JSON.stringify(merged, null, 2))
-      const syncUrl = merged.serverUrl || _serverUrl
-      if (merged.serverUrl && merged.serverUrl !== _serverUrl) {
+      const syncUrl = merged.serverUrl !== undefined ? merged.serverUrl : _serverUrl
+      if (merged.serverUrl !== undefined && merged.serverUrl !== _serverUrl) {
         _serverUrl = merged.serverUrl
         _setServerUrl(merged.serverUrl)
       }

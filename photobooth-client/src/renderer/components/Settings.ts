@@ -80,7 +80,7 @@ export class Settings {
   public get isVisible() { return this.visible }
   private dirty = false
   private onChange: (settings: BoothSettings) => void
-  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', dslrWhiteBalance: 'auto', dslrWhiteBalanceKelvin: 5200, liveviewMode: 'mjpeg', autoPreview: false, liveviewRetryAttempts: 1, shutterOffsetDelay: 0 }
+  private settings: BoothSettings = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: '', cameraMode: 'webcam', dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', dslrWhiteBalance: 'auto', dslrWhiteBalanceKelvin: 5200, liveviewMode: 'mjpeg', autoPreview: false, liveviewRetryAttempts: 1, shutterOffsetDelay: 0 }
   private serverInput!: HTMLInputElement
   private cameraSelect!: HTMLSelectElement
   private audioSelect!: HTMLSelectElement
@@ -1405,6 +1405,10 @@ export class Settings {
 
     if (this.passcodeInput) {
       this.passcodeInput.value = this.settings.settingsPasscode || ''
+    }
+
+    if (this.serverInput) {
+      this.serverInput.value = this.settings.serverUrl || ''
     }
 
     const numValues = [this.settings.photoCount, this.settings.countdown, this.settings.captureInterval, this.settings.postCapturePreview, this.settings.shutterOffsetDelay || 0, this.settings.liveviewRetryAttempts || 1]
