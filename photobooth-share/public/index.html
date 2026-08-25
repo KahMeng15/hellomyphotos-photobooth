@@ -5,73 +5,585 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>hellomyphotos</title>
   <style>
-    /* CSS logic from ShareView.vue */
-    :root {
-      --color-bg: #111;
-      --color-text: #eee;
-      --color-card-bg: #222;
-      --color-primary: #3b82f6;
-      --radius-md: 8px;
-    }
-    body { margin: 0; padding: 0; background: var(--color-bg); color: var(--color-text); font-family: -apple-system, sans-serif; }
-    .share-page { min-height: 100vh; display: flex; flex-direction: column; }
-    .share-content { flex: 1; display: flex; flex-direction: column; max-width: 800px; margin: 0 auto; padding: 2rem 1rem; width: 100%; box-sizing: border-box; }
-    .share-header { text-align: center; margin-bottom: 2rem; }
-    .share-header h1 { margin: 0 0 0.5rem; font-size: 1.5rem; font-weight: 600; }
-    .subtitle { margin: 0; color: #9ca3af; font-size: 0.95rem; }
-    .contact-link { color: var(--color-primary); text-decoration: none; cursor: pointer; }
-    .contact-link:hover { text-decoration: underline; }
-    
-    .hero-preview { margin-bottom: 2rem; border-radius: 12px; overflow: hidden; }
-    .hero-img-wrap { position: relative; width: 100%; aspect-ratio: 3/2; overflow: hidden; border-radius: 12px; }
-    .hero-img-wrap img { position: relative; width: 100%; height: 100%; object-fit: contain; z-index: 1; }
-    .blur-bg { position: absolute; inset: -20px; background-size: cover; background-position: center; filter: blur(20px) brightness(0.5); z-index: 0; }
-    
-    .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; }
-    .photo-card { display: flex; flex-direction: column; gap: 0.5rem; }
-    .card-img-wrap { position: relative; width: 100%; aspect-ratio: 2/3; border-radius: 8px; overflow: hidden; cursor: pointer; }
-    .card-img-wrap img { position: relative; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0; transition: opacity 0.3s; }
-    .card-img-wrap img.loaded { opacity: 1; }
-    .download-btn { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.5rem; background: var(--color-card-bg); color: var(--color-text); text-decoration: none; border-radius: 6px; font-size: 0.85rem; }
-    .download-btn:hover { background: #333; }
-    
-    .actions-wrapper { margin-top: 3rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem; }
-    .btn-download-all { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; background: var(--color-primary); color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 500; cursor: pointer; }
-    .btn-download-all:hover { filter: brightness(1.1); }
-    .expiry-text { color: #9ca3af; font-size: 0.85rem; margin: 0; }
-    
-    .share-footer { text-align: center; padding: 2rem 1rem; color: #6b7280; font-size: 0.8rem; line-height: 1.5; }
-    .share-footer a { color: #9ca3af; text-decoration: none; }
-    .share-footer a:hover { text-decoration: underline; color: #fff; }
-    
-    .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 100; display: none; align-items: center; justify-content: center; }
-    .lightbox.active { display: flex; }
-    .lightbox-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: white; font-size: 2rem; cursor: pointer; z-index: 10; padding: 0.5rem; line-height: 1; transition: opacity 0.3s; }
-    .lightbox-nav-btn { position: absolute; top: 50%; transform: translateY(-50%); background: none; border: none; color: white; cursor: pointer; padding: 1rem; z-index: 10; transition: opacity 0.3s; }
-    .lightbox-prev { left: 1rem; }
-    .lightbox-next { right: 1rem; }
-    .hidden-control { opacity: 0; pointer-events: none; }
-    
-    .lightbox-img-wrap { position: relative; max-width: 90vw; max-height: 90vh; display: flex; align-items: center; justify-content: center; }
-    .lightbox-img { max-width: 90vw; max-height: 90vh; object-fit: contain; z-index: 2; position: relative; opacity: 0; transition: opacity 0.3s; }
-    .lightbox-img.lb-loaded { opacity: 1; }
-    .lightbox-thumb { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; z-index: 1; filter: blur(10px); transition: opacity 0.3s; }
-    .thumb-hidden { opacity: 0; }
-    
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 200; display: none; align-items: center; justify-content: center; }
-    .modal-overlay.active { display: flex; }
-    .modal-page { background: var(--color-bg); border-radius: var(--radius-md); padding: 1.5rem; max-width: 400px; width: 90%; }
-    .modal-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; border-bottom: 1px solid #333; padding-bottom: 1rem; }
-    .modal-header h2 { margin: 0; font-size: 1.25rem; }
-    .back-btn { background: none; border: none; color: white; cursor: pointer; padding: 0; display: flex; }
-    
-    .skeleton-pulse { background: linear-gradient(90deg, #222 25%, #333 50%, #222 75%); background-size: 200% 100%; animation: pulse 1.5s infinite; border-radius: var(--radius-md); }
-    @keyframes pulse { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-    
-    .hidden { display: none !important; }
-  </style>
+/* ============================================================
+   Design Tokens — hellomyphotos Server Frontend
+   Mirrors photobooth-client/src/renderer/styles/tokens.css
+   ============================================================ */
+
+:root {
+  /* --- Color Palette --- */
+  --color-bg:          #0a0a0a;
+  --color-surface:     #141414;
+  --color-surface-alt: #1c1c1c;
+  --color-border:      #2a2a2a;
+  --color-border-sub:  #1f1f1f;
+
+  /* --- Text --- */
+  --color-text:        #f0f0f0;
+  --color-text-sub:    #999;
+  --color-text-muted:  #555;
+
+  /* --- Brand / Accent --- */
+  --color-accent:      #ffffff;
+  --color-accent-fg:   #000000;
+
+  /* --- Semantic --- */
+  --color-success:     #22c55e;
+  --color-warning:     #fbbf24;
+  --color-error:       #ef4444;
+  --color-info:        #60a5fa;
+
+  /* --- Spacing Scale (4px grid) --- */
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
+  --space-5: 1.25rem; --space-6: 1.5rem; --space-8: 2rem; --space-10: 2.5rem;
+  --space-12: 3rem;   --space-16: 4rem;
+
+  /* --- Typography --- */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-base: 1rem; --text-lg: 1.125rem;
+  --text-xl: 1.25rem; --text-2xl: 1.5rem; --text-3xl: 1.875rem;
+
+  /* --- Border Radius --- */
+  --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px;
+  --radius-xl: 16px; --radius-pill: 100px; --radius-full: 50%;
+
+  /* --- Transitions --- */
+  --transition-fast: 100ms ease; --transition-base: 150ms ease; --transition-slow: 300ms ease;
+
+  /* --- Z-index Scale --- */
+  --z-overlay: 10; --z-modal: 100; --z-lightbox: 1000;
+}
+
+/* Share page accent — more consumer-friendly warm white */
+.share-themed {
+  --color-accent: #f8f8f8;
+}
+
+@media (prefers-color-scheme: light) {
+  .share-themed { 
+    --color-bg: #f5f5f5; 
+    --color-surface: #ffffff; 
+    --color-text: #111; 
+    --color-text-sub: #666;
+    --color-border: #ddd;
+    --color-accent-fg: #fff;
+    --color-accent: #000;
+  }
+}
+
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Base class additions for compatibility with the extracted Vue styles */
+.share-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.hidden { display: none !important; }
+
+
+.share-page {
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+.share-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.actions-wrapper {
+  text-align: center;
+  padding: 1rem;
+  margin-bottom: 2rem;
+}
+
+.expiry-text {
+  color: var(--color-text-sub);
+  font-size: var(--text-xs);
+  margin-top: 0.75rem;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 1rem;
+  color: var(--color-text-sub);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-text);
+  border-radius: var(--radius-full);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--color-text-sub);
+}
+
+.error h2 {
+  color: var(--color-error);
+  margin-bottom: 0.5rem;
+}
+
+.share-header {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.share-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+  margin-top: 0.25rem;
+}
+
+.hero-preview {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-img-wrap {
+  position: relative;
+  width: 100%;
+  max-height: 65vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  border: 1px solid var(--color-border);
+}
+
+.hero-img-wrap img {
+  width: 100%;
+  height: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+}
+
+.btn-download-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0;
+  padding: 0.625rem 1.25rem;
+  background: var(--color-text);
+  color: var(--color-bg);
+  border: none;
+  border-radius: 20px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-download-all:hover {
+  opacity: 0.9;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 0.8; }
+  100% { opacity: 0.6; }
+}
+.skeleton-pulse {
+  background-color: var(--color-surface-alt);
+  animation: pulse 1.5s infinite ease-in-out;
+}
+.skeleton-loader {
+  width: 100%;
+}
+
+.photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.photo-card {
+  width: 280px;
+  max-width: 100%;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  transition: transform 0.15s;
+  display: flex;
+  flex-direction: column;
+}
+
+.photo-card:hover {
+  transform: translateY(-2px);
+}
+
+.card-img-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.photo-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  cursor: pointer;
+  background-color: transparent;
+  filter: blur(10px);
+  transform: scale(1.05);
+  transition: transform 0.4s ease-out;
+  will-change: filter, transform;
+}
+
+.photo-card img.loaded {
+  filter: blur(0);
+  transform: scale(1);
+  position: relative;
+  z-index: 1;
+}
+
+.download-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--color-border);
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+  margin-top: auto;
+}
+
+.download-btn:hover {
+  background: #3a3a3a;
+  color: var(--color-text);
+}
+
+.share-footer {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.share-footer a {
+  color: var(--color-text-sub);
+  text-decoration: underline;
+  text-decoration-color: var(--color-border);
+  text-underline-offset: 3px;
+  transition: color 0.2s, text-decoration-color 0.2s;
+}
+
+.share-footer a:hover {
+  color: var(--color-text);
+  text-decoration-color: var(--color-text);
+}
+
+.lightbox { display: none; position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  gap: 1rem;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--color-text);
+  font-size: 1.5rem;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+
+.hidden-control {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.lightbox-close:hover {
+  opacity: 1;
+}
+
+.lightbox-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  color: white;
+  padding: 1rem;
+  cursor: pointer;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease, background 0.2s;
+  z-index: 1010;
+}
+.lightbox-nav-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+.lightbox-prev { left: 2rem; }
+.lightbox-next { right: 2rem; }
+
+@media (max-width: 640px) {
+  .share-header {
+    order: 2;
+    margin-top: -100px;
+    position: relative;
+    z-index: 10;
+    padding-top: 1.5rem;
+    border-bottom: none;
+  }
+  .hero-preview {
+    order: 1;
+    padding: 0;
+    position: relative;
+  }
+  .hero-img-wrap {
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+  .hero-img-wrap::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 160px;
+    background: linear-gradient(to top, var(--color-bg), transparent);
+    pointer-events: none;
+    z-index: 10;
+  }
+  .hero-preview img {
+    border-radius: 0;
+    border: none;
+    margin: 0;
+    width: 100%;
+    max-height: 60vh;
+    object-fit: cover;
+  }
+  .photo-grid {
+    order: 3;
+    padding: 1rem;
+    gap: 1rem;
+  }
+  .actions-wrapper {
+    order: 4;
+  }
+  .lightbox-prev { left: 0.5rem; padding: 0.5rem; }
+  .lightbox-next { right: 0.5rem; padding: 0.5rem; }
+}
+
+.lightbox-img-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+.blur-bg {
+  position: absolute;
+  inset: -20px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(15px);
+  opacity: 0.4;
+  z-index: 0;
+}
+
+.lightbox-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  transition: opacity 0.3s ease;
+}
+
+.lightbox-thumb.thumb-hidden {
+  opacity: 0;
+}
+
+.lightbox-img {
+  max-width: 90vw;
+  max-height: 80vh;
+  border-radius: var(--radius-md);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  will-change: opacity;
+  position: relative;
+  z-index: 1;
+}
+
+.lightbox-img.lb-loaded {
+  opacity: 1;
+}
+
+.contact-link {
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.contact-link:hover {
+  color: var(--color-text);
+}
+
+.modal-overlay { display: none; position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-page {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  width: 90%;
+  max-width: 400px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-header h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 0 1rem;
+  color: var(--color-text);
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+}
+.back-btn:hover { background: var(--color-border); color: var(--color-text); }
+
+.modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+
+.modal-overlay { display: none; }
+.modal-overlay.active { display: flex; }
+.lightbox { display: none; }
+.lightbox.active { display: flex; }
+
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  overflow-x: hidden; /* Fallback to prevent any horizontal scroll */
+}
+
+
+@media (max-width: 640px) {
+  .photo-grid {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    gap: 1rem !important;
+    padding: 1rem !important;
+  }
+  .photo-card {
+    /* 50% width minus half the gap so they fit exactly 2 per row */
+    width: calc(50% - 0.5rem) !important;
+    flex: 0 0 auto !important;
+  }
+}
+
+</style>
 </head>
-<body>
+<body class="share-themed">
   <div class="share-page">
     <div id="loader" class="share-content skeleton-loader">
       <header class="share-header skeleton-pulse" style="height: 60px; max-width: 300px; margin: 0 auto 2rem;"></header>
