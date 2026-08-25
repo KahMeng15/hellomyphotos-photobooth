@@ -13,6 +13,10 @@
             <input type="text" v-model="eventSettings.name" class="text-input" />
           </div>
           <div class="field-row">
+            <label>Event Date</label>
+            <input type="date" v-model="eventSettings.date" class="text-input" />
+          </div>
+          <div class="field-row">
             <label>Organizer</label>
             <input type="text" v-model="eventSettings.organizer" class="text-input" placeholder="Faculty of Computer Science and Information Technology" />
           </div>
@@ -260,6 +264,7 @@ watch([relativeNumber, relativeUnit], ([num, unit]) => {
 
 const eventSettings = ref({
   name: '',
+  date: '',
   obfuscateLinks: false,
   expiryType: 'none',
   expiryValue: '1_year',
@@ -276,6 +281,7 @@ onMounted(async () => {
     const ev = data.event
     eventSettings.value = {
       name: ev.name || '',
+      date: ev.date || '',
       expiryType: ev.expiry_type || 'none',
       expiryValue: ev.expiry_value || '',
       organizer: ev.organizer || '',
@@ -313,6 +319,7 @@ async function saveSettings() {
   try {
     await axios.patch(`/api/admin/events/${eventId.value}`, {
       name: eventSettings.value.name,
+      date: eventSettings.value.date,
       expiryType: eventSettings.value.expiryType,
       expiryValue: eventSettings.value.expiryValue,
       organizer: eventSettings.value.organizer,

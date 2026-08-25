@@ -3,15 +3,16 @@
     <div v-show="fullscreenPhotoIndex === null" class="overlay" @click.self="$emit('close')">
       <div class="viewer">
         <div class="session-header">
-          <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <AppButton variant="ghost" size="sm" @click="$emit('close')" style="padding: 0;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <div class="nav-left">
+            <button class="nav-icon" @click="$emit('close')">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="15 18 9 12 15 6"></polyline>
               </svg>
-            </AppButton>
-            <h1 style="margin: 0; font-size: 1.125rem; font-weight: 600; color: var(--color-text);">
-              {{ session.photoCount }} Photo{{ session.photoCount !== 1 ? 's' : '' }}
-              <span style="color: var(--color-text-sub); font-weight: 400; margin-left: 0.5rem; font-size: 0.9rem;">/ {{ formatTime(session.createdAt) }}</span>
+            </button>
+            <h1 class="event-nav-title">
+              <span class="event-name">{{ session.photoCount }} Photo{{ session.photoCount !== 1 ? 's' : '' }}</span>
+              <span class="nav-divider">/</span>
+              <span class="nav-subtitle">{{ formatTime(session.createdAt) }}</span>
             </h1>
           </div>
         </div>
@@ -49,7 +50,7 @@
             </select>
           </div>
           
-          <AppButton variant="secondary" @click="copyPrimaryShare">
+          <AppButton variant="secondary" @click="copyPrimaryShare" style="width: 140px; justify-content: center;">
             {{ linkCopied ? 'Copied!' : 'Copy Share Link' }}
           </AppButton>
           <AppButton variant="secondary" @click="showPrimaryQr">QR Code</AppButton>
@@ -625,38 +626,67 @@ function formatTime(ts: string) {
 
 .session-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem 1.5rem;
+  align-items: center;
+  padding: var(--space-3) var(--space-6);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 50;
+  height: 60px;
+}
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.event-nav-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  margin: 0;
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.nav-divider, .nav-subtitle {
+  color: var(--color-text-sub);
+  font-weight: 400;
+}
+.nav-icon {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-sub);
+  cursor: pointer;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-base);
+}
+.nav-icon:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
 }
 .frame-toggle {
   display: flex;
   align-items: center;
 }
 .frame-select {
-  padding: 0.5rem 1rem;
-  background: var(--color-border);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
   color: var(--color-text);
-  border: none;
+  padding: 0.5rem 0.75rem;
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
-  cursor: pointer;
   outline: none;
-  font-family: inherit;
-  transition: background 0.2s, color 0.2s;
-}
-.frame-select:hover {
-  background: #3a3a3a;
-  color: var(--color-text);
+  cursor: pointer;
+  min-width: 150px;
 }
 .frame-select:focus {
-  outline: 1px solid var(--color-text-muted);
+  border-color: var(--color-text-sub);
 }
 .viewer-body {
   padding: 1.5rem;
