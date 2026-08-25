@@ -54,7 +54,8 @@ router.post('/session/reserve', boothAuthMiddleware, async (req: Request, res: R
     if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
     const eventId = (req as any).eventId
     const shareId = reservePhotoSession(sessionId, eventId)
-    const shareUrl = `${req.protocol}://${req.get('host')}/share/${shareId}`
+    const baseUrl = process.env.SHARE_BASE_URL ? `${process.env.SHARE_BASE_URL.replace(/\/$/, '')}/share` : `${req.protocol}://${req.get('host')}/share`;
+    const shareUrl = `${baseUrl.replace(/\/$/, '')}/${shareId}`
     res.json({ shareId, shareUrl, sessionId })
   } catch (error: any) {
     logger.error(`Session reserve error: ${error.message}`)

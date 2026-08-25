@@ -20,6 +20,7 @@ services:
       COOKIE_SECURE: "false"
       COOKIE_PATH: /
       VITE_BASE_URL: /
+      SHARE_BASE_URL: ${SHARE_BASE_URL:-https://kmeng.ftp.sh/snapsync}
       VITE_SHARE_BASE_URL: ${VITE_SHARE_BASE_URL:-http://localhost:3001/snapsync/share}
 
       STORAGE_ROOT: /app

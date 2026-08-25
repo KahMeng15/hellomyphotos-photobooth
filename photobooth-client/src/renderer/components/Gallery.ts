@@ -293,7 +293,7 @@ export class Gallery {
       // Defer src assignment slightly so layout doesn't block
       requestAnimationFrame(() => { img.src = fileSrc(thumbPath) })
       img.onerror = () => { 
-        if (session.shareId && paths.length > 0) {
+        if (session.shareId && !session.shareId.startsWith('session_') && paths.length > 0) {
           window.hellomyphoto.getSettings().then(settings => {
             const sUrl = normalizeUrl(settings.serverUrl || '')
             if (sUrl) {
@@ -418,7 +418,7 @@ export class Gallery {
         img.decoding = 'async'
         img.className = 'g-photo-img'
         img.onerror = () => {
-          if (session.shareId) {
+          if (session.shareId && !session.shareId.startsWith('session_')) {
             window.hellomyphoto.getSettings().then(settings => {
               const sUrl = normalizeUrl(settings.serverUrl || '')
               if (sUrl) {
@@ -466,19 +466,27 @@ export class Gallery {
     qrLabel.textContent = 'Share Link'
     rightCol.appendChild(qrLabel)
 
-    if (session.shareId) {
+    if (session.shareId && !session.shareId.startsWith('session_')) {
       const qrBox = document.createElement('div')
       qrBox.className = 'g-qr-box'
 
       try {
         const serverConfig = await window.hellomyphoto.getServerConfig()
         const serverUrl = normalizeUrl(serverConfig?.serverUrl || '')
-        const shareUrl = `${serverUrl}/share/${session.shareId}`
+        let shareBase = `${serverUrl}/share`
+        try {
+          const healthRes = await fetch(`${serverUrl}/api/health`)
+          if (healthRes.ok) {
+            const healthData = await healthRes.json()
+            if (healthData.shareBaseUrl) shareBase = healthData.shareBaseUrl.replace(/\/$/, '')
+          }
+        } catch (e) {}
+        const shareUrl = `${shareBase}/${session.shareId}`
 
         const qrDataUrl = await QRCode.toDataURL(shareUrl, {
           width: 240,
           margin: 1,
-          color: { dark: '#0a0a0a', light: 'var(--color-text)fff' },
+          color: { dark: '#0a0a0a', light: '#ffffff' },
           errorCorrectionLevel: 'M',
         })
 
@@ -752,7 +760,7 @@ export class Gallery {
 
     const update = () => {
       img.onerror = () => {
-        if (session.shareId) {
+        if (session.shareId && !session.shareId.startsWith('session_')) {
           window.hellomyphoto.getSettings().then(settings => {
             const sUrl = normalizeUrl(settings.serverUrl || '')
             if (sUrl) {

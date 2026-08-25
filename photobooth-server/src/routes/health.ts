@@ -34,6 +34,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     const health = {
       status: 'healthy',
+      shareBaseUrl: (process.env.SHARE_BASE_URL ? `${process.env.SHARE_BASE_URL.replace(/\/$/, '')}/share` : `${req.protocol}://${req.get('host')}/share`),
       uptime: Math.floor((Date.now() - startTime) / 1000),
       timestamp: new Date().toISOString(),
       version: '3.0.0',
