@@ -526,11 +526,9 @@ function formatTime(ts: string) {
   }
   .remote-sidebar {
     display: flex;
+    flex-direction: column;
     position: sticky;
     top: 1.5rem;
-    height: calc(100vh - 3rem - 65px);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
   }
 }
 </style>
@@ -539,7 +537,7 @@ function formatTime(ts: string) {
 .dashboard {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
   background: var(--color-bg);
   color: var(--color-text);
 }
@@ -624,8 +622,7 @@ function formatTime(ts: string) {
 }
 
 .photo-feed {
-  overflow-y: auto;
-  padding: 2rem;
+  /* Removed to inherit standard grid padding */
 }
 
 .feed-header {
@@ -958,11 +955,9 @@ function formatTime(ts: string) {
   }
   .remote-sidebar {
     display: flex;
+    flex-direction: column;
     position: sticky;
     top: 1.5rem;
-    height: calc(100vh - 3rem - 65px);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
   }
 }
 </style>

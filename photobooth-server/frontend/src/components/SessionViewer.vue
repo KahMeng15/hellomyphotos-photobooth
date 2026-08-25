@@ -628,7 +628,7 @@ function formatTime(ts: string) {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.75rem 2rem;
+  padding: 0.75rem 1.5rem;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   position: sticky;
@@ -659,7 +659,7 @@ function formatTime(ts: string) {
   outline: 1px solid var(--color-text-muted);
 }
 .viewer-body {
-  padding: 1.5rem 2rem;
+  padding: 1.5rem;
   flex: 1;
   display: flex;
   flex-direction: column;

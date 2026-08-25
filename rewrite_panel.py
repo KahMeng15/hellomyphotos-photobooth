@@ -1,4 +1,10 @@
-<template>
+import re
+
+filepath = 'photobooth-server/frontend/src/components/EventControlPanel.vue'
+with open(filepath, 'r') as f:
+    content = f.read()
+
+new_template = """<template>
   <aside class="control-panel" v-if="event">
     
     <!-- Status Card -->
@@ -14,15 +20,18 @@
         </div>
       </div>
       
-      <div v-if="!connected && event.otp" class="otp-box" style="margin-bottom: 1rem;">
+      <div v-if="!connected && event.otp" class="otp-box">
         <p class="card-desc">Enter OTP in booth app:</p>
         <div class="otp-code-row">
           <span class="otp-code">{{ event.otp }}</span>
           <button @click="copyOtp" class="app-btn app-btn--secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">{{ otpCopied ? 'Copied' : 'Copy' }}</button>
         </div>
       </div>
+    </section>
 
-      <div class="stats-grid" v-if="totalSessions !== undefined" :style="{ marginTop: (!connected && event.otp) ? '0' : '1rem' }">
+    <!-- Stats Card -->
+    <section class="card" v-if="totalSessions !== undefined">
+      <div class="stats-grid">
         <div class="stat-card">
           <span class="stat-value">{{ totalSessions }}</span>
           <span class="stat-label">Sessions</span>
@@ -34,10 +43,8 @@
       </div>
     </section>
 
-    
-
     <!-- Controls Card -->
-    <section class="card">
+    <section class="card" v-if="connected">
       <h2>Action Controls</h2>
       <p class="card-desc">Trigger booth functions remotely.</p>
       
@@ -59,8 +66,8 @@
             <span class="sub-label">Lock the screen.</span>
           </div>
           <div class="focus-toggle">
-            <button :class="['focus-btn', paused ? 'focus-active' : '']" @click="togglePause(true)" :disabled="!connected">PAUSE</button>
-            <button :class="['focus-btn', !paused ? 'focus-active' : '']" @click="togglePause(false)" :disabled="!connected">RESUME</button>
+            <button :class="['focus-btn', paused ? 'focus-active' : '']" @click="togglePause(true)">PAUSE</button>
+            <button :class="['focus-btn', !paused ? 'focus-active' : '']" @click="togglePause(false)">RESUME</button>
           </div>
         </div>
 
@@ -69,83 +76,32 @@
             <label>Retake Photo</label>
             <span class="sub-label">Force a reshot.</span>
           </div>
-          <button class="app-btn app-btn--secondary" @click="triggerReshot" :disabled="!connected">Retake</button>
+          <button class="app-btn app-btn--secondary" @click="triggerReshot">Retake</button>
         </div>
 
       </div>
     </section>
 
-    
+    <!-- Frame Override Card -->
+    <section class="card" v-if="connected">
+      <h2>Frame Override</h2>
+      <div class="settings-box control-box" style="padding: 0.5rem 0.75rem;">
+        <select v-model="selectedFrame" @change="sendFrameOverride" class="custom-select">
+          <option value="">No Override</option>
+          <option v-for="f in photosStore.frames" :key="f.id" :value="f.id">{{ f.name }}</option>
+        </select>
+      </div>
+    </section>
 
   </aside>
-</template>
+</template>"""
 
-<script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { usePhotosStore } from '../stores/photos'
-import axios from 'axios'
+# Replace the template
+template_regex = r'<template>.*?</template>'
+content = re.sub(template_regex, new_template, content, flags=re.DOTALL)
 
-const props = defineProps<{
-  connected: boolean
-  eventId: string
-  sendMessage: (event: string, data: any) => void
-  boothState: string | null
-  show?: boolean
-  totalSessions?: number
-  totalPhotos?: number
-}>()
-
-const emit = defineEmits<{ close: []; retry: [] }>()
-
-const router = useRouter()
-const route = useRoute()
-const photosStore = usePhotosStore()
-
-const event = ref<any>(null)
-const paused = ref(false)
-const otpCopied = ref(false)
-const connectionStatus = computed(() => props.connected ? 'connected' : 'disconnected')
-
-const queuePercent = computed(() => Math.min((photosStore.queueDepth / 10) * 100, 100))
-
-const actionButtonLabel = computed(() => {
-  if (props.boothState === 'preview') return 'Return to Main Menu'
-  if (props.boothState === 'live') return 'Begin Countdown'
-  return 'Start'
-})
-
-const canAct = computed(() => {
-  return props.connected && props.boothState !== 'capturing' && props.boothState !== 'paused'
-})
-
-const actionButtonClass = computed(() => {
-  if (props.boothState === 'preview') return 'btn-warning'
-  return 'btn-primary'
-})
-
-onMounted(async () => {
-  try {
-    const { data } = await axios.get(`/api/admin/events/${props.eventId}`)
-    event.value = data.event
-  } catch (err) {
-    console.error('Failed to fetch event', err)
-  }
-})
-
-
-
-async function boothAction() {
-  if (!canAct.value) return
-  if (props.boothState === 'preview') {
-    props.sendMessage('booth-go-home', { eventId: props.eventId })
-  } else if (props.boothState === 'live') {
-    props.sendMessage('booth-capture', { eventId: props.eventId })
-  } else {
-    props.sendMessage('booth-start', { eventId: props.eventId })
-  }
-}
-
+# Add triggerReshot function and fix togglePause to accept boolean
+script_add = """
 function triggerReshot() {
   props.sendMessage('trigger-reshot', { eventId: props.eventId })
 }
@@ -154,36 +110,15 @@ function togglePause(setPaused: boolean) {
   paused.value = setPaused
   props.sendMessage('booth-pause', { eventId: props.eventId, paused: paused.value })
 }
+"""
+content = content.replace(
+    """function togglePause() {
+  paused.value = !paused.value
+  props.sendMessage('booth-pause', { eventId: props.eventId, paused: paused.value })
+}""", script_add)
 
 
-function shareAll() {
-  if (navigator.share) {
-    navigator.share({
-      title: 'Booth Photos',
-      text: 'Check out the photo booth!',
-      url: window.location.origin,
-    })
-  }
-}
-
-async function endThisEvent() {
-  if (!confirm('End this event? The OTP will be invalidated.')) return
-  try {
-    await axios.post(`/api/admin/events/${props.eventId}/end`)
-    const { data } = await axios.get(`/api/admin/events/${props.eventId}`)
-    event.value = data.event
-  } catch {}
-}
-
-function copyOtp() {
-  if (!event.value?.otp) return
-  navigator.clipboard.writeText(event.value.otp)
-  otpCopied.value = true
-  setTimeout(() => { otpCopied.value = false }, 2000)
-}
-</script>
-
-
+new_css = """
 <style scoped>
 .control-panel {
   display: flex;
@@ -380,15 +315,13 @@ function copyOtp() {
   outline: none;
   cursor: pointer;
 }
-
-.focus-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.custom-select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 </style>
+"""
 
+# Replace css completely
+css_regex = r'<style scoped>.*?</style>'
+content = re.sub(css_regex, new_css, content, flags=re.DOTALL)
+
+with open(filepath, 'w') as f:
+    f.write(content)
 
