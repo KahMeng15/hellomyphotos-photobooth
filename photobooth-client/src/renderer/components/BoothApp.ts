@@ -1,7 +1,6 @@
 import { CameraManager, DslrPreviewManager } from '../utils/camera.js'
 import { AudioManager } from '../utils/audio.js'
 import { CountdownUI } from './Countdown.js'
-import { FrameCarousel } from './FrameCarousel.js'
 import { PhotoPreview } from './PhotoPreview.js'
 import { OfflineIndicator } from './OfflineIndicator.js'
 import { Settings, connectBoothSocket, boothSocket } from './Settings.js'
@@ -18,7 +17,6 @@ export class BoothApp {
   private dslrPreview: DslrPreviewManager
   private audio: AudioManager
   private countdown: CountdownUI
-  private frameCarousel: FrameCarousel
   private photoPreview: PhotoPreview
   private offlineIndicator: OfflineIndicator
   private gallery: Gallery
@@ -80,7 +78,6 @@ export class BoothApp {
     settingsPasscode?: string
   } = { photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, serverUrl: 'http://localhost:3000', liveviewMode: 'mjpeg', autoPreview: false, liveviewRetryAttempts: 1, shutterOffsetDelay: 0, dslrWhiteBalance: 'auto', dslrWhiteBalanceKelvin: 5200 }
   private serverOnline = true
-  private selectedFrame: string | null = null
   private serverUrl = 'http://localhost:3000'
   private _state: BoothState = 'idle'
   private currentSessionId: string | null = null
@@ -333,7 +330,6 @@ export class BoothApp {
     this.dslrPreview = new DslrPreviewManager()
     this.audio = new AudioManager()
     this.countdown = new CountdownUI(this.overlay)
-    this.frameCarousel = new FrameCarousel(this.statusBar, (frameId) => { this.selectedFrame = frameId })
     this.photoPreview = new PhotoPreview(
       this.container,
       (indices) => {
@@ -717,8 +713,6 @@ export class BoothApp {
       this.emitBoothState()
     } else if (cmd.type === 'go-home') {
       this.goHome()
-    } else if (cmd.type === 'frame-override') {
-      this.selectedFrame = (cmd as any).frameId || null
     } else if (cmd.type === 'reshot') {
       if (this.isLive && !this.isCapturing) this.startCapture()
     } else if (cmd.type === 'resolve-error') {
@@ -874,7 +868,6 @@ export class BoothApp {
     } else {
       console.warn('[BoothApp] mount() — getSettings() returned null/undefined, using defaults')
     }
-    await this.frameCarousel.loadFrames(this.settingsData.serverUrl, this.settingsData.otp || '')
     this.updateStartBtn()
 
     document.addEventListener('booth-socket-connect', () => this.updateStartBtn())
@@ -942,10 +935,6 @@ export class BoothApp {
     try {
       console.log(`[BoothApp] goLive() — cameraMode="${this.cameraMode}"`)
       this.landingEl.style.display = 'none'
-
-      if (this.settingsData.serverUrl) {
-        this.frameCarousel.loadFrames(this.settingsData.serverUrl, this.settingsData.otp || '')
-      }
 
       if (this.settingsData.audioDeviceId) {
         await this.audio.setSinkId(this.settingsData.audioDeviceId)
@@ -1466,10 +1455,7 @@ export class BoothApp {
     this.isCapturing = false
     this._state = 'preview'
     this.emitBoothState()
-    const selectedFrameConfig = this.selectedFrame ? this.frameCarousel.activeFrames.find(f => f.id === this.selectedFrame) : null
-    
-    // Show preview UI immediately using sessionId as a fallback share ID
-    this.photoPreview.show(paths, selectedFrameConfig, this.settingsData.serverUrl, this.settingsData.otp, sessionId)
+    this.photoPreview.show(paths, null, this.settingsData.serverUrl, this.settingsData.otp, sessionId)
     this.photoPreview.updateProgress(0, 'Preparing...')
     this.previewWindow.style.display = 'none'
     this.statusBar.style.display = 'none'
@@ -1481,7 +1467,6 @@ export class BoothApp {
       sessionId,
       imagePaths: filePaths,
       imageBuffers: blobBuffers.length > 0 ? blobBuffers : undefined,
-      frameName: this.selectedFrame,
       photoCount: paths.length,
     })
 

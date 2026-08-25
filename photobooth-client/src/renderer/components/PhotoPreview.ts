@@ -1,4 +1,4 @@
-import { renderFrame, FrameConfig } from '../utils/frameRenderer.js'
+
 import QRCode from 'qrcode'
 
 export class PhotoPreview {
@@ -9,7 +9,6 @@ export class PhotoPreview {
   private onConfirm: () => void
 
   private currentPaths: string[] = []
-  private lastFrameConfig?: FrameConfig | null
   private lastServerUrl?: string
   private lastOtp?: string
   private lastSessionId?: string
@@ -79,9 +78,8 @@ export class PhotoPreview {
     window.addEventListener('keydown', this.keydownHandler)
   }
 
-  async show(paths: string[], frameConfig?: FrameConfig | null, serverUrl?: string, otp?: string, sessionId?: string) {
+  async show(paths: string[], _frameConfig?: any, serverUrl?: string, otp?: string, sessionId?: string) {
     this.currentPaths = paths
-    this.lastFrameConfig = frameConfig
     this.lastServerUrl = serverUrl
     this.lastOtp = otp
     this.lastSessionId = sessionId
@@ -96,34 +94,15 @@ export class PhotoPreview {
     title.className = 'ui-photo-preview-title'
     this.overlay.appendChild(title)
 
-    let canvasOrGrid: HTMLElement
-
-    if (frameConfig && serverUrl && otp) {
-      const canvas = document.createElement('canvas')
-      canvas.className = 'ui-photo-preview-canvas'
-      this.overlay.appendChild(canvas)
-      canvasOrGrid = canvas
-      
-      const frameImageUrl = `${serverUrl}${frameConfig.imageUrl}?otp=${otp}`
-      const photoUrls = paths.map(p => p.startsWith('blob:') || p.startsWith('http') ? p : `file://${p}`)
-      
-      try {
-        await renderFrame(frameConfig, frameImageUrl, photoUrls, canvas)
-      } catch (err) {
-        console.error('Failed to render frame preview', err)
-      }
-    } else {
-      const grid = document.createElement('div')
-      grid.className = 'ui-photo-preview-grid'
-      for (const p of paths) {
-        const img = document.createElement('img')
-        img.className = paths.length === 1 ? 'ui-photo-preview-img ui-photo-preview-img-full' : 'ui-photo-preview-img ui-photo-preview-img-half'
-        img.src = p.startsWith('blob:') || p.startsWith('http') ? p : `file://${p}`
-        grid.appendChild(img)
-      }
-      this.overlay.appendChild(grid)
-      canvasOrGrid = grid
+    const grid = document.createElement('div')
+    grid.className = 'ui-photo-preview-grid'
+    for (const p of paths) {
+      const img = document.createElement('img')
+      img.className = paths.length === 1 ? 'ui-photo-preview-img ui-photo-preview-img-full' : 'ui-photo-preview-img ui-photo-preview-img-half'
+      img.src = p.startsWith('blob:') || p.startsWith('http') ? p : `file://${p}`
+      grid.appendChild(img)
     }
+    this.overlay.appendChild(grid)
 
     const actions = document.createElement('div')
     actions.className = 'ui-photo-preview-actions'
@@ -310,7 +289,7 @@ export class PhotoPreview {
     cancelBtn.className = 'ui-photo-btn-cancel'
     cancelBtn.addEventListener('click', () => {
       this.keydownHandlers = null
-      this.show(this.currentPaths, this.lastFrameConfig, this.lastServerUrl, this.lastOtp, this.lastSessionId)
+      this.show(this.currentPaths, null, this.lastServerUrl, this.lastOtp, this.lastSessionId)
     })
 
     const confirmBtn = document.createElement('button')
