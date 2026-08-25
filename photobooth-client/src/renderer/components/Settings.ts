@@ -7,8 +7,17 @@ export function connectBoothSocket(serverUrl: string, otp: string) {
   if (boothSocket?.connected) {
     boothSocket.disconnect()
   }
+  let path = '/socket.io'
+  try {
+    const parsedUrl = new URL(serverUrl)
+    if (parsedUrl.pathname && parsedUrl.pathname !== '/') {
+      path = parsedUrl.pathname.replace(/\/+$/, '') + '/socket.io'
+    }
+  } catch {}
+
   boothSocket = io(serverUrl, {
     auth: { otp },
+    path,
     transports: ['websocket', 'polling'],
   })
   boothSocket.on('connect', () => {

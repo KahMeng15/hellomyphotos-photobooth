@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { config } from '../config'
 import { logger } from '../utils/logger'
 import { authMiddleware } from '../middleware/authMiddleware'
-import { getEvent, getPhotoSessionByShareId, getPhotoSession, logShareAnalytics, getSessionUploadStatus, getSessionDimensions, getOrCreateEventShareToken, getEventIdByShareToken } from '../db'
+import { getEvent, getPhotoSessionByShareId, getPhotoSession, logShareAnalytics, getSessionUploadStatus, getSessionDimensions, getOrCreateEventShareToken, getEventIdByShareToken, getEventByOtp } from '../db'
 import { UAParser } from 'ua-parser-js'
 import { getActiveFrames } from '../utils/frames'
 import { generateSignedUrl, verifySignedUrl } from '../utils/signedUrls'
@@ -366,10 +366,18 @@ router.get('/:token/photo/:filename', async (req: Request, res: Response) => {
   try {
     const token = req.params.token
     const filename = req.params.filename
-    const { exp, sig } = req.query
+    const { exp, sig, otp } = req.query
+    let isValidRequest = false
 
-    if (!verifySignedUrl(token, filename, exp as string, sig as string)) {
-      return res.status(403).json({ error: 'Invalid or expired signature' })
+    if (otp) {
+      const event = getEventByOtp(otp as string)
+      if (event) isValidRequest = true
+    }
+    
+    if (!isValidRequest) {
+      if (!verifySignedUrl(token, filename, exp as string, sig as string)) {
+        return res.status(403).json({ error: 'Invalid or expired signature' })
+      }
     }
 
     let eventId = getEventIdByShareToken(token)

@@ -197,8 +197,8 @@ export class Gallery {
                 const remotePaths = []
                 const remoteThumbPaths = []
                 for (let i = 0; i < (ss.photoCount || 0); i++) {
-                  remotePaths.push(`${sUrl}/api/share/${ss.shareId}/photo/${ss.sessionId}_${i + 1}.webp`)
-                  remoteThumbPaths.push(`${sUrl}/api/share/${ss.shareId}/photo/${ss.sessionId}_${i + 1}_thumb.webp`)
+                  remotePaths.push(`${sUrl}/api/share/${ss.shareId}/photo/${ss.sessionId}_${i + 1}.webp?otp=${settings.otp || ''}`)
+                  remoteThumbPaths.push(`${sUrl}/api/share/${ss.shareId}/photo/${ss.sessionId}_${i + 1}_thumb.webp?otp=${settings.otp || ''}`)
                 }
 
                 sessions.push({
@@ -298,7 +298,7 @@ export class Gallery {
             const sUrl = normalizeUrl(settings.serverUrl || '')
             if (sUrl) {
               img.onerror = () => { img.style.display = 'none' }
-              img.src = `${sUrl}/api/share/${session.shareId}/photo/${session.sessionId}_${paths.length}_thumb.webp`
+              img.src = `${sUrl}/api/share/${session.shareId}/photo/${session.sessionId}_${paths.length}_thumb.webp?otp=${settings.otp || ''}`
             } else {
               img.style.display = 'none'
             }
@@ -426,7 +426,7 @@ export class Gallery {
                   wrap.style.background = '#1f1f1f'
                   img.style.display = 'none'
                 }
-                img.src = `${sUrl}/api/share/${session.shareId}/photo/${session.sessionId}_${i + 1}_thumb.webp`
+                img.src = `${sUrl}/api/share/${session.shareId}/photo/${session.sessionId}_${i + 1}_thumb.webp?otp=${settings.otp || ''}`
               } else {
                 wrap.style.background = '#1f1f1f'
                 img.style.display = 'none'
@@ -757,7 +757,7 @@ export class Gallery {
             const sUrl = normalizeUrl(settings.serverUrl || '')
             if (sUrl) {
               img.onerror = () => { img.style.display = 'none' }
-              img.src = `${sUrl}/api/share/${session.shareId}/photo/${session.sessionId}_${current + 1}.webp`
+              img.src = `${sUrl}/api/share/${session.shareId}/photo/${session.sessionId}_${current + 1}.webp?otp=${settings.otp || ''}`
               img.style.display = 'block'
             }
           })
