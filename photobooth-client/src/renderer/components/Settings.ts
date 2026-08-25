@@ -144,7 +144,7 @@ export class Settings {
           if (window.hellomyphoto) {
             await window.hellomyphoto.saveSettings(this.settings)
           }
-          this.populateUiFromSettings()
+          this.refreshFields()
           this.onChange(this.settings)
           if (boothSocket?.connected) {
             boothSocket.emit('booth-config', this.settings) // Ack back
