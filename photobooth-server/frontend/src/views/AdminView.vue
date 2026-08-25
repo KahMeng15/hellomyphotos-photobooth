@@ -308,7 +308,7 @@ function formatUptime(s: number) {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
-  margin: 1.5rem auto;
+  margin: 0 auto 1.5rem auto;
   max-width: 800px;
 }
 .card h2 {
@@ -355,5 +355,16 @@ function formatUptime(s: number) {
   display: flex;
   justify-content: flex-end;
   margin-top: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .field-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .field-row label {
+    display: block;
+  }
 }
 </style>

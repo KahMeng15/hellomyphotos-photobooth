@@ -39,18 +39,18 @@
               </thead>
               <tbody>
                 <tr v-for="log in analytics.logs" :key="log.id">
-                  <td class="log-time">{{ formatTime(log.created_at) }}</td>
-                  <td>
+                  <td class="log-time" data-label="Time">{{ formatTime(log.created_at) }}</td>
+                  <td data-label="Action">
                     <span class="badge" :class="log.action === 'download' ? 'badge-blue' : 'badge-gray'">
                       {{ log.action }}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Source">
                     <span class="badge badge-purple" v-if="log.source === 'qr'">QR</span>
                     <span class="badge badge-gray" v-else>Direct</span>
                   </td>
-                  <td class="log-device">{{ log.device_type }} / {{ log.os }}</td>
-                  <td class="log-target" :title="log.target_file || '-'">{{ log.target_file || '-' }}</td>
+                  <td class="log-device" data-label="Device">{{ log.device_type }} / {{ log.os }}</td>
+                  <td class="log-target" data-label="Target" :title="log.target_file || '-'">{{ log.target_file || '-' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -227,5 +227,36 @@ onMounted(() => {
 .badge-purple {
   background: rgba(168, 85, 247, 0.2);
   color: #c084fc;
+}
+
+@media (max-width: 768px) {
+  .settings-box {
+    overflow-x: auto;
+  }
+  .logs-table thead {
+    display: none;
+  }
+  .logs-table, .logs-table tbody, .logs-table tr, .logs-table td {
+    display: block;
+    width: 100%;
+  }
+  .logs-table tr {
+    border-bottom: 1px solid var(--color-border);
+    padding: 0.5rem 0;
+  }
+  .logs-table td {
+    border: none;
+    padding: 0.25rem 1.25rem;
+    text-align: left;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .logs-table td::before {
+    content: attr(data-label);
+    font-size: 0.75rem;
+    color: var(--color-text-sub);
+    text-transform: uppercase;
+  }
 }
 </style>

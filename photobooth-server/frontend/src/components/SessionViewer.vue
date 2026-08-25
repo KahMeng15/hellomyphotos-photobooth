@@ -49,25 +49,26 @@
               <option v-for="frame in activeFrames" :key="frame.id" :value="frame.id">{{ frame.name }}</option>
             </select>
           </div>
-          
-          <AppButton variant="secondary" @click="copyPrimaryShare" style="width: 140px; justify-content: center;">
-            {{ linkCopied ? 'Copied!' : 'Copy Share Link' }}
-          </AppButton>
-          <AppButton variant="secondary" @click="showPrimaryQr">QR Code</AppButton>
-
-          <div class="dropdown-wrapper">
-            <AppButton variant="icon" @click="showMenu = !showMenu">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="1"></circle>
-                <circle cx="12" cy="5" r="1"></circle>
-                <circle cx="12" cy="19" r="1"></circle>
-              </svg>
+          <div class="viewer-actions-buttons">
+            <AppButton variant="secondary" @click="copyPrimaryShare" style="width: 140px; justify-content: center;">
+              {{ linkCopied ? 'Copied!' : 'Copy Share Link' }}
             </AppButton>
-            <div v-if="showMenu" class="dropdown-menu">
-              <a @click="openManageShares">Manage Share Links</a>
-              <a v-if="activeFrames.length > 0" @click="applyAllActiveFrames">Regenerate Frames</a>
-              <a @click="downloadAll">Download All</a>
-              <a @click="deleteSession" class="text-danger">Delete Session</a>
+            <AppButton variant="secondary" @click="showPrimaryQr">QR Code</AppButton>
+
+            <div class="dropdown-wrapper">
+              <AppButton variant="icon" @click="showMenu = !showMenu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="1"></circle>
+                  <circle cx="12" cy="5" r="1"></circle>
+                  <circle cx="12" cy="19" r="1"></circle>
+                </svg>
+              </AppButton>
+              <div v-if="showMenu" class="dropdown-menu">
+                <a @click="openManageShares">Manage Share Links</a>
+                <a v-if="activeFrames.length > 0" @click="applyAllActiveFrames">Regenerate Frames</a>
+                <a @click="downloadAll">Download All</a>
+                <a @click="deleteSession" class="text-danger">Delete Session</a>
+              </div>
             </div>
           </div>
         </div>
@@ -185,7 +186,7 @@
       <h2 style="margin: 0;">QR Code</h2>
     </template>
     <div style="display: flex; justify-content: center; align-items: center; width: 100%;">
-      <canvas ref="qrCanvas" style="max-width: 100%; height: auto;"></canvas>
+      <canvas ref="qrCanvas" style="width: 100%; max-width: 300px; aspect-ratio: 1 / 1; display: block; margin: 0 auto;"></canvas>
     </div>
   </AppModal>
 </template>
@@ -1004,5 +1005,32 @@ function formatTime(ts: string) {
 
 .fs-image.fs-loaded {
   opacity: 1;
+}
+
+.viewer-actions-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .viewer-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  .frame-toggle {
+    width: 100%;
+  }
+  .frame-select {
+    width: 100%;
+  }
+  .viewer-actions-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+  }
 }
 </style>

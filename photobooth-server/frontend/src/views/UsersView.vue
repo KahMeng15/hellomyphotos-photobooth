@@ -150,7 +150,7 @@ onMounted(() => {
 .users-main {
   max-width: 800px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 0;
 }
 
 .users-header h2 {
@@ -319,5 +319,17 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .field-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .user-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 </style>

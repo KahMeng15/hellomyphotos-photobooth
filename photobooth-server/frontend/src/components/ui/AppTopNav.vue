@@ -33,6 +33,16 @@
     <div class="nav-right">
       <!-- Subpage Links (Only in Event Mode) -->
       <template v-if="mode === 'event' && event">
+        <button @click="router.push(`/events/${event.id}`)" :class="['nav-icon', { active: currentRoute === '' }]" title="Photo Gallery">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+          </svg>
+        </button>
+        <button @click="router.push(`/events/${event.id}/remote`)" :class="['nav-icon', 'remote-icon-nav', 'hide-on-desktop', { active: currentRoute === 'remote' }]" title="Booth Remote">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+          </svg>
+        </button>
         <button @click="router.push(`/events/${event.id}/analytics`)" :class="['nav-icon', { active: currentRoute === 'analytics' }]" title="Analytics">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
@@ -54,16 +64,6 @@
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
           </svg>
         </button>
-        <button @click="router.push(`/events/${event.id}`)" :class="['nav-icon', { active: currentRoute === '' }]" title="Photo Gallery">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-          </svg>
-        </button>
-        <button @click="router.push(`/events/${event.id}/remote`)" :class="['nav-icon', 'remote-icon-nav', 'hide-on-desktop', { active: currentRoute === 'remote' }]" title="Booth Remote">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
-          </svg>
-        </button>
         <div class="nav-separator"></div>
       </template>
 
@@ -74,10 +74,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import UserDropdown from './UserDropdown.vue'
+
+onMounted(() => {
+  document.body.classList.add('has-bottom-nav')
+})
+
+onUnmounted(() => {
+  document.body.classList.remove('has-bottom-nav')
+})
 
 const props = withDefaults(defineProps<{
   mode?: 'home' | 'event' | 'admin'
@@ -110,6 +118,7 @@ const currentRoute = computed(() => {
   if (path.includes('/frames')) return 'frames'
   if (path.includes('/settings/event')) return 'settings/event'
   if (path.includes('/settings/booth')) return 'settings/booth'
+  if (path.includes('/remote')) return 'remote'
   return ''
 })
 </script>
@@ -222,4 +231,21 @@ const currentRoute = computed(() => {
   }
 }
 
+@media (max-width: 768px) {
+  .nav-right {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    justify-content: space-around;
+    padding: var(--space-2) var(--space-4);
+    gap: 0;
+    z-index: var(--z-modal);
+  }
+  .nav-separator {
+    display: none;
+  }
+}
 </style>

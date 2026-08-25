@@ -1,7 +1,10 @@
 <template>
   <div class="user-dropdown-wrapper" ref="dropdownRef">
-    <button @click="toggle" class="user-email-btn" :class="{ 'is-open': isOpen }">
-      {{ authStore.user?.email }}
+    <button @click="toggle" class="user-email-btn nav-icon" :class="{ 'is-open': isOpen }">
+      <span class="user-email-text">{{ authStore.user?.email }}</span>
+      <svg class="user-icon hide-on-desktop" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      </svg>
     </button>
     
     <div v-if="isOpen" class="dropdown-menu">
@@ -137,6 +140,23 @@ async function handleLogout() {
 }
 .dropdown-item.danger:hover {
   background: color-mix(in srgb, var(--color-error) 15%, transparent);
+}
+
+@media (max-width: 768px) {
+  .user-email-text {
+    display: none;
+  }
+  .dropdown-menu {
+    bottom: 100%;
+    top: auto;
+    margin-bottom: var(--space-1);
+    margin-top: 0;
+  }
+}
+@media (min-width: 769px) {
+  .user-icon.hide-on-desktop {
+    display: none;
+  }
 }
 
 .dropdown-divider {

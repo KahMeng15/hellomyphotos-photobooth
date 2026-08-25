@@ -164,5 +164,12 @@ async function handleLogin() {
   cursor: not-allowed;
 }
 
-
+@media (max-width: 768px) {
+  .login-card {
+    border: none;
+    background: transparent;
+    padding: 1.5rem;
+    box-shadow: none;
+  }
+}
 </style>

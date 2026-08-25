@@ -28,7 +28,7 @@
           <button @click="deleteSingle" class="btn-action btn-danger">Delete</button>
         </div>
         <div v-if="showQrCode" class="qr-section">
-          <canvas ref="qrCanvas"></canvas>
+          <canvas ref="qrCanvas" style="width: 100%; max-width: 300px; aspect-ratio: 1 / 1; display: block; margin: 0 auto;"></canvas>
         </div>
       </div>
     </div>

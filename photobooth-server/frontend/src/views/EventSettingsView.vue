@@ -16,9 +16,9 @@
             <label>Event Date</label>
             <input type="date" v-model="eventSettings.date" class="text-input" />
           </div>
-          <div class="field-row">
+          <div class="field-row-col">
             <label>Organizer</label>
-            <input type="text" v-model="eventSettings.organizer" class="text-input" placeholder="Faculty of Computer Science and Information Technology" />
+            <input type="text" v-model="eventSettings.organizer" class="text-input" placeholder="Faculty of ..." style="width: 100%; min-width: unset;" />
           </div>
           <div class="field-row-col">
             <label>Contact Info</label>
@@ -432,6 +432,21 @@ async function saveSettings() {
 .datetime-input {
   min-width: 250px;
   color-scheme: dark;
+}
+
+@media (max-width: 768px) {
+  .field-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .field-row label {
+    display: block;
+  }
+  .text-input, .custom-select, .datetime-input {
+    width: 100%;
+    min-width: unset;
+  }
 }
 
 .operator-auth-box {

@@ -7,22 +7,6 @@
 
     <div class="app-page-layout settings-container">
       
-      <!-- Connection Status -->
-      <section class="card" :class="{ 'card-connected': boothConnected, 'card-disconnected': !boothConnected }">
-        <div class="card-header-flex">
-          <div>
-            <h2>Booth Connection</h2>
-            <p class="card-desc" style="margin-bottom:0;">
-              {{ boothConnected ? 'Booth is currently online and receiving updates.' : 'Booth is offline. Changes will sync when it reconnects.' }}
-            </p>
-          </div>
-          <div class="status-indicator">
-            <span class="pulse-dot" :class="{ 'active': boothConnected }"></span>
-            {{ boothConnected ? 'Connected' : 'Disconnected' }}
-          </div>
-        </div>
-      </section>
-
       <section class="card">
         <h2>Capture Flow</h2>
         <p class="card-desc">Configure the photo sequence and timing defaults.</p>
@@ -143,6 +127,22 @@
         </div>
       </section>
       
+      <!-- Connection Status -->
+      <section class="card" :class="{ 'card-connected': boothConnected, 'card-disconnected': !boothConnected }">
+        <div class="card-header-flex" style="margin-bottom:0;">
+          <div>
+            <h2>Booth Connection</h2>
+            <p class="card-desc" style="margin-bottom:0;">
+              {{ boothConnected ? 'Booth is currently online and receiving updates.' : 'Booth is offline. Changes will sync when it reconnects.' }}
+            </p>
+          </div>
+          <div class="status-indicator">
+            <span class="pulse-dot" :class="{ 'active': boothConnected }"></span>
+            {{ boothConnected ? 'Connected' : 'Disconnected' }}
+          </div>
+        </div>
+      </section>
+
       <div class="page-actions">
 
         <AppButton variant="secondary" @click="goBack">Cancel</AppButton>
@@ -445,4 +445,21 @@ async function saveSettings() {
   border-color: var(--color-text-sub);
 }
 
+@media (max-width: 768px) {
+  .field-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .field-row label {
+    display: block;
+  }
+  .text-input, .custom-select {
+    width: 100%;
+    min-width: unset;
+  }
+  .button-group, .focus-toggle {
+    width: 100%;
+  }
+}
 </style>

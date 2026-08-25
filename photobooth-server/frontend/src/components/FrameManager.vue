@@ -12,7 +12,7 @@
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            <span>Upload Frame</span>
+            <span class="hide-on-mobile">Upload Frame</span>
             <input type="file" @change="uploadFrame" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="display: none;" />
           </label>
         </div>
@@ -49,7 +49,7 @@
           <h3>{{ frame.name }}</h3>
           <p class="meta">{{ frame.canvasWidth }}x{{ frame.canvasHeight }} • {{ frame.placeholders.length }} slots</p>
           <div class="frame-actions">
-            <button v-if="!frame.isSpecial" @click="$emit('edit', frame)" class="btn-secondary">Edit</button>
+            <button v-if="!frame.isSpecial" @click="handleEdit(frame)" class="btn-secondary">Edit</button>
             <button @click="toggleStatus(frame)" :class="frame.disabled ? 'btn-enable' : 'btn-disable'">
               {{ frame.disabled ? 'Enable' : 'Disable' }}
             </button>
@@ -100,6 +100,15 @@ const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
 
 const props = defineProps<{ eventId: string }>()
 const emit = defineEmits<{ (e: 'edit', frame: any): void }>()
+
+function handleEdit(frame: any) {
+  if (window.innerWidth <= 768) {
+    if (!confirm('Frame editing is heavily optimized for desktop devices. It may be difficult to use on mobile. Do you wish to continue anyway?')) {
+      return
+    }
+  }
+  emit('edit', frame)
+}
 
 const frames = ref<any[]>([])
 const loading = ref(false)

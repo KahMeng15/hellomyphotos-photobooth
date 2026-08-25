@@ -28,6 +28,12 @@ body {
   background-color: var(--color-bg);
 }
 
+@media (max-width: 768px) {
+  body.has-bottom-nav #app {
+    padding-bottom: 60px; /* Space for the bottom navbar */
+  }
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -110,3 +116,10 @@ button, input, select, textarea {
 .app-page-layout > * {
   max-width: 100%;
 }
+
+@media (max-width: 768px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
