@@ -14,6 +14,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@hellomyphotos/shared": "file:../shared",
     "archiver": "^8.0.0",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^9.4.3",

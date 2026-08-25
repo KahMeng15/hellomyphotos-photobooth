@@ -6,8 +6,8 @@ import fs from 'fs/promises'
 import os from 'os'
 import sharp from 'sharp'
 import type { Metadata } from 'sharp'
-import { config } from '../config'
-import { logger } from '../utils/logger'
+import { config } from '@hellomyphotos/shared'
+import { logger } from '@hellomyphotos/shared'
 import { jobQueue } from '../queue'
 import { pendingCommands } from './booth'
 import { v4 as uuidv4 } from 'uuid'
@@ -21,8 +21,8 @@ import {
   updateEventSettingsById, getGlobalSettings, updateGlobalSettings,
   archiveSession, restoreSession, getEventAnalytics,
   getAllUsers, insertUser, deleteUser, findUserByEmail, regenerateSessionShareId, setEventShareOriginals,
-  getSessionShares, createSessionShare, setSessionShareStatus, deleteSessionShare, setSessionDimensions, addEventOperator, listEventOperators, deleteEventOperator
-} from '../db'
+  getSessionShares, createSessionShare, setSessionShareStatus, deleteSessionShare, setSessionDimensions, addEventOperator, listEventOperators, deleteEventOperator, getOrCreateEventShareToken
+} from '@hellomyphotos/shared'
 
 const router = Router()
 
@@ -1267,6 +1267,28 @@ router.put('/settings/defaults', requireRole('admin'), (req: Request, res: Respo
 
 router.get('/queue', (req: Request, res: Response) => {
   res.json({ queue: jobQueue.stats })
+})
+
+
+// Share Create Route (Moved from share.ts)
+router.post('/share/create', async (req: Request, res: Response) => {
+  try {
+    const { eventId } = req.body
+    if (!eventId) {
+      return res.status(400).json({ error: 'eventId required' })
+    }
+
+    const event = getEvent(eventId)
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' })
+    }
+
+    const token = getOrCreateEventShareToken(eventId)
+    res.json({ success: true, token })
+  } catch (error: any) {
+    logger.error('Error creating share link: ' + error.message)
+    res.status(500).json({ error: error.message })
+  }
 })
 
 export default router

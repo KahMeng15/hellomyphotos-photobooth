@@ -13,15 +13,16 @@ import uploadRoutes from './routes/upload'
 import adminRoutes from './routes/admin'
 import boothRoutes from './routes/booth'
 import healthRoutes from './routes/health'
+import internalRoutes from './routes/internal'
 import shareRoutes from './routes/share'
 
 import { authMiddleware } from './middleware/authMiddleware'
 import { errorHandler } from './middleware/errorHandler'
 import { requestLogger } from './middleware/requestLogger'
 import { csrfProtection, setCsrfToken } from './middleware/csrfMiddleware'
-import { config, projectRoot } from './config'
-import { logger } from './utils/logger'
-import { getEventByOtp } from './db'
+import { config, projectRoot } from '@hellomyphotos/shared'
+import { logger } from '@hellomyphotos/shared'
+import { getEventByOtp } from '@hellomyphotos/shared'
 
 const app = express()
 
@@ -85,10 +86,21 @@ apiRouter.use('/admin', adminRateLimiter, csrfProtection, authMiddleware, adminR
 
 // Booth and Share do not use session cookies, so CSRF is not applicable
 apiRouter.use('/booth', boothRoutes)
-apiRouter.use('/share', shareRateLimiter, shareRoutes)
+app.use('/internal', internalRoutes)
+app.use('/api/share', shareRoutes)
 
 apiRouter.use('/health', healthRoutes)
 apiRouter.use('/photos', adminRateLimiter, authMiddleware, express.static(config.storage.photos))
+
+
+// Legacy Share Link Redirect
+app.get('/share/:token', (req, res) => {
+  if (process.env.SHARE_BASE_URL) {
+    res.redirect(`${process.env.SHARE_BASE_URL.replace(/\/$/, '')}/share/${req.params.token}`)
+  } else {
+    res.status(404).send('Share base URL not configured')
+  }
+})
 
 app.use('/api', apiRouter)
 app.use('/hellomyphotos-photobooth-test/api', apiRouter)

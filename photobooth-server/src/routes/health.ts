@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
-import { config } from '../config'
+import { config } from '@hellomyphotos/shared'
 import { jobQueue } from '../queue'
 import { io } from '../server'
 

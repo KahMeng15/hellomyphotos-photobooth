@@ -1,8 +1,22 @@
 import fs from 'fs/promises'
 import path from 'path'
-import { config } from '@hellomyphotos/shared'
-import { FrameConfig } from '../pipeline'
-import { logger } from '@hellomyphotos/shared'
+import { config } from './config'
+import { logger } from './logger'
+
+export interface FrameConfig {
+  name: string;
+  canvasWidth: number;
+  canvasHeight: number;
+  layout: '1x3' | '1x4' | '2x2' | 'single';
+  photoBoxes: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation?: number;
+  }[];
+  disabled?: boolean;
+}
 
 export async function getActiveFrames(eventId: string): Promise<{ id: string, config: FrameConfig, imagePath: string }[]> {
   const framesDir = config.eventFrames(eventId)

@@ -1,18 +1,7 @@
 import path from 'path'
 import fs from 'fs'
 
-function getProjectRoot(startDir: string): string {
-  let current = path.resolve(startDir)
-  for (let i = 0; i < 10; i++) {
-    if (fs.existsSync(path.join(current, 'package.json'))) {
-      return current
-    }
-    current = path.join(current, '..')
-  }
-  return startDir
-}
-
-const projectRoot = getProjectRoot(__dirname)
+const projectRoot = process.env.STORAGE_ROOT || path.resolve(process.cwd())
 
 export { projectRoot }
 

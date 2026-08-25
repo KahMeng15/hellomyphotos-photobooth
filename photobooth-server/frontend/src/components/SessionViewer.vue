@@ -137,7 +137,7 @@
     <div v-else class="share-list">
       <div v-for="share in shares" :key="share.id" class="share-item">
         <div class="share-info">
-          <a :href="origin + baseUrl + '/share/' + share.id" target="_blank" class="share-url" title="Open Share Link">{{ baseUrl }}/share/{{ share.id }}</a>
+          <a :href="shareBaseUrl + '/' + share.id" target="_blank" class="share-url" title="Open Share Link">{{ shareBaseUrl }}/{{ share.id }}</a>
           <div class="share-date">{{ new Date(share.created_at).toLocaleString() }}</div>
         </div>
         <div class="share-actions">
@@ -233,6 +233,7 @@ const showManageSharesModal = ref(false)
 const shares = ref<any[]>([])
 
 const origin = window.location.origin
+const shareBaseUrl = import.meta.env.VITE_SHARE_BASE_URL || (origin + baseUrl + '/share')
 
 const activeFrames = ref<any[]>([])
 const selectedFrameId = ref<string>('')
@@ -495,7 +496,7 @@ async function copyPrimaryShare() {
     const primaryShare = shares.value.find((s: any) => s.is_active) || shares.value[0]
     if (!primaryShare) throw new Error('No shares available')
 
-    shareUrl = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, '')}/share/${primaryShare.id}`
+    shareUrl = `${shareBaseUrl}/${primaryShare.id}`
     await navigator.clipboard.writeText(shareUrl)
     linkCopied.value = true
     toast.success('Share link copied to clipboard!')
@@ -508,7 +509,7 @@ async function copyPrimaryShare() {
 
 async function copySpecificShare(shareId: string) {
   try {
-    await navigator.clipboard.writeText(`${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, '')}/share/${shareId}`)
+    await navigator.clipboard.writeText(`${shareBaseUrl}/${shareId}`)
     toast.success('Link copied to clipboard')
   } catch (err) {
     console.error(err)
@@ -527,7 +528,7 @@ async function showPrimaryQr() {
 }
 
 async function showSpecificQr(shareId: string) {
-  shareUrl = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, '')}/share/${shareId}`
+  shareUrl = `${shareBaseUrl}/${shareId}`
   showQrCode.value = true
   const qrUrl = shareUrl.includes('?') ? `${shareUrl}&ref=qr` : `${shareUrl}?ref=qr`
   currentQrLink.value = qrUrl

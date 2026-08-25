@@ -1,6 +1,11 @@
 services:
   photobooth-server:
-    image: ghcr.io/kahmeng15/hellomyphoto-server:latest
+    build:
+      context: .
+      dockerfile: photobooth-server/Dockerfile
+      args:
+        - VITE_SHARE_BASE_URL=${VITE_SHARE_BASE_URL}
+
     container_name: hellomyphoto-server
     ports:
       - "3000:3000"
@@ -9,13 +14,35 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      STORAGE_ROOT: /app
     volumes:
       - ./storage/photos:/app/storage/photos
       - ./storage/frames:/app/storage/frames
       - ./storage/logs:/app/storage/logs
+      - ./storage/db:/app/storage/db
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  photobooth-share:
+    build:
+      context: .
+      dockerfile: photobooth-share/Dockerfile
+    container_name: hellomyphoto-share
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      STORAGE_ROOT: /app
+    volumes:
+      - ./storage/photos:/app/storage/photos:ro
+      - ./storage/frames:/app/storage/frames:ro
+      - ./storage/logs:/app/storage/logs:ro
+      - ./storage/db:/app/storage/db:ro
+    restart: always

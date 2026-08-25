@@ -2,10 +2,10 @@ import { Router, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import { v4 as uuidv4 } from 'uuid'
-import { config } from '../config'
-import { logger } from '../utils/logger'
+import { config } from '@hellomyphotos/shared'
+import { logger } from '@hellomyphotos/shared'
 import { checkLoginLockout, recordFailedLogin, clearFailedLogin } from '../middleware/authMiddleware'
-import { findUserByEmail, countUsers, insertUser, getEvent, getEventOperatorByToken, logAuditAction } from '../db'
+import { findUserByEmail, countUsers, insertUser, getEvent, getEventOperatorByToken, logAuditAction } from '@hellomyphotos/shared'
 
 const router = Router()
 

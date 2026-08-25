@@ -22,3 +22,18 @@ photobooth-server/public/
 # SQLite database (local runtime data)
 photobooth-server/storage/db/
 tmpfile*
+
+# Share server generated assets
+photobooth-share/public/app.js
+photobooth-share/public/app.js.map
+photobooth-share/public/app.css
+photobooth-share/dist/
+
+# Shared library
+shared/dist/
+
+# Root storage (just in case)
+/storage/
+
+# Accidental share storage
+photobooth-share/storage/

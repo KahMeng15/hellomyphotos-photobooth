@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
-import { config } from '../config'
-import { getEventByOtp } from '../db'
-import { logger } from '../utils/logger'
+import { config } from '@hellomyphotos/shared'
+import { getEventByOtp } from '@hellomyphotos/shared'
+import { logger } from '@hellomyphotos/shared'
 
 const loginAttempts = new Map<string, { count: number; resetTime: number }>()
 const otpAttempts = new Map<string, { count: number; resetTime: number }>()

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>hellomyphotos</title>
+  <style>
+    /* CSS logic from ShareView.vue */
+    :root {
+      --color-bg: #111;
+      --color-text: #eee;
+      --color-card-bg: #222;
+      --color-primary: #3b82f6;
+      --radius-md: 8px;
+    }
+    body { margin: 0; padding: 0; background: var(--color-bg); color: var(--color-text); font-family: -apple-system, sans-serif; }
+    .share-page { min-height: 100vh; display: flex; flex-direction: column; }
+    .share-content { flex: 1; display: flex; flex-direction: column; max-width: 800px; margin: 0 auto; padding: 2rem 1rem; width: 100%; box-sizing: border-box; }
+    .share-header { text-align: center; margin-bottom: 2rem; }
+    .share-header h1 { margin: 0 0 0.5rem; font-size: 1.5rem; font-weight: 600; }
+    .subtitle { margin: 0; color: #9ca3af; font-size: 0.95rem; }
+    .contact-link { color: var(--color-primary); text-decoration: none; cursor: pointer; }
+    .contact-link:hover { text-decoration: underline; }
+    
+    .hero-preview { margin-bottom: 2rem; border-radius: 12px; overflow: hidden; }
+    .hero-img-wrap { position: relative; width: 100%; aspect-ratio: 3/2; overflow: hidden; border-radius: 12px; }
+    .hero-img-wrap img { position: relative; width: 100%; height: 100%; object-fit: contain; z-index: 1; }
+    .blur-bg { position: absolute; inset: -20px; background-size: cover; background-position: center; filter: blur(20px) brightness(0.5); z-index: 0; }
+    
+    .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; }
+    .photo-card { display: flex; flex-direction: column; gap: 0.5rem; }
+    .card-img-wrap { position: relative; width: 100%; aspect-ratio: 2/3; border-radius: 8px; overflow: hidden; cursor: pointer; }
+    .card-img-wrap img { position: relative; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0; transition: opacity 0.3s; }
+    .card-img-wrap img.loaded { opacity: 1; }
+    .download-btn { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.5rem; background: var(--color-card-bg); color: var(--color-text); text-decoration: none; border-radius: 6px; font-size: 0.85rem; }
+    .download-btn:hover { background: #333; }
+    
+    .actions-wrapper { margin-top: 3rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+    .btn-download-all { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; background: var(--color-primary); color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 500; cursor: pointer; }
+    .btn-download-all:hover { filter: brightness(1.1); }
+    .expiry-text { color: #9ca3af; font-size: 0.85rem; margin: 0; }
+    
+    .share-footer { text-align: center; padding: 2rem 1rem; color: #6b7280; font-size: 0.8rem; line-height: 1.5; }
+    .share-footer a { color: #9ca3af; text-decoration: none; }
+    .share-footer a:hover { text-decoration: underline; color: #fff; }
+    
+    .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 100; display: none; align-items: center; justify-content: center; }
+    .lightbox.active { display: flex; }
+    .lightbox-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: white; font-size: 2rem; cursor: pointer; z-index: 10; padding: 0.5rem; line-height: 1; transition: opacity 0.3s; }
+    .lightbox-nav-btn { position: absolute; top: 50%; transform: translateY(-50%); background: none; border: none; color: white; cursor: pointer; padding: 1rem; z-index: 10; transition: opacity 0.3s; }
+    .lightbox-prev { left: 1rem; }
+    .lightbox-next { right: 1rem; }
+    .hidden-control { opacity: 0; pointer-events: none; }
+    
+    .lightbox-img-wrap { position: relative; max-width: 90vw; max-height: 90vh; display: flex; align-items: center; justify-content: center; }
+    .lightbox-img { max-width: 90vw; max-height: 90vh; object-fit: contain; z-index: 2; position: relative; opacity: 0; transition: opacity 0.3s; }
+    .lightbox-img.lb-loaded { opacity: 1; }
+    .lightbox-thumb { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; z-index: 1; filter: blur(10px); transition: opacity 0.3s; }
+    .thumb-hidden { opacity: 0; }
+    
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 200; display: none; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal-page { background: var(--color-bg); border-radius: var(--radius-md); padding: 1.5rem; max-width: 400px; width: 90%; }
+    .modal-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; border-bottom: 1px solid #333; padding-bottom: 1rem; }
+    .modal-header h2 { margin: 0; font-size: 1.25rem; }
+    .back-btn { background: none; border: none; color: white; cursor: pointer; padding: 0; display: flex; }
+    
+    .skeleton-pulse { background: linear-gradient(90deg, #222 25%, #333 50%, #222 75%); background-size: 200% 100%; animation: pulse 1.5s infinite; border-radius: var(--radius-md); }
+    @keyframes pulse { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="share-page">
+    <div id="loader" class="share-content skeleton-loader">
+      <header class="share-header skeleton-pulse" style="height: 60px; max-width: 300px; margin: 0 auto 2rem;"></header>
+      <div class="photo-grid">
+        <div class="photo-card skeleton-pulse" style="aspect-ratio: 2/3;"></div>
+        <div class="photo-card skeleton-pulse" style="aspect-ratio: 2/3;"></div>
+        <div class="photo-card skeleton-pulse" style="aspect-ratio: 2/3;"></div>
+      </div>
+    </div>
+
+    <div id="error" class="error hidden" style="text-align: center; margin-top: 4rem;">
+      <h2>Link not found</h2>
+      <p>This share link is invalid or could not be found.</p>
+    </div>
+
+    <div id="expired" class="error hidden" style="text-align: center; margin-top: 4rem;">
+      <h2>Link Expired</h2>
+      <p>This share link has expired and is no longer accessible.</p>
+    </div>
+
+    <div id="content" class="share-content hidden">
+      <header class="share-header">
+        <h1>Hello there! Here are your photos!</h1>
+        <p class="subtitle">
+          <span id="event-name"></span><br/>
+          <a id="contact-link" class="contact-link hidden"></a>
+          <span id="organizer-text"></span>
+        </p>
+      </header>
+
+      <div id="hero-preview" class="hero-preview hidden">
+        <div class="hero-img-wrap">
+          <div id="hero-blur" class="blur-bg"></div>
+          <img id="hero-img" alt="Preview animation" />
+        </div>
+      </div>
+
+      <div id="photo-grid" class="photo-grid"></div>
+
+      <div class="actions-wrapper">
+        <button id="download-all-btn" class="btn-download-all">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download All
+        </button>
+        <p id="expiry-text" class="expiry-text"></p>
+      </div>
+    </div>
+
+    <footer class="share-footer hidden" id="footer">
+      <p>
+        Photos taken with <a href="https://hellomyphotos.vercel.app" target="_blank">hellomyphotos</a>, an app project by <a href="https://kahmeng15.github.io" target="_blank">kahmeng</a>.<br/>
+        Learn more about this app at <a href="https://hellomyphotos.vercel.app" target="_blank">hellomyphotos.vercel.app</a>.<br/>
+        Have some feedback? Submit it <a href="https://kahmeng15.github.io/feedback/" target="_blank">here</a>.
+      </p>
+    </footer>
+  </div>
+
+  <div id="lightbox" class="lightbox">
+    <button id="lb-close" class="lightbox-close">✕</button>
+    <button id="lb-prev" class="lightbox-nav-btn lightbox-prev">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </button>
+
+    <div class="lightbox-img-wrap">
+      <div id="lb-blur" class="blur-bg"></div>
+      <img id="lb-thumb" class="lightbox-thumb" aria-hidden="true" />
+      <img id="lb-img" class="lightbox-img" alt="Photo" />
+    </div>
+
+    <button id="lb-next" class="lightbox-nav-btn lightbox-next">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+    </button>
+  </div>
+
+  <div id="contact-modal" class="modal-overlay">
+    <div class="modal-page">
+      <div class="modal-header">
+        <button id="modal-close" class="back-btn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+        <h2>Contact Organizer</h2>
+      </div>
+      <div class="modal-body">
+        <div id="contact-info-text" style="white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; color: var(--color-text);"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/snapsync/share/app.js"></script>
+</body>
+</html>

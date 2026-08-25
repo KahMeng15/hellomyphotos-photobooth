@@ -2,8 +2,8 @@ import sharp from 'sharp'
 import type { OverlayOptions } from 'sharp'
 import path from 'path'
 import fs from 'fs/promises'
-import { config } from './config'
-import { logger } from './utils/logger'
+import { config } from '@hellomyphotos/shared'
+import { logger } from '@hellomyphotos/shared'
 
 export interface ProcessedImage {
   path: string

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
-import { getGlobalSettings } from '../db'
-import { logger } from '../utils/logger'
+import { getGlobalSettings } from '@hellomyphotos/shared'
+import { logger } from '@hellomyphotos/shared'
 import crypto from 'crypto'
 
 const WINDOW_MS = 15 * 60 * 1000 // 15 minutes

@@ -7,15 +7,23 @@ export function connectBoothSocket(serverUrl: string, otp: string) {
   if (boothSocket?.connected) {
     boothSocket.disconnect()
   }
+
+  // Socket.IO's first argument is treated as the server origin (+ optional namespace).
+  // If serverUrl contains a pathname (e.g. https://host/hellomyphotos-photobooth-test/),
+  // passing it directly makes Socket.IO use that path as the *namespace*, doubling it up
+  // and causing connection failures. We must pass only the origin and put the pathname
+  // into the `path` option as the Socket.IO endpoint prefix.
+  let socketOrigin = serverUrl
   let path = '/socket.io'
   try {
     const parsedUrl = new URL(serverUrl)
+    socketOrigin = parsedUrl.origin
     if (parsedUrl.pathname && parsedUrl.pathname !== '/') {
       path = parsedUrl.pathname.replace(/\/+$/, '') + '/socket.io'
     }
   } catch {}
 
-  boothSocket = io(serverUrl, {
+  boothSocket = io(socketOrigin, {
     auth: { otp },
     path,
     transports: ['websocket', 'polling'],

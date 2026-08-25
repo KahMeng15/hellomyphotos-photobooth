@@ -1,11 +1,11 @@
 import crypto from 'crypto'
-import { config } from '../config'
+import { config } from './config'
 
-export function generateSignedUrl(shareToken: string, id: string, expiresInSeconds: number = 3600): string {
+export function generateSignedUrl(shareToken: string, id: string, expiresInSeconds: number = 3600, baseUrl: string = '/api/share'): string {
   const exp = Math.floor(Date.now() / 1000) + expiresInSeconds
   const payload = `${shareToken}:${id}:${exp}`
   const sig = crypto.createHmac('sha256', config.security.signedUrlSecret).update(payload).digest('hex')
-  return `/api/share/${shareToken}/photo/${encodeURIComponent(id)}?exp=${exp}&sig=${sig}`
+  return `${baseUrl.replace(/\/$/, '')}/${shareToken}/photo/${encodeURIComponent(id)}?exp=${exp}&sig=${sig}`
 }
 
 export function verifySignedUrl(shareToken: string, id: string, exp: string, sig: string): boolean {

@@ -28,17 +28,17 @@ export default defineConfig({
     port: 5173,
     proxy: {
       [`${process.env.VITE_BASE_URL || '/'}api`]: {
-        target: 'http://localhost:3000',
+        target: 'http://127.0.0.1:3000',
         changeOrigin: true,
         rewrite: (path) => path.replace(new RegExp(`^${process.env.VITE_BASE_URL || '/'}`), '/')
       },
       [`${process.env.VITE_BASE_URL || '/'}socket.io`]: {
-        target: 'http://localhost:3000',
+        target: 'http://127.0.0.1:3000',
         ws: true,
         rewrite: (path) => path.replace(new RegExp(`^${process.env.VITE_BASE_URL || '/'}`), '/')
       },
       '/socket.io': {
-        target: 'http://localhost:3000',
+        target: 'http://127.0.0.1:3000',
         ws: true,
       },
     },

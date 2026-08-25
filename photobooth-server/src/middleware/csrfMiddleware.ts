@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import crypto from 'crypto'
-import { config } from '../config'
+import { config } from '@hellomyphotos/shared'
 
 const CSRF_COOKIE = 'csrf-token'
 const CSRF_HEADER = 'x-csrf-token'

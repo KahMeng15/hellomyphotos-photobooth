@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events'
-import { config } from './config'
-import { logger } from './utils/logger'
+import { config } from '@hellomyphotos/shared'
+import { logger } from '@hellomyphotos/shared'
 
 interface QueueJob {
   id: string

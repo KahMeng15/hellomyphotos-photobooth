@@ -131,9 +131,10 @@ export const usePhotosStore = defineStore('photos', () => {
   }
 
   async function createShareLink(eventId: string): Promise<string> {
-    const { data } = await axios.post('/api/share/create', { eventId })
+    const { data } = await axios.post('/api/admin/share/create', { eventId })
     const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
-    return `${window.location.origin}${baseUrl}/share/${data.token}`
+    const shareBaseUrl = import.meta.env.VITE_SHARE_BASE_URL || (`${window.location.origin}${baseUrl}/share`)
+    return `${shareBaseUrl}/${data.token}`
   }
 
   async function fetchFrames() {
