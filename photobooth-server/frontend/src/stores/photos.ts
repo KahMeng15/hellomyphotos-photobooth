@@ -132,7 +132,8 @@ export const usePhotosStore = defineStore('photos', () => {
 
   async function createShareLink(eventId: string): Promise<string> {
     const { data } = await axios.post('/api/share/create', { eventId })
-    return data.url
+    const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
+    return `${window.location.origin}${baseUrl}/share/${data.token}`
   }
 
   async function fetchFrames() {
@@ -168,7 +169,8 @@ export const usePhotosStore = defineStore('photos', () => {
   }
 
   function triggerQrCode(photo: Photo) {
-    qrUrl.value = `${window.location.origin}/api/photos/${photo.id}`
+    const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
+    qrUrl.value = `${window.location.origin}${baseUrl}/api/photos/${photo.id}`
     showQrCode.value = true
   }
 

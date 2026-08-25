@@ -13,8 +13,9 @@ export function useWebSocket() {
     if (!auth.accessToken) return
 
     const socketUrl = `${window.location.protocol}//${window.location.host}`
+    const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
     const socket = io(socketUrl, {
-      path: '/socket.io',
+      path: `${baseUrl}/socket.io`,
       auth: { token: auth.accessToken },
       transports: ['websocket'],
       reconnection: true,

@@ -137,7 +137,7 @@
     <div v-else class="share-list">
       <div v-for="share in shares" :key="share.id" class="share-item">
         <div class="share-info">
-          <a :href="origin + '/share/' + share.id" target="_blank" class="share-url" title="Open Share Link">/share/{{ share.id }}</a>
+          <a :href="origin + baseUrl + '/share/' + share.id" target="_blank" class="share-url" title="Open Share Link">{{ baseUrl }}/share/{{ share.id }}</a>
           <div class="share-date">{{ new Date(share.created_at).toLocaleString() }}</div>
         </div>
         <div class="share-actions">
