@@ -8,7 +8,7 @@ import helmet from 'helmet'
 import cors from 'cors'
 import path from 'path'
 
-import { config, logger } from '@hellomyphotos/shared'
+import { config, logger, shareRateLimiter } from '@hellomyphotos/shared'
 import shareRoutes from './routes/share'
 
 const app = express()
@@ -25,7 +25,7 @@ app.use(cors(corsOptions))
 
 const basePath = '/snapsync'
 
-app.use(`${basePath}/api/share`, shareRoutes)
+app.use(`${basePath}/api/share`, shareRateLimiter, shareRoutes)
 
 const isDev = process.argv.includes('tsx') || __dirname.includes('src');
 const publicPath = path.join(__dirname, isDev ? '..' : '../../', 'public');

@@ -87,7 +87,7 @@ apiRouter.use('/admin', adminRateLimiter, csrfProtection, authMiddleware, adminR
 // Booth and Share do not use session cookies, so CSRF is not applicable
 apiRouter.use('/booth', boothRoutes)
 app.use('/internal', internalRoutes)
-app.use('/api/share', shareRoutes)
+app.use('/api/share', shareRateLimiter, shareRoutes)
 
 apiRouter.use('/health', healthRoutes)
 apiRouter.use('/photos', adminRateLimiter, authMiddleware, express.static(config.storage.photos))
