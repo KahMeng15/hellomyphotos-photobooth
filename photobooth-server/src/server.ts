@@ -73,8 +73,7 @@ const staticOpts = { maxAge: '1y', etag: false, immutable: true };
 
 app.use(express.static(publicPath, staticOpts));
 
-// Fallback: Also mount on /hellomyphotos-photobooth-test in case Nginx regex blocks don't strip the prefix
-app.use('/hellomyphotos-photobooth-test', express.static(publicPath, staticOpts));
+
 
 const apiRouter = express.Router();
 // Apply CSRF protection to routes that rely on cookies
@@ -103,7 +102,7 @@ app.get('/share/:token', (req, res) => {
 })
 
 app.use('/api', apiRouter)
-app.use('/hellomyphotos-photobooth-test/api', apiRouter)
+
 
 // Track booth sockets per event
 const boothSockets = new Map<string, Set<string>>()
@@ -313,7 +312,7 @@ function getBoothStatus() {
 app.use(errorHandler)
 
 app.get('*', (req, res) => {
-  const isApi = req.path.startsWith('/api/') || req.path.startsWith('/hellomyphotos-photobooth-test/api/')
+  const isApi = req.path.startsWith('/api/')
   if (isApi) {
     return res.status(404).json({ error: 'Not found' })
   }

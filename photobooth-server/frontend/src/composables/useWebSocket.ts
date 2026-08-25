@@ -11,17 +11,7 @@ export function useWebSocket() {
 
     const auth = useAuthStore()
     if (!auth.accessToken) return
-
-    // Extract the base path dynamically from the current URL to ensure it works
-    // even if VITE_BASE_URL was not set during build.
-    const pathname = window.location.pathname
-    let basePath = ''
-    if (pathname.includes('/hellomyphotos-photobooth-test')) {
-      basePath = '/hellomyphotos-photobooth-test'
-    } else {
-      basePath = import.meta.env.BASE_URL.replace(/\/$/, '')
-    }
-
+    const basePath = import.meta.env.BASE_URL.replace(/\/$/, '')
     const socketUrl = `${window.location.protocol}//${window.location.host}`
     const socket = io(socketUrl, {
       path: `${basePath}/socket.io`,
