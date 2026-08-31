@@ -25,7 +25,7 @@ app.use(cors(corsOptions))
 
 const basePath = '/snapsync'
 
-app.use(`${basePath}/api/share`, shareRateLimiter, shareRoutes)
+app.use(`${basePath}/api/share`, shareRateLimiter as any, shareRoutes as any)
 
 const isDev = process.argv.includes('tsx') || __dirname.includes('src');
 const publicPath = path.join(__dirname, isDev ? '..' : '../../', 'public');

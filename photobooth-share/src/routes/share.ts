@@ -82,9 +82,10 @@ router.get('/:token', async (req: Request, res: Response) => {
     let eventId = getEventIdByShareToken(token)
     let isSessionToken = false
     let sessionFilter = ''
+    let sess: any = null
 
     if (!eventId) {
-      let sess = getPhotoSessionByShareId(token)
+      sess = getPhotoSessionByShareId(token)
       if (!sess) sess = getPhotoSession(token) as any
       if (sess) {
         eventId = sess.event_id
@@ -212,6 +213,7 @@ router.get('/:token', async (req: Request, res: Response) => {
     res.json({
       eventId: event.id,
       eventName: event.name,
+      shareTitle: sess?.share_title || null,
       organizer: (event as any).organizer || '',
       contactInfo: (event as any).contact_info || '',
       eventDate: event.date,

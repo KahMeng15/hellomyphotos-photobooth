@@ -140,6 +140,8 @@ interface SessionData {
   photos: SessionPhoto[]
   organizer?: string
   contactInfo?: string
+  eventName?: string
+  shareTitle?: string | null
 }
 
 const route = useRoute()

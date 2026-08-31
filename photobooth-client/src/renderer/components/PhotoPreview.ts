@@ -90,14 +90,9 @@ export class PhotoPreview {
     this.overlay.style.display = 'flex'
 
     const title = document.createElement('h2')
-    title.textContent = 'Your Photos'
+    title.textContent = postSessionMessage || 'Your Photos'
     title.className = 'ui-photo-preview-title'
     this.overlay.appendChild(title)
-    const msg = document.createElement('p')
-    msg.className = 'ui-photo-preview-message'
-    msg.textContent = postSessionMessage || ''
-    if (!postSessionMessage) msg.style.display = 'none'
-    this.overlay.appendChild(msg)
 
     
 

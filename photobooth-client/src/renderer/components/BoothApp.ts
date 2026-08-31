@@ -781,6 +781,7 @@ export class BoothApp {
     } else if (cmd.type === 'settings-update') {
       this.settingsData = { ...this.settingsData, ...cmd.settings }
       window.hellomyphoto?.saveSettings(this.settingsData)
+      this.updateLandingText()
       if (cmd.settings?.dslrFocusMode) {
         window.hellomyphoto?.dslrSetFocusMode(cmd.settings.dslrFocusMode)
       }
@@ -922,7 +923,9 @@ export class BoothApp {
     this.updateStartBtn()
 
     document.addEventListener('booth-socket-connect', () => this.updateStartBtn())
+    document.addEventListener('booth-socket-connect', () => this.updateStartBtn())
     document.addEventListener('booth-socket-disconnect', () => this.updateStartBtn())
+    this.updateLandingText()
   }
 
   private async fetchEventSettings() {
@@ -935,6 +938,7 @@ export class BoothApp {
         const data = await res.json()
         this.settingsData = { ...this.settingsData, ...data }
         window.hellomyphoto?.saveSettings(this.settingsData)
+        this.updateLandingText()
       }
     } catch {
       // Server unreachable — keep local settings
@@ -1194,6 +1198,12 @@ export class BoothApp {
     this.pauseBtn.style.display = 'flex'
     this.stateDisplay.textContent = ''
 
+    // Pick messages for this session
+    this.sessionMessages = {
+      postSession: this.pickMessage('postSession') || '',
+      shareTitle: this.pickMessage('shareTitle') || ''
+    }
+
     const photoCount = this.settingsData.photoCount
     const paths: string[] = []
     this.currentSessionId = `session_${Date.now()}`
@@ -1218,7 +1228,8 @@ export class BoothApp {
         }
       } : undefined
 
-      await this.countdown.play(this.settingsData.countdown, audioCtx, onPrep, () => this.waitIfPaused(), offset)
+      const countdownMsg = this.pickMessage('countdown')
+      await this.countdown.play(this.settingsData.countdown, audioCtx, onPrep, () => this.waitIfPaused(), offset, countdownMsg)
       if (!this.isCapturing) { audioCtx.close(); return }
       const tCountdownEnd = Date.now()
       console.log(`[BoothApp] ⏱ COUNTDOWN = 0 at t+${tCountdownEnd - tCountdownStart} ms`)
@@ -1399,7 +1410,8 @@ export class BoothApp {
         }
       } : undefined
 
-      await this.countdown.play(this.settingsData.countdown, audioCtx, onPrep, () => this.waitIfPaused(), offset)
+      const countdownMsg = this.pickMessage('countdown')
+      await this.countdown.play(this.settingsData.countdown, audioCtx, onPrep, () => this.waitIfPaused(), offset, countdownMsg)
       if (!this.isCapturing) { audioCtx.close(); return }
 
       let result: { success: boolean; path?: string; error?: string }

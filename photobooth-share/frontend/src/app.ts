@@ -20,6 +20,7 @@ interface SessionData {
   organizer?: string
   contactInfo?: string
   eventName?: string
+  shareTitle?: string | null
 }
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -80,6 +81,9 @@ function render(token: string) {
   $('content').classList.remove('hidden');
   $('footer').classList.remove('hidden');
 
+  if (sessionData!.shareTitle) {
+    $('share-title').textContent = sessionData!.shareTitle;
+  }
   $('event-name').textContent = sessionData!.eventName || 'hellomyphotos';
   
   if (sessionData!.organizer) {
