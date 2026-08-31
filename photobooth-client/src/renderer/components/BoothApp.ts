@@ -51,6 +51,8 @@ export class BoothApp {
   private captureProgressBars!: HTMLDivElement
 
   private isCapturing = false
+  private landingBrandEl: HTMLHeadingElement | null = null
+  private landingSubtitleEl: HTMLParagraphElement | null = null
   private isLive = false
   private isTransitioning = false
   private isPaused = false
@@ -81,7 +83,43 @@ export class BoothApp {
   private serverUrl = ''
   private _state: BoothState = 'idle'
   private currentSessionId: string | null = null
+
+  private updateLandingText() {
+    if (this.landingBrandEl) {
+      this.landingBrandEl.textContent = this.pickMessage('homepage') || 'hellomyphoto'
+      this.landingBrandEl.classList.add('loaded')
+    }
+    if (this.landingSubtitleEl) {
+      this.landingSubtitleEl.textContent = (this.settingsData as any)?.eventName || 'Photo Booth'
+      this.landingSubtitleEl.classList.add('loaded')
+    }
+  }
+
+  private pickMessage(slot: string): string | null {
+    if (!this.settingsData || !(this.settingsData as any).messages) return ""
+    let messages = (this.settingsData as any).messages[slot] as string[]
+    const order = (this.settingsData as any).msgOrder || 'random'
+
+    const FALLBACKS: Record<string, string[]> = { homepage: ["Ready to strike a pose!"], countdown: ["Smile!"], postSession: ["Looking great!"], shareTitle: ["Here are your photos!"] }
+    if (!messages || messages.length === 0) messages = FALLBACKS[slot]
+    if (!messages || messages.length === 0) return ""
+    if (order === 'random') return messages[Math.floor(Math.random() * messages.length)]
+
+    const idx = ((this.settingsData as any).msgSeqIndex?.[slot] || 0) % messages.length
+    if (!(this.settingsData as any).msgSeqIndex) (this.settingsData as any).msgSeqIndex = { homepage: 0, countdown: 0, postSession: 0, shareTitle: 0 };
+    (this.settingsData as any).msgSeqIndex[slot] = idx + 1
+    
+    if ((window as any).require) {
+      const { ipcRenderer } = (window as any).require('electron')
+      ipcRenderer.invoke('persist-msg-seq-index', (this.settingsData as any).msgSeqIndex).catch(() => {})
+    }
+
+    return messages[idx]
+  }
+
+
   private currentSessionUploaded = false
+  private sessionMessages = { postSession: "", shareTitle: "" }
   private currentPaths: string[] = []
 
   constructor() {
@@ -201,15 +239,28 @@ export class BoothApp {
     this.landingEl = document.createElement('div')
     this.landingEl.className = 'booth-landing'
 
-    const brand = document.createElement('h1')
-    brand.textContent = 'hellomyphoto'
-    brand.className = 'booth-landing-brand'
-    this.landingEl.appendChild(brand)
+    this.landingBrandEl = document.createElement('h1')
+    this.landingBrandEl.textContent = ''
+    this.landingBrandEl.className = 'booth-landing-brand'
+    this.landingEl.appendChild(this.landingBrandEl)
 
-    const subtitle = document.createElement('p')
-    subtitle.textContent = 'Photo Booth'
-    subtitle.className = 'booth-landing-subtitle'
-    this.landingEl.appendChild(subtitle)
+    this.landingSubtitleEl = document.createElement('p')
+    this.landingSubtitleEl.textContent = ''
+    this.landingSubtitleEl.className = 'booth-landing-subtitle'
+    this.landingEl.appendChild(this.landingSubtitleEl)
+
+    const footer = document.createElement('div')
+    footer.style.position = 'absolute'
+    footer.style.bottom = '1.5rem'
+    footer.style.width = '100%'
+    footer.style.textAlign = 'center'
+    footer.style.fontSize = '0.85rem'
+    footer.style.color = '#555'
+    footer.style.fontWeight = '500'
+    footer.style.letterSpacing = '0.05em'
+    footer.style.fontFamily = 'inherit';
+    footer.textContent = 'hellomyphoto'
+    this.landingEl.appendChild(footer)
 
     this.startBtn = document.createElement('button')
     this.startBtn.textContent = 'Start'
@@ -1055,6 +1106,7 @@ export class BoothApp {
     if (this.isTransitioning) return
     this.isTransitioning = true
     try {
+      this.updateLandingText()
       this.photoPreview.hide()
       this.previewWindow.style.display = 'flex'
       this.statusBar.style.display = 'flex'
@@ -1455,7 +1507,7 @@ export class BoothApp {
     this.isCapturing = false
     this._state = 'preview'
     this.emitBoothState()
-    this.photoPreview.show(paths, null, this.settingsData.serverUrl, this.settingsData.otp, sessionId)
+    this.photoPreview.show(paths, null, this.settingsData.serverUrl, this.settingsData.otp, sessionId, this.sessionMessages.postSession)
     this.photoPreview.updateProgress(0, 'Preparing...')
     this.previewWindow.style.display = 'none'
     this.statusBar.style.display = 'none'
@@ -1468,6 +1520,7 @@ export class BoothApp {
       imagePaths: filePaths,
       imageBuffers: blobBuffers.length > 0 ? blobBuffers : undefined,
       photoCount: paths.length,
+      shareTitle: this.sessionMessages.shareTitle
     })
 
     if (uploadResult?.queued) {

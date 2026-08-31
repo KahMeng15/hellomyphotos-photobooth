@@ -52,7 +52,7 @@ router.get('/:token/status', async (req: Request, res: Response) => {
     let photosReady = 0
     try {
       // Try framed photos dir first, then raw
-      let sess = getPhotoSessionByShareId(token)
+      let sess: any = getPhotoSessionByShareId(token)
       if (!sess) sess = getPhotoSession(token) as any
       if (sess?.event_id) {
         const eventDir = config.eventPhotosDir(sess.event_id)
@@ -82,9 +82,10 @@ router.get('/:token', async (req: Request, res: Response) => {
     let eventId = getEventIdByShareToken(token)
     let isSessionToken = false
     let sessionFilter = ''
+    let sess: any = null
 
     if (!eventId) {
-      let sess = getPhotoSessionByShareId(token)
+      sess = getPhotoSessionByShareId(token)
       if (!sess) sess = getPhotoSession(token) as any
       if (sess) {
         eventId = sess.event_id
@@ -212,6 +213,7 @@ router.get('/:token', async (req: Request, res: Response) => {
     res.json({
       eventId: event.id,
       eventName: event.name,
+      shareTitle: sess?.share_title || null,
       organizer: (event as any).organizer || '',
       contactInfo: (event as any).contact_info || '',
       eventDate: event.date,

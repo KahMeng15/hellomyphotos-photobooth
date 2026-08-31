@@ -1,6 +1,7 @@
 export class CountdownUI {
   private overlay: HTMLElement
   private countdownEl: HTMLDivElement
+  private messageEl: HTMLDivElement
 
   constructor(overlay: HTMLElement) {
     this.overlay = overlay
@@ -8,9 +9,14 @@ export class CountdownUI {
     this.countdownEl = document.createElement('div')
     this.countdownEl.className = 'ui-countdown'
     this.overlay.appendChild(this.countdownEl)
+
+    this.messageEl = document.createElement('div')
+    this.messageEl.className = 'ui-countdown-message'
+    this.overlay.appendChild(this.messageEl)
   }
 
-  async play(seconds: number, audioCtx: AudioContext, onPrep?: () => void, pauseCheck?: () => Promise<void>, prepAt = 1): Promise<void> {
+  async play(seconds: number, audioCtx: AudioContext, onPrep?: () => void, pauseCheck?: () => Promise<void>, prepAt = 1, message?: string | null): Promise<void> {
+    this.messageEl.textContent = message || ''
     const prepTick = Math.ceil(prepAt)
     for (let i = seconds; i > 0; i--) {
       if (pauseCheck) await pauseCheck()
@@ -31,6 +37,7 @@ export class CountdownUI {
 
     this.countdownEl.textContent = ''
     this.countdownEl.style.opacity = '0'
+    this.messageEl.textContent = ''
   }
 
   private playBeep(audioCtx: AudioContext, frequency: number) {

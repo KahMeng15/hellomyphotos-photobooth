@@ -3,7 +3,7 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs/promises'
 import { v4 as uuidv4 } from 'uuid'
-import { config } from '@hellomyphotos/shared'
+import { config, resolveMessages, getGlobalSettings, updateSessionShareTitle } from '@hellomyphotos/shared'
 import { logger } from '@hellomyphotos/shared'
 import { boothAuthMiddleware, authMiddleware, checkOtpRateLimit, recordFailedOtpAttempt } from '../middleware/authMiddleware'
 import { io, operatorSubscriptions } from '../server'
@@ -144,6 +144,10 @@ router.post('/upload', boothAuthMiddleware, upload.array('photos', config.upload
     logger.info(`Booth upload: ${files.length} photos, event=${eventId}, session=${sessionId}`)
 
     const shareId = ensurePhotoSession(sessionId, eventId)
+    const shareTitle = req.body.shareTitle || null
+    if (shareTitle) {
+      updateSessionShareTitle(sessionId, shareTitle)
+    }
 
     const uploadStartTime = Date.now()
     const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0)
@@ -372,7 +376,9 @@ router.get('/settings', async (req: Request, res: Response) => {
     recordFailedOtpAttempt(req)
     return res.status(404).json({ error: 'Event not found for OTP' })
   }
+    const globals = getGlobalSettings();
   res.json({
+    eventName: event.name,
     photoCount: event.photo_count,
     countdown: event.countdown,
     captureInterval: event.capture_interval,
@@ -383,6 +389,13 @@ router.get('/settings', async (req: Request, res: Response) => {
     dslrFocusMode: event.dslr_focus_mode,
     dslrWhiteBalance: event.dslr_whitebalance,
     dslrWhiteBalanceKelvin: event.dslr_whitebalance_kelvin,
+    messages: {
+      homepage: resolveMessages(event, globals, 'homepage'),
+      countdown: resolveMessages(event, globals, 'countdown'),
+      postSession: resolveMessages(event, globals, 'post_session'),
+      shareTitle: resolveMessages(event, globals, 'share_title')
+    },
+    msgOrder: (event as any).msg_order || (globals as any).msg_order || 'random'
   })
 })
 

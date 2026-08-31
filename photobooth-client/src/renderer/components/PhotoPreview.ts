@@ -78,7 +78,7 @@ export class PhotoPreview {
     window.addEventListener('keydown', this.keydownHandler)
   }
 
-  async show(paths: string[], _frameConfig?: any, serverUrl?: string, otp?: string, sessionId?: string) {
+  async show(paths: string[], _frameConfig?: any, serverUrl?: string, otp?: string, sessionId?: string, postSessionMessage?: string | null) {
     this.currentPaths = paths
     this.lastServerUrl = serverUrl
     this.lastOtp = otp
@@ -93,6 +93,13 @@ export class PhotoPreview {
     title.textContent = 'Your Photos'
     title.className = 'ui-photo-preview-title'
     this.overlay.appendChild(title)
+    const msg = document.createElement('p')
+    msg.className = 'ui-photo-preview-message'
+    msg.textContent = postSessionMessage || ''
+    if (!postSessionMessage) msg.style.display = 'none'
+    this.overlay.appendChild(msg)
+
+    
 
     const grid = document.createElement('div')
     grid.className = 'ui-photo-preview-grid'

@@ -36,6 +36,7 @@ declare global {
         imageBuffers?: ArrayBuffer[]
         frameName?: string | null
         photoCount: number
+        shareTitle?: string | null
       }) => Promise<{ success: boolean; error?: string; queued?: boolean; shareId?: string }>
       uploadQueued: () => Promise<{ flushed: number }>
       getQueueDepth: () => Promise<number>

@@ -16,7 +16,7 @@ import { io } from '../server'
 import bcrypt from 'bcryptjs'
 import { requireRole, checkLoginLockout, recordFailedLogin, clearFailedLogin } from '../middleware/authMiddleware'
 import {
-  createEvent, updateEventById, getEvent, listEvents,
+  updateEventMessages, createEvent, updateEventById, getEvent, listEvents,
   endEvent, deleteEvent, listEventPhotoSessions,
   updateEventSettingsById, getGlobalSettings, updateGlobalSettings,
   archiveSession, restoreSession, getEventAnalytics,
@@ -51,7 +51,7 @@ router.post('/users', requireRole('admin'), async (req: Request, res: Response) 
     if (!parseResult.success) {
       return res.status(400).json({ error: parseResult.error.issues[0].message })
     }
-    const { email, password, role } = parseResult.data
+    const { email, password, role } = parseResult.data as any
     
     if (findUserByEmail(email)) {
       return res.status(400).json({ error: 'User already exists' })
@@ -532,17 +532,27 @@ const updateEventSchema = z.object({
       if (!parseResult.success) {
         return res.status(400).json({ error: parseResult.error.issues[0].message })
       }
-      const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, obfuscateLinks, expiryType, expiryValue, organizer, contactInfo } = parseResult.data
+      const { name, date, description, photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, obfuscateLinks, expiryType, expiryValue, organizer, contactInfo, msgHomepage, msgCountdown, msgPostSession, msgShareTitle, msgOrder } = parseResult.data as any
       updateEventById(req.params.id,
         name ?? event.name,
         date ?? event.date,
         description ?? event.description,
         { photoCount, countdown, captureInterval, postCapturePreview, dslrIso, dslrShutterSpeed, dslrAperture, dslrFocusMode, dslrWhiteBalance, obfuscateLinks: obfuscateLinks !== undefined ? (obfuscateLinks ? 1 : 0) : undefined, expiryType, expiryValue, organizer, contactInfo }
       )
+      
+      if (msgOrder !== undefined) {
+        updateEventMessages(req.params.id, {
+          msgHomepage: msgHomepage !== undefined ? msgHomepage : (event as any).msg_homepage,
+          msgCountdown: msgCountdown !== undefined ? msgCountdown : (event as any).msg_countdown,
+          msgPostSession: msgPostSession !== undefined ? msgPostSession : (event as any).msg_post_session,
+          msgShareTitle: msgShareTitle !== undefined ? msgShareTitle : (event as any).msg_share_title,
+          msgOrder: msgOrder
+        })
+      }
 
       // If settings changed, push settings-update command to booth
       const updated = getEvent(req.params.id)!
-      const settingsChanged = photoCount !== undefined || countdown !== undefined || captureInterval !== undefined || postCapturePreview !== undefined || dslrIso !== undefined || dslrShutterSpeed !== undefined || dslrAperture !== undefined || dslrFocusMode !== undefined || dslrWhiteBalance !== undefined
+      const settingsChanged = photoCount !== undefined || countdown !== undefined || captureInterval !== undefined || postCapturePreview !== undefined || dslrIso !== undefined || dslrShutterSpeed !== undefined || dslrAperture !== undefined || dslrFocusMode !== undefined || dslrWhiteBalance !== undefined || msgOrder !== undefined
       if (settingsChanged) {
         pendingCommands.push({
           id: uuidv4(),
@@ -1292,3 +1302,36 @@ router.post('/share/create', async (req: Request, res: Response) => {
 })
 
 export default router
+
+// --- Motivational Messages Routes (Accessible to operators) ---
+import { getGlobalMessages, updateGlobalMessages } from '@hellomyphotos/shared'
+
+router.get('/global-messages', async (req: Request, res: Response) => {
+  try {
+    const msgs = getGlobalMessages()
+    res.json(msgs)
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+router.patch('/global-messages', async (req: Request, res: Response) => {
+  try {
+    const { msgHomepage, msgCountdown, msgPostSession, msgShareTitle, msgOrder } = req.body
+    updateGlobalMessages({
+      msgHomepage: msgHomepage ?? null,
+      msgCountdown: msgCountdown ?? null,
+      msgPostSession: msgPostSession ?? null,
+      msgShareTitle: msgShareTitle ?? null,
+      msgOrder: msgOrder ?? 'random'
+    })
+    
+    // Broadcast setting update to all connected booths via settings-updated
+    // Since global messages changed, we just tell all booths to re-fetch settings
+    // But we don't have an easy way to push to all. Booths will fetch on next reconnect.
+    
+    res.json({ success: true })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})

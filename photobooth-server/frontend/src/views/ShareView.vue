@@ -20,7 +20,7 @@
     <template v-else-if="session">
       <div class="share-content">
         <header class="share-header">
-          <h1>Hello there! Here are your photos!</h1>
+          <h1>{{ session.shareTitle || 'Hello there! Here are your photos!' }}</h1>
           <p class="subtitle">
             {{ session.eventName || 'hellomyphotos' }}<template v-if="session.organizer"><br/>
               <a v-if="session.contactInfo" href="#" @click.prevent="showContactModal = true" class="contact-link">{{ session.organizer }}</a>

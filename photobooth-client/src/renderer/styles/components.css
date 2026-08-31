@@ -611,9 +611,17 @@ input.ui-input:focus, select.ui-select:focus, textarea.ui-textarea:focus {
 }
 .booth-landing-brand {
   font-size: 3rem; font-weight: 900; letter-spacing: -0.03em; margin: 0;
+  opacity: 0; transition: opacity 0.5s ease-in-out;
+}
+.booth-landing-brand.loaded {
+  opacity: 1;
 }
 .booth-landing-subtitle {
-  font-size: 1.125rem; color: var(--color-text-muted); margin: -1rem 0 0;
+  font-size: 1.5rem; color: #ffffff; font-weight: 500; margin: -0.5rem 0 0;
+  opacity: 0; transition: opacity 0.5s ease-in-out;
+}
+.booth-landing-subtitle.loaded {
+  opacity: 1;
 }
 .booth-flash-overlay {
   position: absolute; inset: 0; z-index: 999;
@@ -676,4 +684,35 @@ input.ui-input:focus, select.ui-select:focus, textarea.ui-textarea:focus {
 }
 .booth-spinner-label {
   margin-top: 1rem; font-size: 1rem; opacity: 0.8;
+}
+
+.booth-landing-message {
+  font-size: 1.75rem;
+  color: #ccc;
+  text-align: center;
+  margin-top: 0.5rem;
+  font-style: italic;
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.ui-countdown-message {
+  font-size: 1.4rem;
+  color: rgba(255,255,255,0.85);
+  text-align: center;
+  font-style: italic;
+  margin-top: 0.75rem;
+  position: absolute;
+  top: 60%;
+  left: 50%;
+  transform: translate(-50%, 0);
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  z-index: 1000;
+}
+
+.ui-photo-preview-message {
+  font-size: 1.2rem;
+  color: #aaa;
+  text-align: center;
+  margin: 0.25rem 0 0.75rem;
+  font-style: italic;
 }

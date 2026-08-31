@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('hellomyphoto', {
     imageBuffers?: ArrayBuffer[]
     frameName?: string | null
     photoCount: number
+    shareTitle?: string | null
   }) => ipcRenderer.invoke('upload-photos', data),
 
   uploadQueued: () => ipcRenderer.invoke('upload-queued'),

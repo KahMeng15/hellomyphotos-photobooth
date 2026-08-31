@@ -478,6 +478,7 @@ export function initIpcHandlers(
     imageBuffers?: ArrayBuffer[]
     frameName?: string | null
     photoCount: number
+    shareTitle?: string | null
   }) => {
     // Step 1: Reserve a shareId before upload starts (for instant QR)
     let reservedShareId: string | undefined
@@ -522,7 +523,7 @@ export function initIpcHandlers(
     }
 
     // Always queue the job first
-    offlineQueue.enqueue(data.sessionId, { frameName: data.frameName, photoCount: data.photoCount }, finalPaths, reservedShareId)
+    offlineQueue.enqueue(data.sessionId, { frameName: data.frameName, photoCount: data.photoCount, shareTitle: data.shareTitle }, finalPaths, reservedShareId)
     
     // Kick off the queue processor asynchronously
     flushQueuedUploads().catch(() => {})
@@ -551,6 +552,7 @@ export function initIpcHandlers(
         const metadata = JSON.parse(job.metadata || '{}')
         formData.append('photoCount', String(metadata.photoCount || 1))
         if (metadata.frameName) formData.append('frameName', metadata.frameName)
+        if (metadata.shareTitle) formData.append('shareTitle', metadata.shareTitle)
 
         const response = await fetch(`${_serverUrl}/api/booth/upload`, {
           method: 'POST',
@@ -899,6 +901,7 @@ export async function flushQueuedUploads() {
       const metadata = JSON.parse(job.metadata || '{}')
       formData.append('photoCount', String(metadata.photoCount || 1))
       if (metadata.frameName) formData.append('frameName', metadata.frameName)
+      if (metadata.shareTitle) formData.append('shareTitle', metadata.shareTitle)
       if (job.shareId) formData.append('shareId', job.shareId)
 
       const startTime = Date.now()
@@ -997,3 +1000,9 @@ export function cancelUploadJob(id: number) {
     delete activeCancelTokens[id]
   }
 }
+
+ipcMain.handle('persist-msg-seq-index', async (event, seqIndex) => {
+  const settings = getSettingsSync()
+  settings.msgSeqIndex = seqIndex
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2))
+})

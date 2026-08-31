@@ -113,6 +113,38 @@
           </div>
         </section>
 
+      
+      <section class="card">
+        <h2>Default Motivational Messages (All Events)</h2>
+        
+        
+        <div class="settings-box">
+          <div class="field-row-col">
+            <label >Homepage Hero Message</label>
+            <textarea v-model="globalMessages.msgHomepage" class="str-input textarea-input" placeholder="One message per line"></textarea>
+          </div>
+          <div class="field-row-col">
+            <label >During Countdown</label>
+            <textarea v-model="globalMessages.msgCountdown" class="str-input textarea-input" placeholder="One message per line"></textarea>
+          </div>
+          <div class="field-row-col">
+            <label >After Session (Review Screen)</label>
+            <textarea v-model="globalMessages.msgPostSession" class="str-input textarea-input" placeholder="One message per line"></textarea>
+          </div>
+          <div class="field-row-col">
+            <label >Share Page Title</label>
+            <textarea v-model="globalMessages.msgShareTitle" class="str-input textarea-input" placeholder="One message per line"></textarea>
+          </div>
+          <div class="field-row">
+            <label>Message Order</label>
+            <div class="app-toggle">
+              <button :class="['app-toggle-btn', globalMessages.msgOrder === 'random' ? 'app-toggle-active' : '']" @click="globalMessages.msgOrder = 'random'">Random</button>
+              <button :class="['app-toggle-btn', globalMessages.msgOrder === 'sequential' ? 'app-toggle-active' : '']" @click="globalMessages.msgOrder = 'sequential'">In Order</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div class="actions">
         <AppButton variant="primary" @click="saveAndClose">Save</AppButton>
         <AppButton variant="secondary" @click="cancelChanges">Cancel</AppButton>
@@ -137,6 +169,36 @@ const settings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapt
 const originalSettings = ref({ photoCount: 4, countdown: 5, captureInterval: 1, postCapturePreview: 2, dslrIso: 'auto', dslrShutterSpeed: 'auto', dslrAperture: 'auto', dslrFocusMode: 'auto', organizer: '', contactInfo: '', apiRateLimitAdmin: 500, apiRateLimitShare: 300, bwLimitAdmin: 1000, bwLimitShare: 100, lockoutDuration: 5 })
 const serverInfo = ref({ domain: 'Not set', path: '/' })
 
+const globalMessages = ref({
+  msgHomepage: '',
+  msgCountdown: '',
+  msgPostSession: '',
+  msgShareTitle: '',
+  msgOrder: 'random'
+})
+const origGlobalMessages = ref({
+  msgHomepage: '',
+  msgCountdown: '',
+  msgPostSession: '',
+  msgShareTitle: '',
+  msgOrder: 'random'
+})
+
+function arrayToLines(jsonStr: string) {
+  if (!jsonStr) return ''
+  try {
+    const arr = JSON.parse(jsonStr)
+    if (Array.isArray(arr)) return arr.join('\n')
+  } catch {}
+  return ''
+}
+
+function linesToArray(lines: string) {
+  const arr = lines.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+  return arr.length > 0 ? JSON.stringify(arr) : null
+}
+
+
 const dirty = computed(() =>
   settings.value.photoCount !== originalSettings.value.photoCount ||
   settings.value.countdown !== originalSettings.value.countdown ||
@@ -149,6 +211,11 @@ const dirty = computed(() =>
   settings.value.organizer !== originalSettings.value.organizer ||
   settings.value.contactInfo !== originalSettings.value.contactInfo ||
   settings.value.apiRateLimitAdmin !== originalSettings.value.apiRateLimitAdmin ||
+  globalMessages.value.msgHomepage !== origGlobalMessages.value.msgHomepage ||
+  globalMessages.value.msgCountdown !== origGlobalMessages.value.msgCountdown ||
+  globalMessages.value.msgPostSession !== origGlobalMessages.value.msgPostSession ||
+  globalMessages.value.msgShareTitle !== origGlobalMessages.value.msgShareTitle ||
+  globalMessages.value.msgOrder !== origGlobalMessages.value.msgOrder ||
   settings.value.apiRateLimitShare !== originalSettings.value.apiRateLimitShare ||
   settings.value.bwLimitAdmin !== originalSettings.value.bwLimitAdmin ||
   settings.value.bwLimitShare !== originalSettings.value.bwLimitShare ||
@@ -160,6 +227,17 @@ onMounted(async () => {
     const { data } = await axios.get('/api/admin/settings/defaults')
     settings.value = data.settings
     originalSettings.value = { ...data.settings }
+
+    try {
+      const { data: gData } = await axios.get('/api/admin/global-messages')
+      globalMessages.value.msgHomepage = arrayToLines(gData.msgHomepage)
+      globalMessages.value.msgCountdown = arrayToLines(gData.msgCountdown)
+      globalMessages.value.msgPostSession = arrayToLines(gData.msgPostSession)
+      globalMessages.value.msgShareTitle = arrayToLines(gData.msgShareTitle)
+      globalMessages.value.msgOrder = gData.msgOrder || 'random'
+      origGlobalMessages.value = { ...globalMessages.value }
+    } catch {}
+
     if (data.serverInfo) {
       serverInfo.value = data.serverInfo
     }
@@ -172,6 +250,22 @@ async function saveAndClose() {
   try {
     await axios.put('/api/admin/settings/defaults', settings.value)
     originalSettings.value = { ...settings.value }
+
+    if (globalMessages.value.msgHomepage !== origGlobalMessages.value.msgHomepage ||
+        globalMessages.value.msgCountdown !== origGlobalMessages.value.msgCountdown ||
+        globalMessages.value.msgPostSession !== origGlobalMessages.value.msgPostSession ||
+        globalMessages.value.msgShareTitle !== origGlobalMessages.value.msgShareTitle ||
+        globalMessages.value.msgOrder !== origGlobalMessages.value.msgOrder) {
+      await axios.patch('/api/admin/global-messages', {
+        msgHomepage: linesToArray(globalMessages.value.msgHomepage),
+        msgCountdown: linesToArray(globalMessages.value.msgCountdown),
+        msgPostSession: linesToArray(globalMessages.value.msgPostSession),
+        msgShareTitle: linesToArray(globalMessages.value.msgShareTitle),
+        msgOrder: globalMessages.value.msgOrder
+      })
+      origGlobalMessages.value = { ...globalMessages.value }
+    }
+
     toast.success('Settings saved')
   } catch (err) {
     console.error('Failed to save defaults', err)
@@ -188,6 +282,34 @@ function cancelChanges() {
 </script>
 
 <style scoped>
+
+.field-row-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.app-toggle {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.app-toggle-btn {
+  padding: 0.375rem 0.75rem;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  background: var(--color-surface);
+  color: var(--color-text-sub);
+}
+.app-toggle-btn.app-toggle-active {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
 .settings-page {
   /* min-height: 100vh; removed to prevent double scrolling */
   background: var(--color-bg);
@@ -200,7 +322,7 @@ function cancelChanges() {
   justify-content: space-between;
   padding: 0.75rem 1.5rem;
   background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  
   position: sticky;
   top: 0;
   z-index: 50;
@@ -449,4 +571,29 @@ function cancelChanges() {
     width: 100%;
   }
 }
+
+.str-input.textarea-input {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 80px;
+  resize: vertical;
+  text-align: left !important;
+  box-sizing: border-box;
+}
+.field-row-col {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding: 0.75rem 0.75rem;
+  
+}
+
+.field-row-col label {
+  font-weight: 600;
+  text-align: left;
+  display: block;
+  width: 100%;
+}
+
 </style>

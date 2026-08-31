@@ -59,6 +59,37 @@
         </div>
       </section>
 
+      
+      <section class="card">
+        <h2>Motivational Messages</h2>
+        <p class="card-desc">Messages displayed during the photobooth session. Leave blank to inherit system defaults.</p>
+        <div class="settings-box">
+          <div class="field-row-col">
+            <label >Homepage Hero Message</label>
+            <textarea v-model="eventMessages.msgHomepage" class="text-input textarea-input" placeholder="Leave blank to use default messages\nOne message per line"></textarea>
+          </div>
+          <div class="field-row-col">
+            <label >During Countdown</label>
+            <textarea v-model="eventMessages.msgCountdown" class="text-input textarea-input" placeholder="Leave blank to use default messages\nOne message per line"></textarea>
+          </div>
+          <div class="field-row-col">
+            <label >After Session (Review Screen)</label>
+            <textarea v-model="eventMessages.msgPostSession" class="text-input textarea-input" placeholder="Leave blank to use default messages\nOne message per line"></textarea>
+          </div>
+          <div class="field-row-col">
+            <label >Share Page Title</label>
+            <textarea v-model="eventMessages.msgShareTitle" class="text-input textarea-input" placeholder="Leave blank to use default messages\nOne message per line"></textarea>
+          </div>
+          <div class="field-row">
+            <label>Message Order</label>
+            <div class="app-toggle">
+              <button :class="['app-toggle-btn', eventMessages.msgOrder === 'random' ? 'app-toggle-active' : '']" @click="eventMessages.msgOrder = 'random'">Random</button>
+              <button :class="['app-toggle-btn', eventMessages.msgOrder === 'sequential' ? 'app-toggle-active' : '']" @click="eventMessages.msgOrder = 'sequential'">In Order</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="card" v-if="authStore.user?.role === 'admin'">
         <div class="card-header-flex">
           <div>
@@ -78,6 +109,9 @@
         </div>
 
         <!-- Locked State -->
+        
+
+
         <div class="settings-box operator-auth-box" v-if="!operatorAccessUnlocked">
           <p>Please enter your master admin password to view and manage operators.</p>
           <div class="auth-flex">
@@ -265,12 +299,37 @@ watch([relativeNumber, relativeUnit], ([num, unit]) => {
 const eventSettings = ref({
   name: '',
   date: '',
-  obfuscateLinks: false,
   expiryType: 'none',
-  expiryValue: '1_year',
+  expiryValue: '',
   organizer: '',
   contactInfo: ''
 })
+
+const eventMessages = ref({
+  msgHomepage: '',
+  msgCountdown: '',
+  msgPostSession: '',
+  msgShareTitle: '',
+  msgOrder: 'random'
+})
+
+
+
+function arrayToLines(jsonStr) {
+  if (!jsonStr) return ''
+  try {
+    const arr = JSON.parse(jsonStr)
+    if (Array.isArray(arr)) return arr.join('\n')
+  } catch {}
+  return ''
+}
+
+function linesToArray(lines) {
+  const arr = lines.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+  return arr.length > 0 ? JSON.stringify(arr) : null
+}
+
+
 
 const settingsSaving = ref(false)
 
@@ -286,6 +345,13 @@ onMounted(async () => {
       expiryValue: ev.expiry_value || '',
       organizer: ev.organizer || '',
       contactInfo: ev.contact_info || ''
+    }
+    eventMessages.value = {
+      msgHomepage: arrayToLines(ev.msg_homepage),
+      msgCountdown: arrayToLines(ev.msg_countdown),
+      msgPostSession: arrayToLines(ev.msg_post_session),
+      msgShareTitle: arrayToLines(ev.msg_share_title),
+      msgOrder: ev.msg_order || 'random'
     }
     if (ev.expiry_type === 'relative' && ev.expiry_value) {
       const parts = ev.expiry_value.split('_')
@@ -324,6 +390,11 @@ async function saveSettings() {
       expiryValue: eventSettings.value.expiryValue,
       organizer: eventSettings.value.organizer,
       contactInfo: eventSettings.value.contactInfo,
+      msgHomepage: linesToArray(eventMessages.value.msgHomepage),
+      msgCountdown: linesToArray(eventMessages.value.msgCountdown),
+      msgPostSession: linesToArray(eventMessages.value.msgPostSession),
+      msgShareTitle: linesToArray(eventMessages.value.msgShareTitle),
+      msgOrder: eventMessages.value.msgOrder
     })
     toast.success('Settings saved successfully')
   } catch {
@@ -334,6 +405,33 @@ async function saveSettings() {
 </script>
 
 <style scoped>
+
+.field-row-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.app-toggle {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.app-toggle-btn {
+  padding: 0.375rem 0.75rem;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  background: var(--color-surface);
+  color: var(--color-text-sub);
+}
+.app-toggle-btn.app-toggle-active {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
 .page-wrapper {
   background: var(--color-bg);
   min-height: 100vh;
@@ -381,7 +479,7 @@ async function saveSettings() {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--color-border);
+  
 }
 .field-row:last-child {
   border-bottom: none;
@@ -391,7 +489,7 @@ async function saveSettings() {
 }
 .field-row-col {
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--color-border);
+  
 }
 .field-row-col label {
   display: block;
@@ -416,11 +514,7 @@ async function saveSettings() {
 .text-input:focus, .custom-select:focus {
   border-color: var(--color-text-sub);
 }
-.textarea-input {
-  width: 100%;
-  height: 80px;
-  resize: vertical;
-}
+
 .compound-input {
   display: flex;
   gap: 0.5rem;
@@ -513,4 +607,29 @@ async function saveSettings() {
   margin-top: 2rem;
   margin-bottom: 2rem;
 }
+
+.text-input.textarea-input {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 80px;
+  resize: vertical;
+  text-align: left !important;
+  box-sizing: border-box;
+}
+.field-row-col {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding: 0.75rem 0.75rem;
+  
+}
+
+.field-row-col label {
+  font-weight: 600;
+  text-align: left;
+  display: block;
+  width: 100%;
+}
+
 </style>
