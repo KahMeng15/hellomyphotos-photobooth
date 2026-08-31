@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { initIpcHandlers } from './ipc'
 import { OfflineQueue } from './offlineQueue'
-import { DslrManager } from './gphoto2'
+import { DslrManager, restorePtpDaemons } from './gphoto2'
 
 let mainWindow: BrowserWindow | null = null
 let dslrManager: DslrManager
@@ -192,6 +192,10 @@ function cleanupAndQuit() {
   // orphaned gphoto2 subprocesses holding the camera, causing "Could not claim
   // the USB device" errors on the next launch.
   dslrManager?.shutdown().catch(() => {})
+  // Restore macOS PTPCamera / imagecaptured daemons so that Capture One,
+  // Lightroom Classic, and other tether apps can immediately reconnect to the
+  // camera without the user having to unplug/replug the USB cable.
+  restorePtpDaemons().catch(() => {})
 }
 
 app.on('before-quit', cleanupAndQuit)

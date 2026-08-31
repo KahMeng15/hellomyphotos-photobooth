@@ -70,13 +70,21 @@ function tempDir(): string {
 }
 
 /**
- * Kill the macOS PTPCamera daemon permanently (prevents auto-respawn) so
- * that gphoto2 can claim the USB camera interface.
+ * Temporarily stop the macOS PTPCamera / Image Capture daemons so that
+ * gphoto2 can claim the USB camera interface exclusively.
  *
  * macOS auto-launches PTPCamera via launchd when a camera is plugged in.
  * `killall` alone doesn't work because launchd immediately respawns the
- * process. We must use `launchctl bootout` to evict the service from launchd
- * first, then kill any remaining instances.
+ * process. We use `launchctl bootout` to evict the service session for the
+ * duration of our tethering session, then restore it on quit via
+ * `restorePtpDaemons()`.
+ *
+ * ⚠️  IMPORTANT — we deliberately do NOT call `launchctl disable` here.
+ * `disable` writes a permanent flag to launchd's database that survives
+ * reboots, which would break Capture One, Lightroom, and every other app
+ * that relies on the Image Capture framework — even after this app exits.
+ * `bootout` only evicts the running session; launchd will re-launch the
+ * daemon automatically on the next USB camera plug-in event.
  *
  * Safe to call on non-macOS — it no-ops on Windows/Linux.
  */
@@ -84,27 +92,18 @@ export function killPtpDaemon(): Promise<void> {
   if (process.platform !== 'darwin') return Promise.resolve()
 
   return new Promise((resolve) => {
-    // Use a shell script that:
-    // 1. Boots out the launchd agent so it can't respawn
-    // 2. Disables the service so launchd won't re-load it on USB reconnect
-    // 3. Force-kills any still-running PTPCamera processes
-    // 4. Waits 1.5s for the OS to release the USB interface
     const UID = `gui/$(id -u)`
     const script = [
-      // Disable so launchd won't re-load when the USB device re-appears
-      `launchctl disable ${UID}/com.apple.ptpcamerad 2>/dev/null`,
-      `launchctl disable ${UID}/com.apple.imagecaptured 2>/dev/null`,
-      `launchctl disable ${UID}/com.apple.PTPCamera 2>/dev/null`,
-      // Stop & unload
+      // Evict the running launchd session — does NOT permanently disable.
+      // The daemon will restart automatically when the camera is next plugged in.
       `launchctl bootout ${UID} /System/Library/LaunchAgents/com.apple.ptpcamerad.plist 2>/dev/null`,
       `launchctl bootout ${UID} /System/Library/LaunchAgents/com.apple.imagecaptured.plist 2>/dev/null`,
-      `launchctl bootout ${UID} /System/Library/LaunchAgents/com.apple.photolibraryd.plist 2>/dev/null`,
-      // Hard-kill any process still holding the camera
+      // Hard-kill any process still holding the camera USB interface
       `pkill -9 -f PTPCamera 2>/dev/null`,
       `pkill -9 -f imagecaptured 2>/dev/null`,
       `pkill -9 -f "Image Capture Extension" 2>/dev/null`,
       `pkill -9 -f "com.apple.photos.ImageCaptureService" 2>/dev/null`,
-      // Also kill any gphoto2 processes that might be holding the device
+      // Kill any stale gphoto2 processes from a previous session
       `pkill -9 -f gphoto2 2>/dev/null`,
       `exit 0`,
     ].join('; ')
@@ -114,7 +113,7 @@ export function killPtpDaemon(): Promise<void> {
     proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
 
     proc.on('close', () => {
-      log.ok('[macOS] PTPCamera / Image Capture daemons evicted + disabled')
+      log.ok('[macOS] PTPCamera / Image Capture daemons temporarily evicted (not disabled)')
       if (stderr.trim()) {
         log.warn('[macOS] killPtpDaemon stderr (expected for non-running services):', stderr.trim())
       }
@@ -125,6 +124,49 @@ export function killPtpDaemon(): Promise<void> {
     })
     proc.on('error', () => {
       log.warn('[macOS] killPtpDaemon: bash spawn error — skipping')
+      resolve()
+    })
+  })
+}
+
+/**
+ * Restore the macOS PTPCamera / Image Capture daemons after tethering is done.
+ *
+ * Call this on app quit so that Capture One, Lightroom Classic, and other
+ * tether apps immediately regain access to the camera without needing to
+ * unplug/replug the USB cable. Uses `launchctl bootstrap` (modern API) with
+ * a `launchctl load` fallback for older macOS versions.
+ *
+ * Safe to call on non-macOS — it no-ops on Windows/Linux.
+ */
+export function restorePtpDaemons(): Promise<void> {
+  if (process.platform !== 'darwin') return Promise.resolve()
+
+  return new Promise((resolve) => {
+    const UID = `gui/$(id -u)`
+    const PLISTS = [
+      '/System/Library/LaunchAgents/com.apple.ptpcamerad.plist',
+      '/System/Library/LaunchAgents/com.apple.imagecaptured.plist',
+    ]
+
+    const script = PLISTS.flatMap((plist) => [
+      // bootstrap is the modern launchctl API (macOS 10.15+); falls back to load
+      `launchctl bootstrap ${UID} ${plist} 2>/dev/null || launchctl load ${plist} 2>/dev/null`,
+    ]).concat(['exit 0']).join('; ')
+
+    const proc = spawn('bash', ['-c', script])
+    let stderr = ''
+    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+
+    proc.on('close', () => {
+      log.ok('[macOS] PTPCamera / Image Capture daemons restored — other tether apps can connect again')
+      if (stderr.trim()) {
+        log.warn('[macOS] restorePtpDaemons stderr:', stderr.trim())
+      }
+      resolve()
+    })
+    proc.on('error', () => {
+      log.warn('[macOS] restorePtpDaemons: bash spawn error — skipping')
       resolve()
     })
   })
