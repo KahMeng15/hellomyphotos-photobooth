@@ -177,7 +177,9 @@ export class PhotoPreview {
         this.shareBtn.style.background = 'var(--color-info)'
         // If the overlay was showing the offline message, hide it so they can click the button again
         if (this.qrOverlay && this.qrOverlay.style.display !== 'none') {
-          this.qrOverlay.style.display = 'none'
+          if (this.qrOverlay.querySelector('.ui-qr-title-offline')) {
+            this.qrOverlay.style.display = 'none'
+          }
         }
       }
     }

@@ -1524,15 +1524,44 @@ export class DslrManager {
       const doCapture = async () => {
         const portArgs = this.selectedPort ? [`--port=${this.selectedPort}`] : []
 
-        // For Sony Alpha cameras: set image quality to Fine (JPEG) before capture.
-        // The camera defaults to RAW, which produces .ARW files that are harder
-        // to handle downstream. Best-effort — not fatal if it fails.
+        // Hoisted here so proc.on('close') can reference it for post-capture restore.
+        let originalCaptureMode: string | null = null
+
+        // For Sony Alpha cameras: pre-capture config (quality + drive mode guard).
         if (this.cameraModel.toLowerCase().includes('sony') || this.cameraModel.toLowerCase().includes('alpha')) {
+          // Set image quality to Fine (JPEG). Best-effort — not fatal if it fails.
           const qualRes = await this.execGphoto2(['--set-config', '/main/capturesettings/imagequality=Fine', ...portArgs], 5000)
           if (qualRes.code === 0) {
             log.ok('[DslrManager] Set image quality to Fine (JPEG)')
           } else {
             log.warn(`[DslrManager] Failed to set image quality (non-fatal): ${qualRes.stderr.trim().slice(0, 80)}`)
+          }
+
+          // CRITICAL: Force Single Shot drive mode before every capture.
+          //
+          // On Sony Alpha cameras, `capture=1` holds the shutter open for the
+          // entire duration that the PTP property is set to 1. In Burst or
+          // Continuous drive mode the camera fires repeatedly at burst rate
+          // (up to 10 fps on the A7 III) until `capture=0` is sent — which
+          // can mean 18+ accidental shots during a single photobooth capture.
+          //
+          // Setting capturemode=0 (Single Shot) before firing guarantees exactly
+          // one frame regardless of whatever drive mode the user had dialed in.
+          // We restore the original mode after capture so the camera dial isn't
+          // silently changed forever.
+          const captureModeRes = await this.execGphoto2(['--get-config', '/main/capturesettings/capturemode', ...portArgs], 5000)
+          if (captureModeRes.code === 0) {
+            const match = captureModeRes.stdout.match(/Current:\s*(.+)/)
+            originalCaptureMode = match ? match[1].trim() : null
+            if (originalCaptureMode && originalCaptureMode !== 'Single Shot') {
+              log.warn(`[DslrManager] Sony drive mode is "${originalCaptureMode}" — forcing Single Shot to prevent burst fire`)
+              const setModeRes = await this.execGphoto2(['--set-config', '/main/capturesettings/capturemode=0', ...portArgs], 5000)
+              if (setModeRes.code === 0) {
+                log.ok('[DslrManager] Sony drive mode set to Single Shot')
+              } else {
+                log.warn(`[DslrManager] Failed to set Single Shot mode (non-fatal): ${setModeRes.stderr.trim().slice(0, 80)}`)
+              }
+            }
           }
         }
 
@@ -1552,16 +1581,18 @@ export class DslrManager {
 
         let args: string[]
         if (this.cameraModel.toLowerCase().includes('sony') || this.cameraModel.toLowerCase().includes('alpha')) {
-          // Sony PTP capture is very slow with --capture-image-and-download due to unnecessary
-          // state wait loops inside gphoto2. Using the direct capture=1 action forces an instant
-          // shutter trigger, dropping capture delay from 5.5s down to 2.6s total (shutter is instant).
+          // Sony PTP capture: set capture=1 to fire shutter, then wait for the
+          // file download event. capture=0 is sent as a SEPARATE gphoto2 call
+          // after this process exits — do NOT chain it here. When chained in the
+          // same invocation, gphoto2 queues capture=0 but Sony firmware can
+          // interpret the trailing config write as a second trigger, or the
+          // 4s wait window keeps the shutter open in burst mode.
           args = [
             '--set-config', '/main/actions/capture=1',
             '--wait-event-and-download=4s',
             `--filename=${path.join(downloadDir, filenameTemplate)}`,
             '--force-overwrite',
             ...portArgs,
-            '--set-config', '/main/actions/capture=0',
           ]
         } else {
           args = [
@@ -1605,6 +1636,34 @@ export class DslrManager {
         proc.on('close', (code: number | null) => {
           clearTimeout(captureTimeout)
           log.info(`[DslrManager] ⏱ gphoto2 capture command exited code=${code} after ${Date.now() - tShutter} ms (total captureGphoto2: ${Date.now() - tCapStart} ms)`)
+
+          const isSony = this.cameraModel.toLowerCase().includes('sony') || this.cameraModel.toLowerCase().includes('alpha')
+
+          // Sony post-capture cleanup (fire-and-forget, non-blocking):
+          //  1. Send capture=0 as a SEPARATE gphoto2 call to release the shutter.
+          //     This must not be chained in the capture args — see above.
+          //  2. Restore the original drive mode if we changed it to Single Shot.
+          if (isSony) {
+            const sonyCleanup = async () => {
+              // 1. Release shutter (capture=0)
+              const resetRes = await this.execGphoto2(['--set-config', '/main/actions/capture=0', ...portArgs], 3000)
+              if (resetRes.code === 0) {
+                log.ok('[DslrManager] Sony capture=0 sent — shutter released')
+              } else {
+                log.warn(`[DslrManager] Sony capture=0 failed (non-fatal): ${resetRes.stderr.trim().slice(0, 80)}`)
+              }
+              // 2. Restore original drive mode
+              if (originalCaptureMode && originalCaptureMode !== 'Single Shot') {
+                const restoreRes = await this.execGphoto2(['--set-config', `/main/capturesettings/capturemode=${originalCaptureMode}`, ...portArgs], 5000)
+                if (restoreRes.code === 0) {
+                  log.ok(`[DslrManager] Sony drive mode restored to "${originalCaptureMode}"`)
+                } else {
+                  log.warn(`[DslrManager] Sony drive mode restore failed (non-fatal): ${restoreRes.stderr.trim().slice(0, 80)}`)
+                }
+              }
+            }
+            sonyCleanup().catch(() => {})
+          }
 
           const addReturned = (fp: string) => { this._returnedFiles.add(fp); return fp }
 
